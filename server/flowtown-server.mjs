@@ -4,6 +4,10 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
+import zlib from 'node:zlib';
+import { spawn } from 'node:child_process';
+import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -362,6 +366,58 @@ async function readMobiel() {
   return { t: mobiel.t || null, quelle: 'moBiel', seite: MOBIEL_URL, items: Date.now() - mobiel.t < 24 * 3600e3 ? mobiel.items : [] };
 }
 
+// ---------- Bus und Bahn: Fahrplan aus dem DELFI-Datensatz ----------
+// Einmal pro Woche, nachts: deutschlandweite GTFS-Datei laden (etwa 550 MB), mit Python nur moBiel herausziehen
+// (fahrplan-bielefeld.py), ZIP wieder löschen. Die App lädt den ganzen Auszug (gepackt etwa 150 KB) und rechnet
+// Abfahrten auf dem Handy: Der Server erfährt weder Haltestelle noch Linie.
+const DELFI_URL = process.env.DELFI_GTFS_URL || '';
+const FAHRPLAN_AGENCY = process.env.FAHRPLAN_AGENCY || 'moBiel';
+const FAHRPLAN_FILE = path.join(DATA_DIR, 'fahrplan.json');
+let fahrplan = null, fahrplanRun = null;   // { stand, gilt, json (gzip), etag }
+function loadFahrplan() {
+  try {
+    const raw = fs.readFileSync(FAHRPLAN_FILE);
+    const d = JSON.parse(raw);
+    fahrplan = { stand: d.stand, gilt: d.gilt, gz: zlib.gzipSync(raw, { level: 9 }), raw, etag: '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"', t: fs.statSync(FAHRPLAN_FILE).mtimeMs };
+  } catch (e) { if (e.code !== 'ENOENT') console.error('Fahrplan:', e.message); }
+}
+async function refreshFahrplan() {
+  if (!DELFI_URL) throw new Error('DELFI_GTFS_URL fehlt in /etc/flowtown.env');
+  const zip = path.join(DATA_DIR, 'delfi-gtfs.zip');
+  try {
+    const res = await fetch(DELFI_URL, { headers: { 'User-Agent': 'Flowtown-Prototyp (info@barrierefrai.com)' } });
+    if (!res.ok || !/zip|octet/.test(res.headers.get('content-type') || '')) throw new Error('Download: HTTP ' + res.status + ' ' + (res.headers.get('content-type') || ''));
+    await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(zip));
+    const script = path.join(path.dirname(new URL(import.meta.url).pathname), 'fahrplan-bielefeld.py');
+    const out = await new Promise((resolve, reject) => {
+      const p = spawn('python3', [script, zip, FAHRPLAN_FILE, FAHRPLAN_AGENCY]);
+      let log = '';
+      p.stdout.on('data', (c) => { log += c; }); p.stderr.on('data', (c) => { log += c; });
+      p.on('error', (e) => reject(new Error('python3 nicht gefunden: ' + e.message)));
+      p.on('close', (code) => (code === 0 ? resolve(log.trim()) : reject(new Error('Auszug: ' + log.trim().slice(-300)))));
+    });
+    loadFahrplan();
+    return out;
+  } finally { fs.rmSync(zip, { force: true }); }
+}
+// stündlich prüfen: fehlt der Fahrplan oder ist er älter als 7 Tage, nachts zwischen 3 und 5 Uhr neu holen
+function fahrplanTick() {
+  if (!DELFI_URL || fahrplanRun) return;
+  const age = fahrplan ? Date.now() - fahrplan.t : Infinity, h = new Date().getHours();
+  if (age === Infinity || (age > 7 * 864e5 && h >= 3 && h < 5)) {
+    fahrplanRun = refreshFahrplan().then((m) => console.log('Fahrplan:', m)).catch((e) => console.error('Fahrplan:', e.message)).finally(() => { fahrplanRun = null; });
+  }
+}
+function sendFahrplan(req, res, origin) {
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: fahrplan.etag, Vary: 'Origin, Accept-Encoding' };
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
+  if (req.headers['if-none-match'] === fahrplan.etag) { res.writeHead(304, h); return res.end(); }
+  const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  if (gz) h['Content-Encoding'] = 'gzip';
+  res.writeHead(200, h);
+  res.end(gz ? fahrplan.gz : fahrplan.raw);
+}
+
 // ---------- Ziel prüfen: Strecke mit Verkehr, Meldungen entlang der Strecke, beste Abfahrt ----------
 // Nur auf Knopfdruck. Der Start kommt auf etwa 1 km gerundet an, gespeichert wird nichts außer einem kurzen Zwischenspeicher.
 const ROUTER_URL = process.env.HERE_ROUTER_URL || 'https://router.hereapi.com/v8/routes';
@@ -697,7 +753,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -710,6 +766,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
+    if (req.method === 'GET' && p === '/api/fahrplan') return fahrplan ? sendFahrplan(req, res, origin) : send(res, 404, { fehler: 'Noch kein Fahrplan auf dem Server.' }, origin);
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);
       if (p === '/api/ort') {
@@ -751,5 +808,12 @@ if (cli === 'neue-codes') {
   process.exit(0);
 }
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
-if (cli) { console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export'); process.exit(1); }
-server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}`));
+if (cli === 'fahrplan') {
+  refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli) {
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan'); process.exit(1);
+} else {
+  loadFahrplan();
+  setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
+  server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
+}

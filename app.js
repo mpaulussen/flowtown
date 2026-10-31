@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.22.0';
+  const VERSION = '0.23.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -79,7 +79,8 @@
   };
   let trips = store.get('trips', []);
   let settings = Object.assign({ mode: 'auto', cut: 200, fuelPrice: 1.75, powerPrice: 0.35, access: { on: false, type: 'rollator' }, server: { url: DEFAULT_SERVER, wir: false, ki: false } }, store.get('settings', {}));
-  if (!Array.isArray(settings.linien)) settings.linien = [];   // Bus und Bahn: eigene Linien für die Umleitungen von moBiel
+  if (!Array.isArray(settings.linien)) settings.linien = [];
+  if (!Array.isArray(settings.haltestellen)) settings.haltestellen = [];   // Bus und Bahn: Haltestellen für die nächsten Abfahrten   // Bus und Bahn: eigene Linien für die Umleitungen von moBiel
   if (!settings.serverDefault) { if (!settings.server.url) settings.server.url = DEFAULT_SERVER; settings.serverDefault = true; }   // ab 0.21: Server ist voreingestellt
   let signalCache = store.get('signals', { areas: [], nodes: {} });
   // Haltestellen ab 0.9.0, Angaben zur Barrierefreiheit ab 0.10.0: Gebiete einmal neu laden
@@ -1683,6 +1684,7 @@
     renderVorfahrt();
     if (lageOn() && Date.now() - lageAt >= 300000) loadLage().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
     if (group === 'oepnv' && lageOn() && Date.now() - mbAt >= 900000) loadMobiel().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
+    if (group === 'oepnv' && lageOn() && Date.now() - fpAt >= 6 * 3600e3) loadFahrplan().then(() => { if (!$('#view-start').hidden) renderVorfahrt(); });
   }
   function sortedRoutes(group) {
     const now = new Date().getHours();
@@ -1893,6 +1895,98 @@
     if (!settings.linien.includes(l)) { settings.linien.push(l); store.set('settings', settings); }
     return true;
   }
+  // ---------- Bus und Bahn: Abfahrten aus dem Fahrplan (DELFI) ----------
+  // Die App lädt den ganzen moBiel-Fahrplan (etwa 150 KB) und rechnet hier. Haltestellen und Standort verlassen das Handy nicht.
+  let fp = null, fpAt = 0, fpLoading = false, fpErr = '', hsAdd = false, hsOpen = null, hsHits = null;
+  async function loadFahrplan() {
+    if (!lageOn() || fpLoading || Date.now() - fpAt < 6 * 3600e3) return false;
+    fpLoading = true;
+    try {
+      const d = await api('/api/fahrplan', { cache: 'no-cache' });
+      // Haltestellen nach Namen zusammenfassen (je Steig ein Eintrag), Haltefolgen je Haltestelle
+      const byName = {}, patsOf = {};
+      d.stops.forEach((st, i) => { const n = st[1].replace(/^Bielefeld,\s*/, ''); (byName[n] = byName[n] || []).push(i); });
+      d.patterns.forEach((pat, pi) => pat.forEach((si) => { (patsOf[si] = patsOf[si] || new Set()).add(pi); }));
+      fp = Object.assign(d, { byName, patsOf, names: Object.keys(byName).sort((a, b) => a.localeCompare(b, 'de')), svcDay: {} });
+      fpAt = Date.now(); fpErr = '';
+      return true;
+    } catch (e) {
+      fpErr = /Noch kein Fahrplan/.test(e.message) ? 'Der Fahrplan ist auf dem Server noch nicht eingerichtet.' : 'Der Fahrplan ist gerade nicht erreichbar.';
+      fpAt = Date.now() - 6 * 3600e3 + 60000;   // in einer Minute noch einmal
+      return false;
+    } finally { fpLoading = false; }
+  }
+  const ymd = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`;
+  function servicesOn(day) {
+    if (!fp.svcDay[day]) fp.svcDay[day] = new Set(Object.keys(fp.services).filter((k) => fp.services[k].includes(day)));
+    return fp.svcDay[day];
+  }
+  // nächste Abfahrten an einer Haltestelle (alle Steige), auch Fahrten nach Mitternacht vom Vortag
+  function departures(name, now, span) {
+    const idx = new Set(fp.byName[name] || []), pats = new Set();
+    idx.forEach((si) => (fp.patsOf[si] || []).forEach((pi) => pats.add(pi)));
+    const nowMin = now.getHours() * 60 + now.getMinutes(), out = [];
+    const days = [[servicesOn(ymd(now)), 0], [servicesOn(ymd(new Date(now - 864e5))), 1440]];
+    for (const [r, pi, h, sv, start, deltas] of fp.trips) {
+      if (!pats.has(pi)) continue;
+      for (const [on, shift] of days) {
+        if (!on.has(sv)) continue;
+        const pat = fp.patterns[pi];
+        let t = start - shift;
+        for (let k = 0; k < pat.length - 1; k++) {   // an der Endhaltestelle fährt nichts mehr ab
+          if (k) t += deltas[k - 1];
+          if (t > nowMin + span) break;
+          if (idx.has(pat[k]) && t >= nowMin) out.push({ t, line: fp.routes[r][0], tram: fp.routes[r][1] === 0, head: fp.heads[h].replace(/^Bielefeld,\s*/, '') });
+        }
+      }
+    }
+    return out.sort((a, b) => a.t - b.t);
+  }
+  const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+  function hsSuggest(q) {
+    if (!fp) return [];
+    const k = q.trim().toLowerCase();
+    if (k.length < 2) return [];
+    return fp.names.filter((n) => n.toLowerCase().includes(k)).sort((a, b) => a.toLowerCase().indexOf(k) - b.toLowerCase().indexOf(k)).slice(0, 6);
+  }
+  const hsHitList = () => (hsHits ? (hsHits.length ? `<div class="vf-chips" role="group" aria-label="Haltestellen">${hsHits.map((n) => `<button type="button" class="vf-chip" data-hs-pick="${esc(n)}">${esc(n)}</button>`).join('')}</div>` : '<p class="small muted">Keine Haltestelle gefunden.</p>') : '');
+  function abfahrtSection() {
+    const mine = settings.haltestellen;
+    if (hsOpen && !mine.includes(hsOpen)) hsOpen = null;
+    const open = hsOpen || mine[0] || null;
+    const chips = mine.map((n) => `<button type="button" class="vf-chip${n === open ? ' on' : ''}" data-hs="${esc(n)}" aria-pressed="${n === open}">${esc(n)}</button>`).join('')
+      + (mine.length < 6 ? `<button type="button" class="vf-chip add${hsAdd ? ' on' : ''}" data-hs-add="1" aria-expanded="${hsAdd}">+ Haltestelle</button>` : '');
+    const form = hsAdd ? `<div class="vf-panel"><form class="vf-form" data-hs-form="1"><label class="sr-only" for="inp-hs">Haltestelle</label><input id="inp-hs" type="search" placeholder="Name der Haltestelle" autocomplete="off" enterkeyhint="search"><button class="btn" type="button" data-hs-near="1">${ic('pin')}In meiner Nähe</button></form>
+      <div id="hs-hits">${hsHitList()}</div><p class="small muted">${ic('shield')} Haltestellen und Standort bleiben auf dem Handy. Den Fahrplan hat die App schon geladen.</p></div>` : '';
+    let body = '';
+    if (!fp) body = `<p class="small muted" role="status">${fpErr || 'Fahrplan wird geladen …'}</p>`;
+    else if (!open) body = hsAdd ? '' : '<p class="small">Wähle deine Haltestellen, dann siehst du hier die nächsten Abfahrten.</p>';
+    else {
+      const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+      let list = departures(open, now, 60);
+      if (list.length < 4) list = departures(open, now, 180);
+      const mineL = settings.linien;
+      const rows = list.slice(0, 8).map((d) => { const inMin = d.t - nowMin;
+        return `<li class="dep${mineL.includes(d.line) ? ' mine' : ''}"><b class="dep-t">${hhmm((d.t + 1440) % 1440)}</b><span class="dep-line${d.tram ? ' tram' : ''}">${esc(d.line)}</span><span class="dep-head">${esc(d.head)}</span><span class="dep-in">${inMin <= 0 ? 'jetzt' : inMin < 60 ? `in ${inMin} min` : ''}</span></li>`; }).join('');
+      body = rows ? `<ul class="dep-list" aria-label="Abfahrten ${esc(open)}">${rows}</ul>` : '<p class="small">In den nächsten drei Stunden fährt hier laut Fahrplan nichts.</p>';
+      body += `<p class="small muted lg-src">Laut Fahrplan, ohne Verspätungen · <button type="button" class="btn-link" data-hs-del="${esc(open)}">${esc(open)} entfernen</button> · Fahrplan: DELFI (CC BY 4.0), Stand ${esc((fp.stand || '').slice(8, 10) + '.' + (fp.stand || '').slice(5, 7) + '.')}</p>`;
+    }
+    return `<section class="vf world-vor" aria-labelledby="hs-h"><h3 class="vf-title" id="hs-h">Nächste Abfahrten</h3>
+      <div class="vf-chips" role="group" aria-label="Deine Haltestellen">${chips}</div>${form}${body}</section>`;
+  }
+  function addHaltestelle(n) {
+    if (!fp || !fp.byName[n]) return;
+    if (!settings.haltestellen.includes(n)) { settings.haltestellen.push(n); store.set('settings', settings); }
+    hsOpen = n; hsAdd = false; hsHits = null;
+  }
+  function nearStops() {
+    navigator.geolocation.getCurrentPosition((p) => {
+      const me = { lat: p.coords.latitude, lon: p.coords.longitude }, best = {};
+      fp.stops.forEach((st) => { const n = st[1].replace(/^Bielefeld,\s*/, ''), d = dist(me, { lat: st[2], lon: st[3] }); if (best[n] == null || d < best[n]) best[n] = d; });
+      hsHits = Object.keys(best).filter((n) => best[n] < 1500).sort((a, b) => best[a] - best[b]).slice(0, 5);
+      const el = $('#hs-hits'); if (el) el.innerHTML = hsHitList();
+    }, () => { const el = $('#hs-hits'); if (el) el.innerHTML = '<p class="small muted">Ohne Standort geht das nicht. Gib den Namen ein.</p>'; }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
+  }
   const LAGE_RANK = { sperrung: 0, stau: 1, unfall: 2, zaeh: 3, baustelle: 4, warnung: 5 };
   const LAGE_LABEL = { sperrung: 'Sperrung', stau: 'Stau', unfall: 'Unfall', zaeh: 'zäh', baustelle: 'Baustelle', warnung: 'Hinweis' };
   const LAGE_CLS = { sperrung: 'red', stau: 'red', unfall: 'red', zaeh: 'amber', baustelle: 'amber', warnung: 'amber' };
@@ -2023,7 +2117,7 @@
     const group = MODE_GROUP[selectedMode()];
     // Bus und Bahn: statt Ziele prüfen die Umleitungen von moBiel
     if (group === 'oepnv') {
-      if (lageOn()) el.innerHTML = mobielSection(); else { el.hidden = true; el.innerHTML = ''; }
+      if (lageOn()) el.innerHTML = abfahrtSection() + mobielSection(); else { el.hidden = true; el.innerHTML = ''; }
       return;
     }
     const can = zielFor(group);
@@ -2140,6 +2234,18 @@
   ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => $('#vorfahrt').addEventListener(t, () => clearTimeout(pressTimer)));
   $('#vorfahrt').addEventListener('click', (ev) => {
     if (pressed) { pressed = false; ev.preventDefault(); return; }
+    const hs = ev.target.closest('[data-hs],[data-hs-add],[data-hs-pick],[data-hs-near],[data-hs-del]');
+    if (hs) {
+      const d = hs.dataset;
+      if (d.hsNear) { nearStops(); return; }
+      if (d.hs) hsOpen = d.hs;
+      else if (d.hsAdd) { hsAdd = !hsAdd; hsHits = null; }
+      else if (d.hsPick) addHaltestelle(d.hsPick);
+      else if (d.hsDel) { settings.haltestellen = settings.haltestellen.filter((n) => n !== d.hsDel); store.set('settings', settings); hsOpen = null; }
+      renderVorfahrt();
+      if (hsAdd && d.hsAdd) { const i = $('#inp-hs'); if (i) i.focus(); }
+      return;
+    }
     const m = ev.target.closest('[data-mb]:not(form),[data-linie-del],[data-linie-add]');
     if (m) {
       if (m.dataset.linieDel) { settings.linien = settings.linien.filter((l) => l !== m.dataset.linieDel); store.set('settings', settings); }
@@ -2183,10 +2289,20 @@
     else return;
     renderVorfahrt();
   });
+  $('#vorfahrt').addEventListener('input', (ev) => {
+    if (ev.target.id !== 'inp-hs') return;
+    hsHits = ev.target.value.trim().length >= 2 ? hsSuggest(ev.target.value) : null;
+    const el = $('#hs-hits'); if (el) el.innerHTML = hsHitList();
+  });
+  // Abfahrten laufen mit der Uhr: jede halbe Minute neu, solange nichts eingegeben wird
+  setInterval(() => {
+    if (fp && !hsAdd && !mbAdd && !$('#view-start').hidden && MODE_GROUP[selectedMode()] === 'oepnv' && settings.haltestellen.length) renderVorfahrt();
+  }, 30000);
   $('#vorfahrt').addEventListener('submit', (ev) => {
     ev.preventDefault();
-    const f = ev.target.closest('[data-vf],[data-mb]');
+    const f = ev.target.closest('[data-vf],[data-mb],[data-hs-form]');
     if (!f) return;
+    if (f.dataset.hsForm) { const hits = hsSuggest($('#inp-hs').value); if (hits.length === 1) { addHaltestelle(hits[0]); renderVorfahrt(); } return; }
     if (f.dataset.mb === 'linie') {
       const i = $('#inp-linie');
       if (addLinie(i.value)) { mbAdd = false; renderToday(); } else { i.value = ''; i.placeholder = 'Nur Nummern wie 3, 21 oder N4'; }

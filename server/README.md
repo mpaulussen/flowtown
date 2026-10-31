@@ -65,6 +65,19 @@ Bei 5 Minuten Abstand sind das höchstens knapp 600 HERE-Abfragen am Tag (Fluss 
 
 Laufen ohne Einrichtung. Der Server liest höchstens alle 15 Minuten die öffentliche Seite https://www.mobiel.de/aktuelles/neueste-umleitungen/ (nur wenn jemand in der App „Bus und Bahn“ gewählt hat) und gibt Titel, Linien, Zeitraum, den ersten Satz und den Link weiter: `/api/oepnv`. Welche Linien jemand fährt, erfährt der Server nicht. Liefert die Seite nichts Lesbares mehr (etwa nach einem Umbau bei moBiel), bleibt die letzte gute Liste bis zu 24 Stunden stehen; im Protokoll steht dann `moBiel: …`. Abstand ändern: `MOBIEL_MIN=30`.
 
+### Fahrplan von moBiel (DELFI)
+
+Der Server holt einmal pro Woche nachts (3 bis 5 Uhr) den deutschlandweiten Fahrplan von DELFI (GTFS, etwa 550 MB), zieht mit `fahrplan-bielefeld.py` nur moBiel heraus (etwa 40 Sekunden, rund 130 MB Arbeitsspeicher) und löscht die große Datei wieder. Übrig bleibt `fahrplan.json` mit knapp 2 MB; die App lädt sie gepackt mit etwa 150 KB und rechnet die Abfahrten auf dem Handy.
+
+1. Python 3 muss da sein (bei Ubuntu vorinstalliert): `python3 --version`. Kurzzeitig braucht der Server etwa 600 MB freien Platz: `df -h /var/lib`.
+2. In `/etc/flowtown.env` den persönlichen Freigabe-Link von opendata-oepnv.de eintragen (Datensatz „Deutschlandweite Sollfahrplandaten (GTFS)“, Knopf „Teilen“ bzw. Download-Link), in Anführungszeichen:
+   ```
+   DELFI_GTFS_URL="https://www.opendata-oepnv.de/index.php?id=1384&tx_vrrkit_view%5Bsharing%5D=…"
+   ```
+3. `sudo systemctl restart flowtown`. Fehlt der Fahrplan, holt der Server ihn sofort (etwa eine Minute), danach wöchentlich. Ins Protokoll schauen: `sudo journalctl -u flowtown -n 20` zeigt „Fahrplan: 91 Linien, … Fahrten“.
+
+Von Hand neu holen: `sudo bash -c 'set -a; . /etc/flowtown.env; node /opt/flowtown/server/flowtown-server.mjs fahrplan' && sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`. Lizenz: CC BY 4.0, Quelle DELFI e.V.; die App nennt sie unter den Abfahrten.
+
 ### Pilot: Codes vergeben und Fahrten exportieren
 
 Testpersonen bekommen einen Pilot-Code (Form `FT-XXXX-XXXX`). Mit Code und Einwilligung überträgt die App ihre Fahrten pseudonym an den Server (ohne Zielnamen). Der Server speichert nur einen Hash des Codes, nie einen Namen.

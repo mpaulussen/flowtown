@@ -480,3 +480,15 @@ h2[tabindex="-1"]:focus{outline:none}
 .mb-link{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
 .vf-chip .ic{width:1em;height:1em;margin-left:4px;vertical-align:-.15em}
 .world-vor .lg-src a{color:inherit;font-weight:700}
+
+/* 0.22 Abfahrten aus dem Fahrplan */
+.dep-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
+.dep{display:grid;grid-template-columns:3.4em auto 1fr auto;gap:10px;align-items:center;padding:8px 0;border-bottom:1px solid color-mix(in srgb,var(--w-vor-ink) 15%,transparent)}
+.dep:last-child{border-bottom:0}
+.dep-t{font-variant-numeric:tabular-nums}
+.dep-line{min-width:2.2em;text-align:center;font-weight:700;border-radius:8px;padding:1px 6px;background:var(--surface);border:1px solid color-mix(in srgb,var(--w-vor-ink) 30%,transparent)}
+.dep-line.tram{background:var(--w-vor-ink);color:#fff;border-color:var(--w-vor-ink)}
+.dep-head{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.dep-in{font-size:14px;color:var(--w-vor-ink);font-variant-numeric:tabular-nums}
+.dep.mine .dep-head{font-weight:700}
+#hs-hits:empty{display:none}
