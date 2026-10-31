@@ -629,6 +629,46 @@ async function checkZiel(from, to, mode) {
   if (zielCache.size > 200) zielCache.delete(zielCache.keys().next().value);
   return v;
 }
+// Bus und Bahn: Verbindungen über HERE Public Transit (deutschlandweit, mit Zügen), gleicher Schlüssel
+const TRANSIT_URL = process.env.HERE_TRANSIT_URL || 'https://transit.router.hereapi.com/v8/routes';
+const transitArt = (m) => (/Train$/.test(m) ? 'zug' : /^(lightRail|subway|tram|monorail|inclined|aerial)$/.test(m) ? 'bahn' : /bus/i.test(m) ? 'bus' : m === 'ferry' ? 'faehre' : 'zug');
+async function hereTransit(from, to) {
+  const q = new URLSearchParams({ origin: from.join(','), destination: to.join(','), alternatives: '5', lang: 'de-DE', return: 'travelSummary', apiKey: HERE_KEY });
+  let j;
+  try { j = await getJson(`${TRANSIT_URL}?${q}`, 12000); }
+  catch (e) {
+    if (/HTTP 40[13]/.test(e.message)) throw Object.assign(new Error('Die Verbindungssuche ist für den HERE-Schlüssel noch nicht freigeschaltet.'), { status: 503 });
+    throw e;
+  }
+  const quellen = new Set();
+  const list = (j.routes || []).map((r) => {
+    const teile = (r.sections || []).map((sec) => {
+      const dep = sec.departure || {}, arr = sec.arrival || {}, tr = sec.transport || {}, dp = dep.place || {}, ap = arr.place || {};
+      for (const a of sec.attributions || []) if (a.text) quellen.add(clip(a.text, 120));
+      if (sec.type === 'pedestrian') return { art: 'fuss', ab: dep.time, an: arr.time };
+      const delay = Number(dep.delay);
+      return { art: transitArt(tr.mode || ''), linie: clip(tr.name || tr.shortName || tr.category || '', 20), ziel: clip(tr.headsign || '', 40),
+        von: clip(dp.name || '', 50), ab: dep.time, nach: clip(ap.name || '', 50), an: arr.time, gleis: dp.platform ? clip(dp.platform, 8) : undefined,
+        plus: delay >= 60 ? Math.round(delay / 60) : undefined };
+    }).filter((x) => x.ab && x.an);
+    const fahrt = teile.filter((x) => x.art !== 'fuss');
+    return fahrt.length ? { ab: teile[0].ab, an: teile[teile.length - 1].an, umstiege: fahrt.length - 1, teile } : null;
+  }).filter(Boolean);
+  return { list, quellen: [...quellen].slice(0, 4) };
+}
+async function checkZielOepnv(from, to) {
+  const key = [from, to, 'oepnv'].join('|');
+  const hit = zielCache.get(key);
+  if (hit && Date.now() - hit.t < 180000) return hit.v;
+  const { list, quellen } = await hereTransit(from, to);
+  const seen = new Set(), verbindungen = list.filter((c) => { const k = c.ab + c.an + c.teile.length; if (seen.has(k)) return false; seen.add(k); return true; })
+    .sort((a, b) => Date.parse(a.ab) - Date.parse(b.ab)).slice(0, 6);
+  if (!verbindungen.length) throw Object.assign(new Error('Keine Verbindung gefunden'), { status: 404 });
+  const v = { t: Date.now(), mode: 'oepnv', verbindungen, quellen };
+  zielCache.set(key, { t: Date.now(), v });
+  if (zielCache.size > 200) zielCache.delete(zielCache.keys().next().value);
+  return v;
+}
 function thin2(pts, n) {
   if (pts.length <= n) return pts.map((p) => [r5(p[0]), r5(p[1])]);
   const step = (pts.length - 1) / (n - 1);
@@ -775,10 +815,11 @@ const server = http.createServer(async (req, res) => {
         if (!ortAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Suchen möglich.' }, origin);
         return send(res, 200, { orte: await findOrt(q) }, origin);
       }
-      const from = coord(url.searchParams.get('from'), 2), to = coord(url.searchParams.get('to'), 4);   // Start auf etwa 1 km gerundet
-      const mode = url.searchParams.get('mode') === 'rad' ? 'rad' : 'auto';
+      // Start auf etwa 1 km gerundet; bei Bus und Bahn darf er eine gewählte Haltestelle sein (öffentlicher Ort, genau)
+      const m = url.searchParams.get('mode'), mode = m === 'rad' ? 'rad' : m === 'oepnv' ? 'oepnv' : 'auto';
+      const from = coord(url.searchParams.get('from'), mode === 'oepnv' && url.searchParams.get('ab') === 'halt' ? 4 : 2), to = coord(url.searchParams.get('to'), 4);
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
-      return send(res, 200, await checkZiel(from, to, mode), origin);
+      return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode), origin);
     }
     if (req.method === 'POST' && p.startsWith('/api/pilot/')) {
       if (!pilotAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Übertragungen möglich.' }, origin);

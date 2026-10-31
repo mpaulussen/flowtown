@@ -61,6 +61,10 @@ Autobahn-Meldungen laufen sofort. Für die Stadtstraßen:
 
 Bei 5 Minuten Abstand sind das höchstens knapp 600 HERE-Abfragen am Tag (Fluss und Störungen), egal wie viele Leute die App nutzen. Die aktuellen Freikontingente und Nutzungsbedingungen bitte bei HERE prüfen. Weitere Autobahnen: `LAGE_ROADS=A2,A33,A30`.
 
+### Woanders hin? mit Bus und Bahn
+
+Nutzt denselben HERE-Schlüssel mit der HERE Public Transit API (Verbindungen deutschlandweit, mit Zügen). Meldet die App „Die Verbindungssuche ist für den HERE-Schlüssel noch nicht freigeschaltet“, auf platform.here.com in der App beim Schlüssel prüfen, ob „Public Transit“ dazugehört. Jede Suche ist eine Abfrage; sie zählt wie die Ziel-Prüfung (`ZIEL_PER_DAY`).
+
 ### Umleitungen von moBiel
 
 Laufen ohne Einrichtung. Der Server liest höchstens alle 15 Minuten die öffentliche Seite https://www.mobiel.de/aktuelles/neueste-umleitungen/ (nur wenn jemand in der App „Bus und Bahn“ gewählt hat) und gibt Titel, Linien, Zeitraum, den ersten Satz und den Link weiter: `/api/oepnv`. Welche Linien jemand fährt, erfährt der Server nicht. Liefert die Seite nichts Lesbares mehr (etwa nach einem Umbau bei moBiel), bleibt die letzte gute Liste bis zu 24 Stunden stehen; im Protokoll steht dann `moBiel: …`. Abstand ändern: `MOBIEL_MIN=30`.

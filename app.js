@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.24.0';
+  const VERSION = '0.25.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2209,7 +2209,9 @@
   let vfOpen = false, zielOpen = null, zielEdit = false, ortList = null, ortQ = '', ortMsg = '';
   const zielRes = {};   // Ziel-ID|Verkehrsmittel → { t, data } | { loading } | { error }
   if (!Array.isArray(settings.ziele)) settings.ziele = [];
-  const zielFor = (group) => (group === 'auto' || group === 'rad');
+  const zielFor = (group) => (group === 'auto' || group === 'rad' || group === 'oepnv');
+  let zielAb = null, conOpen = 0;   // Bus und Bahn: Start an einer eigenen Haltestelle (sonst Standort), aufgeklappte Verbindung
+  const zKey = (z, group) => z.id + '|' + group + (group === 'oepnv' ? '|' + (zielAb || '') : '');
   const hm = (s) => { const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h` : `${m} min`; };
   const hmSay = (s) => { const m = Math.round(s / 60), h = Math.floor(m / 60); return (h ? `${h} Stunde${h === 1 ? '' : 'n'} ` : '') + `${m % 60} Minute${m % 60 === 1 ? '' : 'n'}`; };
 
@@ -2218,20 +2220,21 @@
     if (!apiBase()) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     const group = MODE_GROUP[selectedMode()];
-    // Bus und Bahn: statt Ziele prüfen die Umleitungen von moBiel
-    if (group === 'oepnv') {
-      if (lageOn()) el.innerHTML = abfahrtSection() + mobielSection(); else { el.hidden = true; el.innerHTML = ''; }
-      return;
-    }
+    const woanders = woandersSection(group);
+    if (woanders === null) return;   // wird gerade geprüft, zeichnet sich danach neu
+    // Bus und Bahn: Abfahrten, Woanders hin? (Verbindungen) und die Umleitungen von moBiel
+    el.innerHTML = group === 'oepnv' ? (lageOn() ? abfahrtSection() : '') + woanders + (lageOn() ? mobielSection() : '') : woanders;
+  }
+  function woandersSection(group) {
     const can = zielFor(group);
     const chips = settings.ziele.map((z) => `<button type="button" class="vf-chip${zielOpen === z.id ? ' on' : ''}" data-ziel="${z.id}" aria-expanded="${zielOpen === z.id}"${can ? '' : ' disabled'}>${esc(z.name)}</button>`).join('')
       + (settings.ziele.length < ZIEL_MAX ? `<button type="button" class="vf-chip add${zielOpen === 'neu' ? ' on' : ''}" data-ziel="neu" aria-expanded="${zielOpen === 'neu'}"${can ? '' : ' disabled'}>+ Ziel</button>` : '');
     // offenes Ziel nach einem Wechsel des Verkehrsmittels gleich neu prüfen
     const openZ = can && zielOpen && zielOpen !== 'neu' && !zielEdit ? settings.ziele.find((z) => z.id === zielOpen) : null;
-    if (openZ && !zielRes[openZ.id + '|' + group]) { checkZiel(openZ); return; }
-    const panel = !can ? (settings.ziele.length ? '<p class="small muted">Ziele prüft Flowtown mit dem Auto und dem Rad.</p>' : '')
-      : zielOpen === 'neu' ? zielForm() : zielOpen ? zielPanel(settings.ziele.find((z) => z.id === zielOpen), group) : '';
-    el.innerHTML = `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Woanders hin?</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
+    if (openZ && !zielRes[zKey(openZ, group)]) { checkZiel(openZ); return null; }
+    const panel = !can ? (settings.ziele.length ? '<p class="small muted">Ziele prüft Flowtown mit dem Auto, dem Rad und mit Bus und Bahn.</p>' : '')
+      : zielOpen === 'neu' ? zielForm() : zielOpen ? (group === 'oepnv' ? zielPanelOepnv : zielPanel)(settings.ziele.find((z) => z.id === zielOpen), group) : '';
+    return `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Woanders hin?</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
   }
   function zielForm() {
     const list = ortList ? (ortList.length
@@ -2245,7 +2248,7 @@
     if (!z) return '';
     const head = `<div class="vf-phead"><b>${esc(z.name)}</b><button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
     if (zielEdit) return `<div class="vf-panel">${head}<form class="vf-form" data-vf="rename"><label class="sr-only" for="inp-zielname">Name des Ziels</label><input id="inp-zielname" type="text" maxlength="30" value="${esc(z.name)}"><button class="btn" type="submit">Speichern</button></form><button type="button" class="btn quiet danger-text" data-vf="del">${ic('trash')}Ziel löschen</button></div>`;
-    const r = zielRes[z.id + '|' + group];
+    const r = zielRes[zKey(z, group)];
     if (!r || r.loading) return `<div class="vf-panel">${head}<p class="small muted" role="status">Strecke wird geprüft …</p></div>`;
     if (r.error) return `<div class="vf-panel">${head}<p class="small" role="status">${esc(r.error)}</p><button type="button" class="btn quiet" data-vf="again">Noch einmal prüfen</button></div>`;
     const d = r.data, route = d.pts.map((p) => p.join(',')).join(';');
@@ -2274,6 +2277,33 @@
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
     return `<div class="vf-panel">${head}${sum}${alt}${rows}${bars}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
+  // Bus und Bahn: die nächsten Verbindungen, ab Standort oder einer eigenen Haltestelle
+  const ART_LABEL = { zug: 'rail', bahn: 'tram', bus: '' };
+  function zielPanelOepnv(z, group) {
+    if (!z) return '';
+    if (zielEdit) return zielPanel(z, group);
+    const head = `<div class="vf-phead"><b>${esc(z.name)}</b><button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
+    const abs = settings.haltestellen.length && fp ? `<div class="vf-chips" role="group" aria-label="Start"><span class="small muted">Ab</span>${settings.haltestellen.map((n) => `<button type="button" class="vf-chip${zielAb === n ? ' on' : ''}" data-zab="${esc(n)}" aria-pressed="${zielAb === n}">${esc(n)}</button>`).join('')}<button type="button" class="vf-chip${zielAb ? '' : ' on'}" data-zab="" aria-pressed="${!zielAb}">${ic('pin')}Standort</button></div>` : '';
+    const r = zielRes[zKey(z, group)];
+    if (!r || r.loading) return `<div class="vf-panel">${head}${abs}<p class="small muted" role="status">Verbindungen werden gesucht …</p></div>`;
+    if (r.error) return `<div class="vf-panel">${head}${abs}<p class="small" role="status">${esc(r.error)}</p><button type="button" class="btn quiet" data-vf="again">Noch einmal suchen</button></div>`;
+    const d = r.data, now = Date.now();
+    const cons = d.verbindungen.filter((c) => Date.parse(c.ab) > now - 60000);
+    if (conOpen >= cons.length) conOpen = 0;
+    const badge = (x) => `<span class="dep-line${ART_LABEL[x.art] ? ' ' + ART_LABEL[x.art] : ''}">${esc(x.linie || '?')}</span>`;
+    const rows = cons.map((c, i) => {
+      const dur = (Date.parse(c.an) - Date.parse(c.ab)) / 1000, fahrt = c.teile.filter((x) => x.art !== 'fuss');
+      const late = fahrt.some((x) => x.plus) ? ` · <b class="con-late">+${Math.max(...fahrt.map((x) => x.plus || 0))} min</b>` : '';
+      const legs = i === conOpen ? `<ol class="con-legs">${c.teile.map((x) => x.art === 'fuss'
+        ? `<li class="small muted">${ic('walk')}${Math.max(1, Math.round((Date.parse(x.an) - Date.parse(x.ab)) / 60000))} min zu Fuß</li>`
+        : `<li>${badge(x)}<span><b>${clock(x.ab)}</b> ${esc(x.von)}${x.gleis ? `, Gleis ${esc(x.gleis)}` : ''}${x.plus ? ` <b class="con-late">+${x.plus}</b>` : ''}<br><span class="small">Richtung ${esc(x.ziel)}</span><br><b>${clock(x.an)}</b> ${esc(x.nach)}</span></li>`).join('')}</ol>` : '';
+      return `<li><button type="button" class="con${i === conOpen ? ' on' : ''}" data-con="${i}" aria-expanded="${i === conOpen}"><span class="con-t"><b>${clock(c.ab)} → ${clock(c.an)}</b><span class="small">${hm(dur)} · ${c.umstiege ? `${c.umstiege}× umsteigen` : 'direkt'}${late}</span></span><span class="con-lines">${fahrt.map(badge).join('')}</span></button>${legs}</li>`;
+    }).join('');
+    const list = rows ? `<ul class="con-list">${rows}</ul>` : '<p class="small">Gerade keine Verbindung gefunden.</p>';
+    const go = cons.length ? `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>` : '';
+    const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · © HERE${d.quellen && d.quellen.length ? ', ' + esc(d.quellen.join(', ')) : ''}${r.fallback ? ' · Start: Bielefeld' : ''} · <button type="button" class="btn-link" data-vf="again">neu suchen</button></p>`;
+    return `<div class="vf-panel">${head}${abs}${list}${zielHistory(z)}${go}${foot}</div>`;
+  }
   // Aus deinen Fahrten: frühere Fahrten zu diesem Ziel, nur angekommene
   function zielHistory(z) {
     const mine = trips.filter((t) => t.plan && t.plan.ziel === z.id && !(t.plan.rest > 2));
@@ -2298,15 +2328,17 @@
   }
   async function checkZiel(z, force) {
     const group = MODE_GROUP[selectedMode()];
-    const key = z.id + '|' + group;
+    const key = zKey(z, group);
     const old = zielRes[key];
     if (!force && old && old.data && Date.now() - old.t < 300000) return;
     zielRes[key] = { loading: true };
     renderVorfahrt();
-    const pos = await myStart();
-    const from = (pos || [52.02, 8.53]).map((x) => Math.round(x * 100) / 100);   // auf etwa 1 km gerundet, ohne Standort: Bielefeld
+    // Bus und Bahn ab einer eigenen Haltestelle: deren Lage ist öffentlich und darf genau mit
+    const halt = group === 'oepnv' && zielAb && fp && fp.byName[zielAb] ? fp.stops[fp.byName[zielAb][0]] : null;
+    const pos = halt ? [halt[2], halt[3]] : await myStart();
+    const from = halt ? pos : (pos || [52.02, 8.53]).map((x) => Math.round(x * 100) / 100);   // sonst auf etwa 1 km gerundet, ohne Standort: Bielefeld
     try {
-      const data = await api(`/api/ziel?from=${from.join(',')}&to=${z.lat},${z.lon}&mode=${group}`);
+      const data = await api(`/api/ziel?from=${from.join(',')}&to=${z.lat},${z.lon}&mode=${group}${halt ? '&ab=halt' : ''}`);
       zielRes[key] = { t: Date.now(), data, fallback: !pos };
     } catch (e) {
       zielRes[key] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : e.message };
@@ -2371,6 +2403,15 @@
     }
     const o = ev.target.closest('[data-ort]');
     if (o && ortList) { addZiel(ortList[Number(o.dataset.ort)]); return; }
+    const ab = ev.target.closest('[data-zab]');
+    if (ab) {
+      zielAb = ab.dataset.zab || null; conOpen = 0;
+      const zz = settings.ziele.find((x) => x.id === zielOpen);
+      if (zz) checkZiel(zz); else renderVorfahrt();
+      return;
+    }
+    const cn = ev.target.closest('[data-con]');
+    if (cn) { const i = Number(cn.dataset.con); conOpen = conOpen === i ? -1 : i; renderVorfahrt(); return; }
     const b = ev.target.closest('[data-vf]');
     if (!b) return;
     const z = settings.ziele.find((x) => x.id === zielOpen);
@@ -2379,10 +2420,17 @@
     else if (act === 'edit') zielEdit = !zielEdit;
     else if (act === 'again' && z) { checkZiel(z, true); return; }
     else if (act === 'go' && z) {
-      const r = zielRes[z.id + '|' + MODE_GROUP[selectedMode()]];
+      const r = zielRes[zKey(z, MODE_GROUP[selectedMode()])];
       if (!r || !r.data) return;
       const d = r.data;
-      pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km,
+      if (d.mode === 'oepnv') {
+        // geplant: von jetzt bis zur Ankunft der gewählten Verbindung; aufgezeichnet wird mit dem ersten Verkehrsmittel
+        const c = d.verbindungen[conOpen] || d.verbindungen[0], first = c.teile.find((x) => isTransit(x.art));
+        const dauer = Math.max(60, Math.round((Date.parse(c.an) - Date.now()) / 1000));
+        pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: Date.now(), dauer, basis: dauer, km: null, meldungen: [],
+          verbindung: c.teile.filter((x) => x.art !== 'fuss').map((x) => `${x.linie} ${clock(x.ab)}`).join(', ') };
+        if (first) setModeUI(first.art);
+      } else pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km,
         meldungen: d.items.slice(0, 3).map((it) => ({ titel: it.titel, art: it.art, km: it.km })) };
       zielOpen = null;
       startTrip();
