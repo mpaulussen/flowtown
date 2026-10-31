@@ -19,6 +19,8 @@
 *{box-sizing:border-box}
 [hidden]{display:none!important}
 html,body{margin:0}
+/* iOS: kein Nachfedern der ganzen Seite, sonst schwingt die feste Menüleiste mit und verdeckt Inhalte */
+html,body{overscroll-behavior-y:none}
 button,label,select,.btn{touch-action:manipulation;-webkit-tap-highlight-color:rgba(0,0,0,.08)}
 body{background:var(--bg);color:var(--fg);font:17px/1.5 "Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:block;min-height:100vh}
 .top{position:sticky;top:0;z-index:1100;display:flex;align-items:center;gap:10px;padding:calc(10px + env(safe-area-inset-top,0px)) max(16px,env(safe-area-inset-right,0px)) 10px max(16px,env(safe-area-inset-left,0px));background:var(--nav);color:var(--on-nav)}
@@ -161,7 +163,7 @@ td{font-variant-numeric:tabular-nums}
 .row{display:flex;justify-content:space-between;align-items:center;gap:12px;font-size:15px}
 select{font:inherit;min-height:44px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
 
-.tabs{position:fixed;left:0;right:0;bottom:0;z-index:1100;display:grid;grid-template-columns:repeat(5,1fr);background:var(--nav);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
+.tabs{position:fixed;left:0;right:0;bottom:0;z-index:1100;transform:translate3d(0,0,0);-webkit-backface-visibility:hidden;backface-visibility:hidden;display:grid;grid-template-columns:repeat(5,1fr);background:var(--nav);padding-bottom:env(safe-area-inset-bottom,0px);padding-left:env(safe-area-inset-left,0px);padding-right:env(safe-area-inset-right,0px)}
 .tabs button{font:inherit;font-size:12px;font-weight:600;min-height:60px;border:0;background:transparent;color:var(--on-nav);opacity:.7;cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
 .tabs button .ic{width:24px;height:24px}
 .tabs button[aria-current="page"]{opacity:1;box-shadow:inset 0 3px 0 var(--amber)}
