@@ -80,7 +80,7 @@ button:focus-visible,input:focus-visible+span,select:focus-visible,.file-btn:foc
 .switch{border:0;margin:0;padding:0;display:flex;flex-direction:column;gap:8px;min-width:0}
 .switch legend{font-weight:600;margin-bottom:8px;padding:0}
 .switch-row{display:grid;grid-template-columns:repeat(4,1fr);gap:4px;padding:4px;background:var(--surface);border:1px solid var(--line);border-radius:16px}
-.switch-row.sub{grid-template-columns:repeat(2,1fr);align-self:flex-start;min-width:240px}
+.switch-row.sub{grid-template-columns:repeat(3,1fr);align-self:flex-start;min-width:min(100%,330px)}
 .switch label{position:relative;display:flex;-webkit-tap-highlight-color:transparent}
 .switch input{position:absolute;inset:0;margin:0;opacity:0;pointer-events:none}
 .switch span{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;text-align:center;min-height:64px;padding:6px 4px;border-radius:12px;font-weight:600;font-size:14px;line-height:1.2;cursor:pointer}
@@ -492,3 +492,13 @@ h2[tabindex="-1"]:focus{outline:none}
 .dep-in{font-size:14px;color:var(--w-vor-ink);font-variant-numeric:tabular-nums}
 .dep.mine .dep-head{font-weight:700}
 #hs-hits:empty{display:none}
+
+/* 0.24 Züge und Plan gegen Ist */
+.dep-line.rail{background:#7a1f2b;color:#fff;border-color:#7a1f2b;white-space:nowrap}
+.fp-leg{background:var(--w-vor-bg);color:var(--w-vor-ink);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;margin-top:4px}
+.fp-leg .small.muted{color:inherit;opacity:.85}
+.fp-head{margin:0;display:flex;align-items:center;gap:8px;font-weight:700}
+.fp-verdict{margin:0}
+.fp-table{width:100%;border-collapse:collapse;font-size:15px;font-variant-numeric:tabular-nums}
+.fp-table th,.fp-table td{text-align:left;padding:4px 6px 4px 0;border-bottom:1px solid color-mix(in srgb,var(--w-vor-ink) 15%,transparent)}
+.fp-table td:nth-child(n+2),.fp-table th:nth-child(n+2){text-align:right}

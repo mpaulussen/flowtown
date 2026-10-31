@@ -21,6 +21,7 @@
   <symbol id="i-bike" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9l3 7.5H5.5M15 9l-1.2-3.2H11.5"/></symbol>
   <symbol id="i-bus" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16M8 18v3M16 18v3"/><circle cx="8" cy="14.5" r=".9" fill="currentColor"/><circle cx="16" cy="14.5" r=".9" fill="currentColor"/></symbol>
   <symbol id="i-tram" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="13" rx="3"/><path d="M5 11h14M9 2h6M12 2v3M8.5 21l1.5-3M15.5 21 14 18"/><circle cx="9" cy="14.5" r=".9" fill="currentColor"/><circle cx="15" cy="14.5" r=".9" fill="currentColor"/></symbol>
+  <symbol id="i-train" viewBox="0 0 24 24"><path d="M7 3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/><path d="M4 10h16M12 3v7M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".9" fill="currentColor"/><circle cx="15.5" cy="14" r=".9" fill="currentColor"/></symbol>
   <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"/><path d="m9 21 2.5-6.5M11.5 14.5 14 17v4M12.5 8.5l-1 6M12.5 8.5 9 10.5l-1.5 3M12.5 8.5 15 11.5h3"/></symbol>
   <symbol id="i-access" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><path d="M11 7.5V13h5l2.5 5.5"/><path d="M8 10.5a5.5 5.5 0 1 0 7.5 7"/></symbol>
   <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="5" r="2.2"/><path d="M8.2 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.8"/></symbol>
@@ -118,6 +119,7 @@
       <div class="switch-row sub" id="pt-row" hidden>
         <label><input type="radio" name="pt" value="bahn" checked><span><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</span></label>
         <label><input type="radio" name="pt" value="bus"><span><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg>Bus</span></label>
+        <label><input type="radio" name="pt" value="zug"><span><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Zug</span></label>
       </div>
     </fieldset>
     <div class="access-row">
@@ -164,6 +166,7 @@
         <p class="small muted">Womit geht es weiter?</p>
         <button id="btn-next-bahn" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Weiter mit Stadtbahn</button>
         <button id="btn-next-bus" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg>Weiter mit Bus</button>
+        <button id="btn-next-zug" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Weiter mit Zug</button>
       </div>
     </div>
     <div class="end-row">

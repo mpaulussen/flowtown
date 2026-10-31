@@ -4,18 +4,33 @@
 Aufruf: python3 fahrplan-bielefeld.py <gtfs.zip> <ziel.json> [Betreiber-Muster]
 
 Liest die ZIP-Datei Zeile für Zeile, ohne sie auszupacken (stop_times.txt allein hat ausgepackt
-etwa 4 GB). Behält nur die Fahrten der Betreiber, deren Name auf das Muster passt (Standard: moBiel),
-und schreibt eine kleine JSON-Datei: Haltestellen, Linien, Haltefolgen, Verkehrstage und Abfahrten.
+etwa 4 GB). Behält die Fahrten der Betreiber, deren Name auf das Muster passt (Standard: moBiel),
+und alle Züge (Nah- und Fernverkehr), die in Bielefeld halten, mit ihren Halten in der Region.
+Schreibt eine kleine JSON-Datei: Haltestellen, Linien, Haltefolgen, Verkehrstage und Abfahrten.
 Nur Standardbibliothek, damit es auf jedem Server mit Python 3 läuft.
 """
 import csv
 import datetime as dt
 import io
 import json
+import os
 import re
 import sys
 import time
 import zipfile
+
+CITY = (51.90, 52.12, 8.38, 8.70)     # Süd, Nord, West, Ost: Bielefeld
+REGION = (51.55, 52.60, 7.70, 9.60)   # Halte von Zügen nur in diesem Rahmen (Ostwestfalen und Umgebung)
+RAIL = {2} | set(range(100, 118))     # GTFS: Eisenbahn und erweiterte Bahn-Typen
+
+
+def kind(rt):
+    """0 StadtBahn, 3 Bus, 2 Zug (GTFS-Typen vereinheitlicht)"""
+    return 2 if rt in RAIL else 0 if rt == 0 or 900 <= rt <= 906 or 400 <= rt <= 405 else 3
+
+
+def inside(box, lat, lon):
+    return box[0] <= lat <= box[1] and box[2] <= lon <= box[3]
 
 
 def main():
@@ -26,15 +41,33 @@ def main():
     rows = lambda name: csv.DictReader(io.TextIOWrapper(z.open(name), encoding='utf-8-sig', newline=''))
 
     feed = next(rows('feed_info.txt'), {})
-    agencies = {a['agency_id'] for a in rows('agency.txt') if pattern.search(a['agency_name'])}
+    agency_name = {a['agency_id']: a['agency_name'] for a in rows('agency.txt')}
+    agencies = {k for k, v in agency_name.items() if pattern.search(v)}
     if not agencies:
         sys.exit('Kein Betreiber passt auf ' + pattern.pattern)
 
-    routes, route_idx = [], {}
+    # Haltestellen der Region vorab, damit beim großen Durchlauf jede Zeile schnell geprüft ist
+    region, in_city = {}, set()
+    for s in rows('stops.txt'):
+        try:
+            lat, lon = float(s['stop_lat']), float(s['stop_lon'])
+        except ValueError:
+            continue
+        if inside(REGION, lat, lon):
+            region[s['stop_id']] = [s['stop_id'], s['stop_name'], round(lat, 5), round(lon, 5)]
+            if inside(CITY, lat, lon):
+                in_city.add(s['stop_id'])
+
+    routes, route_idx, rail_routes = [], {}, set()
     for r in rows('routes.txt'):
-        if r['agency_id'] in agencies:
+        rt = int(r['route_type'] or 3)
+        if r['agency_id'] in agencies or rt in RAIL:
             route_idx[r['route_id']] = len(routes)
-            routes.append([r['route_short_name'], int(r['route_type'] or 3)])
+            if r['agency_id'] in agencies:
+                routes.append([r['route_short_name'], kind(rt)])
+            else:   # Züge: GTFS-Typ (101 ICE, 102 IC/EC) und Betreiber
+                routes.append([r['route_short_name'], 2, rt, agency_name.get(r['agency_id'], '')])
+                rail_routes.add(r['route_id'])
 
     trips, heads, head_idx = {}, [], {}
     for t in rows('trips.txt'):
@@ -45,7 +78,8 @@ def main():
         if h not in head_idx:
             head_idx[h] = len(heads)
             heads.append(h)
-        trips[t['trip_id']] = [ri, t['service_id'], head_idx[h], t['direction_id'] or '0', []]
+        # Züge: Zugnummer merken (ICE 549), und ob die Fahrt Bielefeld berührt, zeigt erst stop_times
+        trips[t['trip_id']] = [ri, t['service_id'], head_idx[h], t['trip_short_name'] if t['route_id'] in rail_routes else '', [], t['route_id'] not in rail_routes]
 
     # stop_times: erst nur das erste Feld prüfen, das ist bei 4 GB der teure Teil
     with z.open('stop_times.txt') as f:
@@ -58,18 +92,23 @@ def main():
             if tr is None:
                 continue
             v = next(csv.reader([line]))
+            sid = v[col['stop_id']]
+            if sid not in region:
+                continue
             dep = v[col['departure_time']] or v[col['arrival_time']]
             if not dep:
                 continue
             h, m, s = (int(x) for x in dep.split(':'))
-            tr[4].append((int(v[col['stop_sequence']]), v[col['stop_id']], h * 60 + m + (1 if s >= 30 else 0)))
+            tr[4].append((int(v[col['stop_sequence']]), sid, h * 60 + m + (1 if s >= 30 else 0)))
+            if sid in in_city:
+                tr[5] = True
 
+    trips = {k: tr for k, tr in trips.items() if tr[5]}
     used = {s for tr in trips.values() for _, s, _ in tr[4]}
     stops, stop_idx = [], {}
-    for s in rows('stops.txt'):
-        if s['stop_id'] in used:
-            stop_idx[s['stop_id']] = len(stops)
-            stops.append([s['stop_id'], s['stop_name'], round(float(s['stop_lat']), 5), round(float(s['stop_lon']), 5)])
+    for sid in sorted(used):
+        stop_idx[sid] = len(stops)
+        stops.append(region[sid])
 
     # Verkehrstage je Dienst: Wochentage im Zeitraum plus Ausnahmen
     services = {tr[1] for tr in trips.values()}
@@ -101,21 +140,25 @@ def main():
             pat_idx[seq] = len(patterns)
             patterns.append(list(seq))
         times = [m for _, _, m in st]
-        out_trips.append([tr[0], pat_idx[seq], tr[2], tr[1], times[0], [b - a for a, b in zip(times, times[1:])]])
+        out_trips.append([tr[0], pat_idx[seq], tr[2], tr[1], times[0], [b - a for a, b in zip(times, times[1:])]] + ([tr[3]] if tr[3] else []))
+    # nur Linien und Verkehrstage, die übrig bleiben
+    used_routes = sorted({t[0] for t in out_trips})
+    remap = {old: new for new, old in enumerate(used_routes)}
+    for t in out_trips:
+        t[0] = remap[t[0]]
     out_trips.sort(key=lambda t: (t[0], t[4]))
-
+    used_services = {t[3] for t in out_trips}
     out = {
         'quelle': 'DELFI', 'lizenz': 'CC BY 4.0', 'stand': feed.get('feed_version', ''),
         'gilt': [feed.get('feed_start_date', ''), feed.get('feed_end_date', '')],
-        'stops': stops, 'routes': routes, 'heads': heads, 'patterns': patterns,
-        'services': {k: sorted(v) for k, v in days.items() if v}, 'trips': out_trips
+        'stops': stops, 'routes': [routes[i] for i in used_routes], 'heads': heads, 'patterns': patterns,
+        'services': {k: sorted(v) for k, v in days.items() if v and k in used_services}, 'trips': out_trips
     }
     with open(dst + '.tmp', 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
-    import os
     os.replace(dst + '.tmp', dst)
-    print(f'{len(routes)} Linien, {len(out_trips)} Fahrten, {len(stops)} Haltestellen, {len(patterns)} Haltefolgen in {time.time() - t0:.0f} s')
-
+    rail = sum(1 for t in out_trips if out['routes'][t[0]][1] == 2)
+    print(f'{len(out_trips)} Fahrten, davon {rail} Züge, {len(used_routes)} Linien, {len(stops)} Haltestellen, {len(patterns)} Haltefolgen in {time.time() - t0:.0f} s')
 
 if __name__ == '__main__':
     main()

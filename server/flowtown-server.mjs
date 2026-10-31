@@ -679,8 +679,8 @@ function writePilot(h, d) {
   fs.writeFileSync(tmp, JSON.stringify(d));
   fs.renameSync(tmp, f);
 }
-const TRIP_KEYS = ['id', 'mode', 'start', 'end', 'distance', 'events', 'gaps', 'cells', 'stats', 'legs', 'transfers', 'access', 'consumption', 'plan'];
-const TRIP_MODES = new Set(['auto', 'rad', 'bus', 'bahn', 'fuss']);
+const TRIP_KEYS = ['id', 'mode', 'start', 'end', 'distance', 'events', 'gaps', 'cells', 'stats', 'legs', 'transfers', 'access', 'consumption', 'plan', 'fahrplan'];
+const TRIP_MODES = new Set(['auto', 'rad', 'bus', 'bahn', 'zug', 'fuss']);
 function cleanTrip(t) {
   if (!t || typeof t !== 'object' || typeof t.id !== 'string' || t.id.length > 40 || !TRIP_MODES.has(t.mode) || t.demo) return null;
   if (!Array.isArray(t.events) || t.events.length > 3000 || !(Number(t.start) > 0)) return null;

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.23.0';
+  const VERSION = '0.24.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -12,6 +12,7 @@
     rad:  { label: 'Rad',       stopV: 0.9,  goV: 1.8, haltRadius: 40, passRadius: 20, vRef: 5.5 },
     bus:  { label: 'Bus',       stopV: 1.4,  goV: 2.5, haltRadius: 70, passRadius: 25, vRef: 13.9 },
     bahn: { label: 'Stadtbahn', stopV: 1.4,  goV: 2.5, haltRadius: 60, passRadius: 25, vRef: 13.9 },
+    zug:  { label: 'Zug',       stopV: 1.4,  goV: 2.5, haltRadius: 0,  passRadius: 0,  vRef: 25 },   // ohne Straßenampeln: zählt Halte an Bahnhöfen und Verspätung
     fuss: { label: 'Zu Fuß',    stopV: 0.35, goV: 0.8, haltRadius: 30, passRadius: 18, vRef: 1.3 }
   };
   const STOP_CONFIRM_MS = 3000;   // so lange langsam, bis ein Halt zählt
@@ -124,7 +125,7 @@
   const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   // Symbole aus dem Sprite in index.html
   const ic = (name, cls) => `<svg class="ic${cls ? ' ' + cls : ''}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
-  const MODE_ICON = { auto: 'car', rad: 'bike', bus: 'bus', bahn: 'tram', fuss: 'walk', oepnv: 'tram' };
+  const MODE_ICON = { auto: 'car', rad: 'bike', bus: 'bus', bahn: 'tram', zug: 'train', fuss: 'walk', oepnv: 'tram' };
   // Name einer Ampel oder eines Wegs zum Antippen: öffnet die kleine Karte
   const placeBtn = (label, lat, lon, kind) => `<button type="button" class="place" data-peek="${kind || 's'}" data-lat="${lat}" data-lon="${lon}" data-name="${esc(label)}">${esc(label)}</button>`;
   const placeFor = (e) => placeBtn(labelFor(e), e.lat, e.lon);
@@ -469,11 +470,13 @@
         if (t - rec.slowSince.t >= STOP_CONFIRM_MS) {
           const s = rec.slowSince;
           // Bus und Bahn: die Haltestelle geht vor. Beim Umsteigen zu Fuß geht die Fußgängerampel vor.
-          const near = findSignal(s, s.heading, cfg.haltRadius);
-          const atStop = rec.transfer ? !near && nearStop(s) : (rec.curMode === 'bahn' || rec.curMode === 'bus') && nearStop(s);
+          // Zug: keine Straßenampeln, Bahnhöfe sind lang (Fahrplan-Halte bis 250 m)
+          const train = rec.curMode === 'zug';
+          const near = train ? null : findSignal(s, s.heading, cfg.haltRadius);
+          const atStop = rec.transfer ? !near && nearStop(s) : train ? nearStop(s) || fpStopsNear(s, 250, 2).length > 0 : isTransit(rec.curMode) && nearStop(s);
           const sig = atStop ? null : near;
           // keine Ampel in der Nähe, aber eine voraus: vermutlich Stau davor (endgültig zugeordnet wird am Ende der Fahrt)
-          const queueSig = !sig && !atStop ? findSignal(s, s.heading, QUEUE_M) : null;
+          const queueSig = !sig && !atStop && !train ? findSignal(s, s.heading, QUEUE_M) : null;
           rec.stop = { t0: s.t, lat: s.lat, lon: s.lon, heading: s.heading, signal: sig, atStop, queueSig };
           rec.fastSince = null;
         }
@@ -553,6 +556,7 @@
 
   function checkPass(p, heading, t) {
     const cfg = rec.cfg;
+    if (rec.curMode === 'zug') return;
     for (const c of allClusters()) {
       if (dist(c, p) > cfg.passRadius) continue;
       if (rec.recentPass[c.id] && t - rec.recentPass[c.id] < 90000) continue;
@@ -790,7 +794,7 @@
   }
 
   // ---------- Umsteigen (Bus und Bahn) ----------
-  const isTransit = (m) => m === 'bus' || m === 'bahn';
+  const isTransit = (m) => m === 'bus' || m === 'bahn' || m === 'zug';
   const nowT = () => (rec.samples.length ? rec.samples[rec.samples.length - 1].t : Date.now());
   function closeLeg(t) {
     const legs = rec.trip.legs || (rec.trip.legs = []);
@@ -890,6 +894,86 @@
     $('#btn-end').hidden = false; $('#btn-end-confirm').hidden = true; $('#btn-end-cancel').hidden = true;
   }
 
+  // ---------- Bus und Bahn: Plan gegen Ist ----------
+  // Welche Fahrt laut Fahrplan war das? Die Halte an Haltestellen werden auf dem Handy mit dem Fahrplan abgeglichen.
+  // Ergebnis je Abschnitt: Linie, Ziel, Halt für Halt Plan und Ist, und wie lange das Fahrzeug dazwischen an Ampeln stand.
+  const KIND_OF_MODE = { bahn: 0, bus: 3, zug: 2 };
+  function matchLeg(t, mode, t0, t1) {
+    const k = KIND_OF_MODE[mode];
+    // Zeitpunkte: alle Halte in der Nähe einer Haltestelle dieser Art (auch ältere Fahrten, in denen ein Halt an der Ampel daneben zählte)
+    const halts = [], cand = [];
+    for (const e of t.events) {
+      if (e.type !== 'halt' || e.t < t0 || e.t > t1 || (e.mode || t.mode) !== mode) continue;
+      const c = fpStopsNear(e.at ? { lat: e.at[0], lon: e.at[1] } : e, mode === 'zug' ? 300 : 90, k);
+      if (c.length) { halts.push(e); cand.push(new Set(c)); }
+    }
+    if (halts.length < 2) return null;
+    const pats = new Set();
+    cand.forEach((c) => c.forEach((si) => (fp.patsOf[si] || []).forEach((pi) => pats.add(pi))));
+    const d0 = new Date(halts[0].t); d0.setHours(0, 0, 0, 0);
+    const days = [[servicesOn(ymd(d0)), d0.getTime()], [servicesOn(ymd(new Date(d0.getTime() - 864e5))), d0.getTime() - 864e5]];
+    let best = null;
+    for (const tr of fp.trips) {
+      if (!pats.has(tr[1]) || fp.routes[tr[0]][1] !== k) continue;
+      const pat = fp.patterns[tr[1]];
+      for (const [on, base] of days) {
+        if (!on.has(tr[3])) continue;
+        const times = [tr[4]];
+        for (const x of tr[5]) times.push(times[times.length - 1] + x);
+        const m = [];
+        let from = 0;
+        halts.forEach((e, hi) => {
+          const j = pat.findIndex((si, jj) => jj >= from && cand[hi].has(si));
+          if (j < 0) return;
+          const d = (e.tEnd - base) / 60000 - times[j];   // Abfahrt Ist minus Plan, in Minuten
+          if (d >= -3 && d <= 30) { m.push({ hi, j }); from = j + 1; }
+        });
+        if (m.length < 2 || m.length < halts.length / 2) continue;
+        // bei gleich vielen Treffern: gleichmäßige Verspätung und vor allem die kleinste (sonst passt bei dichtem Takt auch die Bahn davor)
+        const ds = m.map((x) => (halts[x.hi].tEnd - base) / 60000 - times[x.j]).sort((p, q) => p - q);
+        const cost = (ds[ds.length - 1] - ds[0]) + Math.abs(ds[Math.floor(ds.length / 2)]) * 1.5;
+        if (!best || m.length > best.m.length || (m.length === best.m.length && cost < best.cost)) best = { tr, base, times, pat, m, cost };
+      }
+    }
+    if (!best) return null;
+    const { tr, base, times, pat, m } = best;
+    const a = halts[m[0].hi].tEnd, b = halts[m[m.length - 1].hi].t;
+    const amps = t.events.filter((e) => e.type === 'halt' && e.signal && e.t >= a && e.t <= b);
+    return { mode, linie: fpLine(tr[0], tr[6]), ziel: fp.heads[tr[2]].replace(/^Bielefeld,\s*/, ''),
+      halte: m.map(({ hi, j }) => [fpName(pat[j]), base + times[j] * 60000, halts[hi].tEnd]),
+      amp: amps.reduce((x, e) => x + e.wait, 0), ampN: amps.length };
+  }
+  function matchFahrplan(t) {
+    const legs = t.legs && t.legs.length ? t.legs : [{ mode: t.mode, t0: t.start, t1: t.end }];
+    return legs.filter((l) => isTransit(l.mode)).map((l) => matchLeg(t, l.mode, l.t0, l.t1 || t.end)).filter(Boolean);
+  }
+  // einmal je Fahrt abgleichen, solange der Fahrplan die Fahrt abdeckt; das Ergebnis bleibt an der Fahrt
+  function ensureFahrplan(t) {
+    if (t.demo || 'fahrplan' in t || !(isTransit(t.mode) || (t.legs || []).some((l) => isTransit(l.mode)))) return false;
+    if (!fp) { loadFahrplan().then((ok) => { if (ok && reviewTrip === t && ensureFahrplan(t)) openReview(t); }); return false; }
+    const day = ymd(new Date(t.start));
+    if (day < fp.gilt[0] || day > fp.gilt[1]) return false;
+    t.fahrplan = matchFahrplan(t);
+    saveTrips();
+    return true;
+  }
+  function fahrplanHtml(t) {
+    if (!t.fahrplan || !t.fahrplan.length) return '';
+    return t.fahrplan.map((l) => {
+      const f = l.halte[0], z = l.halte[l.halte.length - 1];
+      const late = (h) => Math.round((h[2] - h[1]) / 60000), sign = (x) => (x > 0 ? `+${x}` : x < 0 ? `−${-x}` : '±0');
+      const gain = late(z) - late(f);
+      const verdict = gain >= 1 ? `${gain} min Verspätung unterwegs aufgebaut` : gain <= -1 ? `${-gain} min unterwegs aufgeholt` : 'Unterwegs im Plan geblieben';
+      const who = l.mode === 'bus' ? 'der Bus' : l.mode === 'zug' ? 'der Zug' : 'die Bahn';
+      const amp = l.mode === 'zug' ? '' : l.amp ? ` Dazwischen stand ${who} ${durText(l.amp)} an Ampeln (${l.ampN} Halt${l.ampN === 1 ? '' : 'e'}).` : ` Dazwischen musste ${who} an keiner Ampel halten.`;
+      const rows = l.halte.map((h) => `<tr><td>${esc(h[0])}</td><td>${clock(h[1])}</td><td>${clock(h[2])}</td><td>${sign(late(h))}</td></tr>`).join('');
+      return `<div class="fp-leg"><p class="fp-head"><span class="dep-line${l.mode === 'bahn' ? ' tram' : l.mode === 'zug' ? ' rail' : ''}">${esc(l.linie)}</span><span>→ ${esc(l.ziel)}</span></p>
+        <p class="small muted">Laut Fahrplan ${esc(f[0])} ${clock(f[1])} bis ${esc(z[0])} ${clock(z[1])} · Abfahrt ${sign(late(f))} min, zuletzt ${sign(late(z))} min</p>
+        <p class="fp-verdict"><b>${verdict}.</b>${amp}</p>
+        <details class="fp-more"><summary>Halt für Halt</summary><table class="fp-table"><thead><tr><th>Halt</th><th>Plan</th><th>Ist</th><th>min</th></tr></thead><tbody>${rows}</tbody></table></details></div>`;
+    }).join('') + `<p class="small muted lg-src">Fahrplan: DELFI (CC BY 4.0). Ist ist die Abfahrt, wie Flowtown sie gemessen hat.</p>`;
+  }
+
   // ---------- Bewertung ----------
   let reviewTrip = null;
   function openReview(trip) {
@@ -910,6 +994,7 @@
       trs.length ? pill('walk', `${trs.length} Umstieg${trs.length === 1 ? '' : 'e'} · ${durText(trs.reduce((x, r) => x + r.wait, 0))}`) : '',
       other ? pill('info', `${other} ohne Ampel`) : ''
     ].join('');
+    ensureFahrplan(trip);
     renderReviewHead(trip, halts, passes, wait);
     $('#review-ask').hidden = !halts.length && !trs.length;
     $('#review-ask').textContent = halts.length ? 'Wie war es an den Ampeln?' : 'Wie war der Umstieg?';
@@ -1015,7 +1100,8 @@
     const pc = (x) => (x / all * 100).toFixed(1) + '%';
     $('#review-head').innerHTML = `<p class="st-sub">${sub}</p>
       <div class="rh-bar" role="img" aria-label="${esc(`${hmSay(dur / 1000)}, davon ${transit ? `${hmSay(stopT / 1000)} an Haltestellen, ` : ''}etwa ${hmSay(slow / 1000)} langsam oder im Stau und ${hmSay(wait / 1000)} an Ampeln`)}"><span style="width:${pc(flow)}"></span>${transit ? `<span class="stop" style="width:${pc(stopT)}"></span>` : ''}<span class="slow" style="width:${pc(slow)}"></span><span class="amp" style="width:${pc(wait)}"></span></div>
-      <ul class="pl-legend row-legend">${transit ? `<li><span class="lg-dot stop"></span>${durText(stopT)} an Haltestellen</li>` : ''}${slow >= 60000 ? `<li><span class="lg-dot red"></span>etwa ${Math.round(slow / 60000)} min langsam oder Stau</li>` : ''}<li><span class="lg-dot"></span>${durText(wait)} an Ampeln</li></ul>`;
+      <ul class="pl-legend row-legend">${transit ? `<li><span class="lg-dot stop"></span>${durText(stopT)} an Haltestellen</li>` : ''}${slow >= 60000 ? `<li><span class="lg-dot red"></span>etwa ${Math.round(slow / 60000)} min langsam oder Stau</li>` : ''}<li><span class="lg-dot"></span>${durText(wait)} an Ampeln</li></ul>
+      ${fahrplanHtml(t)}`;
   }
   function renderBilanz() {
     const t = reviewTrip;
@@ -1573,7 +1659,7 @@
   $$('.tabs button').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
 
   // ---------- Heute: Verkehrsmittel, eigene Wege, beste Abfahrtszeit ----------
-  const MODE_GROUP = { auto: 'auto', rad: 'rad', bus: 'oepnv', bahn: 'oepnv', fuss: 'fuss' };
+  const MODE_GROUP = { auto: 'auto', rad: 'rad', bus: 'oepnv', bahn: 'oepnv', zug: 'oepnv', fuss: 'fuss' };
   const GROUP_WITH = { auto: 'mit dem Auto', rad: 'mit dem Rad', oepnv: 'mit Bus und Bahn', fuss: 'zu Fuß' };
   const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
   const durText = (ms) => (ms >= 3600000 ? fmtDur(ms) : fmtDur(ms) + ' min');
@@ -1927,7 +2013,7 @@
     idx.forEach((si) => (fp.patsOf[si] || []).forEach((pi) => pats.add(pi)));
     const nowMin = now.getHours() * 60 + now.getMinutes(), out = [];
     const days = [[servicesOn(ymd(now)), 0], [servicesOn(ymd(new Date(now - 864e5))), 1440]];
-    for (const [r, pi, h, sv, start, deltas] of fp.trips) {
+    for (const [r, pi, h, sv, start, deltas, nr] of fp.trips) {
       if (!pats.has(pi)) continue;
       for (const [on, shift] of days) {
         if (!on.has(sv)) continue;
@@ -1936,11 +2022,28 @@
         for (let k = 0; k < pat.length - 1; k++) {   // an der Endhaltestelle fährt nichts mehr ab
           if (k) t += deltas[k - 1];
           if (t > nowMin + span) break;
-          if (idx.has(pat[k]) && t >= nowMin) out.push({ t, line: fp.routes[r][0], tram: fp.routes[r][1] === 0, head: fp.heads[h].replace(/^Bielefeld,\s*/, '') });
+          if (idx.has(pat[k]) && t >= nowMin) out.push({ t, line: fpLine(r, nr), kind: fp.routes[r][1], head: fp.heads[h].replace(/^Bielefeld,\s*/, '') });
         }
       }
     }
     return out.sort((a, b) => a.t - b.t);
+  }
+  // Zuglinien: ICE und IC mit Zugnummer (im Datensatz steht dort nur die Liniennummer), sonst RE6, RB69 …
+  function fpLine(r, nr) {
+    const [short, k, rt] = fp.routes[r], n = nr ? String(Number(nr)) : '';
+    return k !== 2 ? short : rt === 101 ? `ICE ${n}` : rt === 102 && !/^[A-Z]/.test(short) ? `IC ${n}` : short;
+  }
+  const fpName = (si) => fp.stops[si][1].replace(/^Bielefeld,\s*/, '');
+  // Fahrplan-Halte in der Nähe eines Punkts, wahlweise nur von Linien einer Art (0 StadtBahn, 3 Bus, 2 Zug)
+  function fpStopsNear(p, r, k) {
+    if (!fp) return [];
+    if (!fp.kindOf) {
+      fp.kindOf = {};
+      for (const tr of fp.trips) for (const si of fp.patterns[tr[1]]) (fp.kindOf[si] = fp.kindOf[si] || new Set()).add(fp.routes[tr[0]][1]);
+    }
+    const out = [];
+    fp.stops.forEach((st, i) => { if (Math.abs(st[2] - p.lat) < 0.004 && (k == null || (fp.kindOf[i] && fp.kindOf[i].has(k))) && dist(p, { lat: st[2], lon: st[3] }) <= r) out.push(i); });
+    return out;
   }
   const hhmm = (m) => `${String(Math.floor(m / 60) % 24).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
   function hsSuggest(q) {
@@ -1967,7 +2070,7 @@
       if (list.length < 4) list = departures(open, now, 180);
       const mineL = settings.linien;
       const rows = list.slice(0, 8).map((d) => { const inMin = d.t - nowMin;
-        return `<li class="dep${mineL.includes(d.line) ? ' mine' : ''}"><b class="dep-t">${hhmm((d.t + 1440) % 1440)}</b><span class="dep-line${d.tram ? ' tram' : ''}">${esc(d.line)}</span><span class="dep-head">${esc(d.head)}</span><span class="dep-in">${inMin <= 0 ? 'jetzt' : inMin < 60 ? `in ${inMin} min` : ''}</span></li>`; }).join('');
+        return `<li class="dep${mineL.includes(d.line) ? ' mine' : ''}"><b class="dep-t">${hhmm((d.t + 1440) % 1440)}</b><span class="dep-line${d.kind === 0 ? ' tram' : d.kind === 2 ? ' rail' : ''}">${esc(d.line)}</span><span class="dep-head">${esc(d.head)}</span><span class="dep-in">${inMin <= 0 ? 'jetzt' : inMin < 60 ? `in ${inMin} min` : ''}</span></li>`; }).join('');
       body = rows ? `<ul class="dep-list" aria-label="Abfahrten ${esc(open)}">${rows}</ul>` : '<p class="small">In den nächsten drei Stunden fährt hier laut Fahrplan nichts.</p>';
       body += `<p class="small muted lg-src">Laut Fahrplan, ohne Verspätungen · <button type="button" class="btn-link" data-hs-del="${esc(open)}">${esc(open)} entfernen</button> · Fahrplan: DELFI (CC BY 4.0), Stand ${esc((fp.stand || '').slice(8, 10) + '.' + (fp.stand || '').slice(5, 7) + '.')}</p>`;
     }
@@ -2791,6 +2894,7 @@
   $('#btn-transfer').addEventListener('click', startTransfer);
   $('#btn-next-bahn').addEventListener('click', () => endTransfer('bahn'));
   $('#btn-next-bus').addEventListener('click', () => endTransfer('bus'));
+  $('#btn-next-zug').addEventListener('click', () => endTransfer('zug'));
   $$('input[name="mgroup"], input[name="pt"]').forEach((i) => i.addEventListener('change', () => {
     $('#pt-row').hidden = $('input[name="mgroup"]:checked').value !== 'oepnv';
     settings.mode = selectedMode(); store.set('settings', settings);
@@ -2880,5 +2984,5 @@
   }
 
   // Für Tests von außen erreichbar
-  window.__ww = { onPosition: (p) => onPosition(p), state: () => ({ rec, trips, clusters }), demoRun };
+  window.__ww = { onPosition: (p) => onPosition(p), state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)) };
 })();

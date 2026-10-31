@@ -67,7 +67,7 @@ Laufen ohne Einrichtung. Der Server liest höchstens alle 15 Minuten die öffent
 
 ### Fahrplan von moBiel (DELFI)
 
-Der Server holt einmal pro Woche nachts (3 bis 5 Uhr) den deutschlandweiten Fahrplan von DELFI (GTFS, etwa 550 MB), zieht mit `fahrplan-bielefeld.py` nur moBiel heraus (etwa 40 Sekunden, rund 130 MB Arbeitsspeicher) und löscht die große Datei wieder. Übrig bleibt `fahrplan.json` mit knapp 2 MB; die App lädt sie gepackt mit etwa 150 KB und rechnet die Abfahrten auf dem Handy.
+Der Server holt einmal pro Woche nachts (3 bis 5 Uhr) den deutschlandweiten Fahrplan von DELFI (GTFS, etwa 550 MB), zieht mit `fahrplan-bielefeld.py` nur moBiel und alle Züge mit Halt in Bielefeld heraus (RE, RB, IC, ICE mit ihren Halten in Ostwestfalen) (etwa 40 Sekunden, rund 130 MB Arbeitsspeicher) und löscht die große Datei wieder. Übrig bleibt `fahrplan.json` mit knapp 2 MB; die App lädt sie gepackt mit etwa 150 KB und rechnet die Abfahrten auf dem Handy.
 
 1. Python 3 muss da sein (bei Ubuntu vorinstalliert): `python3 --version`. Kurzzeitig braucht der Server etwa 600 MB freien Platz: `df -h /var/lib`.
 2. In `/etc/flowtown.env` den persönlichen Freigabe-Link von opendata-oepnv.de eintragen (Datensatz „Deutschlandweite Sollfahrplandaten (GTFS)“, Knopf „Teilen“ bzw. Download-Link), in Anführungszeichen:
@@ -75,6 +75,8 @@ Der Server holt einmal pro Woche nachts (3 bis 5 Uhr) den deutschlandweiten Fahr
    DELFI_GTFS_URL="https://www.opendata-oepnv.de/index.php?id=1384&tx_vrrkit_view%5Bsharing%5D=…"
    ```
 3. `sudo systemctl restart flowtown`. Fehlt der Fahrplan, holt der Server ihn sofort (etwa eine Minute), danach wöchentlich. Ins Protokoll schauen: `sudo journalctl -u flowtown -n 20` zeigt „Fahrplan: 91 Linien, … Fahrten“.
+
+Nach einem Update des Auszugs (etwa 0.24 mit Zügen) einfach die alte Datei löschen und neu starten, dann holt der Server sofort neu: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown`.
 
 Von Hand neu holen: `sudo bash -c 'set -a; . /etc/flowtown.env; node /opt/flowtown/server/flowtown-server.mjs fahrplan' && sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`. Lizenz: CC BY 4.0, Quelle DELFI e.V.; die App nennt sie unter den Abfahrten.
 
