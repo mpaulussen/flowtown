@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.25.0';
+  const VERSION = '0.26.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3030,6 +3030,22 @@
     // neue Version übernommen: einmal neu laden, damit sie sofort sichtbar ist (nie während einer Aufzeichnung)
     if (navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => { if (!rec) location.reload(); });
   }
+
+  // Aktualisieren oben rechts: neue Version holen und alles neu laden (in den Homescreen-Apps fehlt das Herunterziehen)
+  $('#btn-refresh').addEventListener('click', async () => {
+    if (rec) return;   // nie während einer Aufzeichnung
+    const b = $('#btn-refresh');
+    b.classList.add('busy'); b.disabled = true;
+    try {
+      const reg = 'serviceWorker' in navigator ? await navigator.serviceWorker.getRegistration() : null;
+      if (reg) {
+        await Promise.race([reg.update(), new Promise((r) => setTimeout(r, 4000))]);
+        // kommt eine neue Version, lädt der Wechsel des Service Workers die Seite selbst neu
+        if (reg.installing || reg.waiting) { setTimeout(() => location.reload(), 4000); return; }
+      }
+    } catch (e) { /* ohne Service Worker einfach neu laden */ }
+    location.reload();
+  });
 
   // Für Tests von außen erreichbar
   window.__ww = { onPosition: (p) => onPosition(p), state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)) };
