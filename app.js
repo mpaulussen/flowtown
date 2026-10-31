@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.21.4';
+  const VERSION = '0.21.5';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -212,6 +212,8 @@
         clearTimeout(timer);
         if (!res.ok) throw new Error('HTTP ' + res.status);
         const json = await res.json();
+        // Overpass meldet Überlast oft mit „OK“ und leerer oder halber Liste, nur mit Hinweis: dann nicht als geladen merken
+        if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
         let n = 0;
         for (const el of json.elements || []) {
           if (el.type !== 'node') continue;
@@ -226,10 +228,13 @@
           else signalCache.stops[el.id] = tg.name ? [round5(el.lat), round5(el.lon), tg.name] : [round5(el.lat), round5(el.lon)];
         }
         signalCache.areas = signalCache.areas.filter((a) => dist(a, p) > 1000);
-        signalCache.areas.push({ lat: round5(p.lat), lon: round5(p.lon), r: AREA_RADIUS, fetched: Date.now() });
+        // ohne eine einzige Ampel (auf dem Land möglich, oder ein Aussetzer): nur einen Tag als geladen merken
+        signalCache.areas.push({ lat: round5(p.lat), lon: round5(p.lon), r: AREA_RADIUS, fetched: Date.now() - (n ? 0 : 29 * 864e5) });
         store.set('signals', signalCache);
         clusters = buildClusters(signalCache.nodes);
         updateSignalsInfo();
+        // Halte aus Fahrten, bei denen die Ampeldaten fehlten, jetzt zuordnen
+        if (!rec && trips.map((t) => tidyTrip(t)).some(Boolean)) saveTrips();
         return n;
       } catch (e) { lastErr = e; }
     }
@@ -634,6 +639,17 @@
   function tidyTrip(trip) {
     const ev = trip.events;
     let changed = false;
+    // Halte ohne Ampel nachträglich zuordnen, etwa wenn die Ampeldaten während der Fahrt nicht da waren.
+    // Durchfahrten ohne Halt lassen sich nicht nachholen: dafür fehlt die Spur.
+    for (const e of ev) {
+      if (trip.demo || e.type !== 'halt' || e.signal || e.atStop) continue;
+      const p = e.at ? { lat: e.at[0], lon: e.at[1] } : e, mode = e.mode || trip.mode;
+      if (isTransit(mode) && nearStop(p)) { e.atStop = true; delete e.queueSig; changed = true; continue; }
+      const c = findSignal(p, e.heading, (MODES[mode] || MODES.auto).haltRadius);
+      if (!c) continue;
+      Object.assign(e, { signal: c.id, lat: round5(c.lat), lon: round5(c.lon), distToSignal: Math.round(dist(p, c)) });
+      delete e.queueSig; changed = true;
+    }
     for (const e of ev) {
       const to = e.signal && alias[e.signal];
       if (to && to !== e.signal) {
