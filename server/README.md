@@ -61,7 +61,9 @@ Autobahn-Meldungen laufen sofort. Für die Stadtstraßen:
 
 Bei 5 Minuten Abstand sind das höchstens knapp 600 HERE-Abfragen am Tag (Fluss und Störungen), egal wie viele Leute die App nutzen. Die aktuellen Freikontingente und Nutzungsbedingungen bitte bei HERE prüfen. Weitere Autobahnen: `LAGE_ROADS=A2,A33,A30`.
 
-### Woanders hin? mit Bus und Bahn
+### Wohin fahren? mit Bus und Bahn
+
+Die Ortssuche nutzt HERE Discover (Orte und Einrichtungen wie „Uni Bielefeld“) und HERE Geocode (Adressen) mit demselben Schlüssel.
 
 Nutzt denselben HERE-Schlüssel mit der HERE Public Transit API (Verbindungen deutschlandweit, mit Zügen). Meldet die App „Die Verbindungssuche ist für den HERE-Schlüssel noch nicht freigeschaltet“, auf platform.here.com in der App beim Schlüssel prüfen, ob „Public Transit“ dazugehört. Jede Suche ist eine Abfrage; sie zählt wie die Ziel-Prüfung (`ZIEL_PER_DAY`).
 

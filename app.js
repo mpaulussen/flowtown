@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.26.0';
+  const VERSION = '0.26.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2220,12 +2220,12 @@
     if (!apiBase()) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     const group = MODE_GROUP[selectedMode()];
-    const woanders = woandersSection(group);
-    if (woanders === null) return;   // wird gerade geprüft, zeichnet sich danach neu
-    // Bus und Bahn: Abfahrten, Woanders hin? (Verbindungen) und die Umleitungen von moBiel
-    el.innerHTML = group === 'oepnv' ? (lageOn() ? abfahrtSection() : '') + woanders + (lageOn() ? mobielSection() : '') : woanders;
+    const wohin = wohinSection(group);
+    if (wohin === null) return;   // wird gerade geprüft, zeichnet sich danach neu
+    // Bus und Bahn: Abfahrten, Wohin fahren? (Verbindungen) und die Umleitungen von moBiel
+    el.innerHTML = group === 'oepnv' ? (lageOn() ? abfahrtSection() : '') + wohin + (lageOn() ? mobielSection() : '') : wohin;
   }
-  function woandersSection(group) {
+  function wohinSection(group) {
     const can = zielFor(group);
     const chips = settings.ziele.map((z) => `<button type="button" class="vf-chip${zielOpen === z.id ? ' on' : ''}" data-ziel="${z.id}" aria-expanded="${zielOpen === z.id}"${can ? '' : ' disabled'}>${esc(z.name)}</button>`).join('')
       + (settings.ziele.length < ZIEL_MAX ? `<button type="button" class="vf-chip add${zielOpen === 'neu' ? ' on' : ''}" data-ziel="neu" aria-expanded="${zielOpen === 'neu'}"${can ? '' : ' disabled'}>+ Ziel</button>` : '');
@@ -2234,13 +2234,13 @@
     if (openZ && !zielRes[zKey(openZ, group)]) { checkZiel(openZ); return null; }
     const panel = !can ? (settings.ziele.length ? '<p class="small muted">Ziele prüft Flowtown mit dem Auto, dem Rad und mit Bus und Bahn.</p>' : '')
       : zielOpen === 'neu' ? zielForm() : zielOpen ? (group === 'oepnv' ? zielPanelOepnv : zielPanel)(settings.ziele.find((z) => z.id === zielOpen), group) : '';
-    return `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Woanders hin?</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
+    return `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Wohin fahren?</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
   }
   function zielForm() {
     const list = ortList ? (ortList.length
       ? `<ul class="vf-orte">${ortList.map((o, i) => `<li><button type="button" class="vf-ort" data-ort="${i}"><b>${esc(o.name)}</b>${o.sub ? `<span class="small muted">${esc(o.sub)}</span>` : ''}</button></li>`).join('')}</ul>`
       : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '';
-    return `<div class="vf-panel"><form class="vf-form" data-vf="suche"><label class="sr-only" for="inp-ziel">Ziel: Ort oder Adresse</label><input id="inp-ziel" type="search" placeholder="Ort oder Adresse" autocomplete="off" enterkeyhint="search" value="${esc(ortQ)}"><button class="btn" type="submit">Suchen</button></form>
+    return `<div class="vf-panel"><form class="vf-form" data-vf="suche"><label class="sr-only" for="inp-ziel">Ziel: Ort, Adresse oder Einrichtung</label><input id="inp-ziel" type="search" placeholder="Ort, Adresse oder z. B. Uni Bielefeld" autocomplete="off" enterkeyhint="search" value="${esc(ortQ)}"><button class="btn" type="submit">Suchen</button></form>
       ${ortMsg ? `<p class="small muted" role="status">${esc(ortMsg)}</p>` : ''}${list}
       <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit.</p></div>`;
   }

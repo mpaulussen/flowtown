@@ -674,14 +674,35 @@ function thin2(pts, n) {
   const step = (pts.length - 1) / (n - 1);
   return Array.from({ length: n }, (_, k) => pts[Math.round(k * step)]).map((p) => [r5(p[0]), r5(p[1])]);
 }
+// Ortssuche: Orte und Einrichtungen („Uni Bielefeld“, „Hauptbahnhof“) über HERE Discover, rund um Bielefeld gewichtet,
+// dazu Adressen über HERE Geocode; doppelte Treffer an derselben Stelle fallen weg
+const DISCOVER_URL = process.env.HERE_DISCOVER_URL || 'https://discover.search.hereapi.com/v1/discover';
+const ORT_LAENDER = 'countryCode:DEU,NLD,BEL,LUX,FRA,CHE,AUT,DNK,POL,CZE';
+const ORT_MITTE = [(LAGE_BBOX[1] + LAGE_BBOX[3]) / 2, (LAGE_BBOX[0] + LAGE_BBOX[2]) / 2].map((x) => x.toFixed(3)).join(',');
+function ortItem(x) {
+  const a = x.address || {};
+  const place = x.resultType === 'place';
+  const name = place ? x.title : a.street ? `${a.street}${a.houseNumber ? ' ' + a.houseNumber : ''}, ${a.city || ''}` : a.city || a.label || x.title;
+  const what = place && x.categories && x.categories[0] ? x.categories[0].name : '';
+  const where = place ? [a.street ? `${a.street}${a.houseNumber ? ' ' + a.houseNumber : ''}` : '', a.city] : [a.postalCode, a.city !== name ? a.city : '', a.state];
+  return { name: clip(name, 50), sub: clip([what].concat(where, a.countryName !== 'Deutschland' ? a.countryName : '').filter(Boolean).join(' · '), 70), lat: r5(x.position.lat), lon: r5(x.position.lng) };
+}
 async function findOrt(q) {
-  const u = `${GEOCODE_URL}?${new URLSearchParams({ q, limit: '3', lang: 'de-DE', in: 'countryCode:DEU,NLD,BEL,LUX,FRA,CHE,AUT,DNK,POL,CZE', apiKey: HERE_KEY })}`;
-  const j = await getJson(u);
-  return (j.items || []).filter((x) => x.position).slice(0, 3).map((x) => {
-    const a = x.address || {};
-    const name = a.street ? `${a.street}${a.houseNumber ? ' ' + a.houseNumber : ''}, ${a.city || ''}` : a.city || a.label || x.title;
-    return { name: clip(name, 50), sub: clip([a.postalCode, a.city !== name ? a.city : '', a.state, a.countryName !== 'Deutschland' ? a.countryName : ''].filter(Boolean).join(' · '), 70), lat: r5(x.position.lat), lon: r5(x.position.lng) };
-  });
+  const [disc, geo] = await Promise.allSettled([
+    getJson(`${DISCOVER_URL}?${new URLSearchParams({ q, at: ORT_MITTE, in: ORT_LAENDER, limit: '5', lang: 'de-DE', apiKey: HERE_KEY })}`),
+    getJson(`${GEOCODE_URL}?${new URLSearchParams({ q, limit: '3', lang: 'de-DE', in: ORT_LAENDER, apiKey: HERE_KEY })}`)
+  ]);
+  if (disc.status === 'rejected' && geo.status === 'rejected') throw geo.reason;
+  const all = [].concat(disc.status === 'fulfilled' ? disc.value.items || [] : [], geo.status === 'fulfilled' ? geo.value.items || [] : []);
+  const seen = new Set(), out = [];
+  for (const x of all) {
+    if (!x.position) continue;
+    const k = Math.round(x.position.lat * 500) + '|' + Math.round(x.position.lng * 500);   // etwa 200 m
+    if (seen.has(k)) continue;
+    seen.add(k); out.push(ortItem(x));
+    if (out.length >= 5) break;
+  }
+  return out;
 }
 const coord = (s, digits) => {
   const v = String(s || '').split(',').map(Number);
