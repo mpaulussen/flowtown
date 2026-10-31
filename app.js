@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.21.6';
+  const VERSION = '0.22.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -79,6 +79,7 @@
   };
   let trips = store.get('trips', []);
   let settings = Object.assign({ mode: 'auto', cut: 200, fuelPrice: 1.75, powerPrice: 0.35, access: { on: false, type: 'rollator' }, server: { url: DEFAULT_SERVER, wir: false, ki: false } }, store.get('settings', {}));
+  if (!Array.isArray(settings.linien)) settings.linien = [];   // Bus und Bahn: eigene Linien für die Umleitungen von moBiel
   if (!settings.serverDefault) { if (!settings.server.url) settings.server.url = DEFAULT_SERVER; settings.serverDefault = true; }   // ab 0.21: Server ist voreingestellt
   let signalCache = store.get('signals', { areas: [], nodes: {} });
   // Haltestellen ab 0.9.0, Angaben zur Barrierefreiheit ab 0.10.0: Gebiete einmal neu laden
@@ -1681,6 +1682,7 @@
     renderStatus(group);
     renderVorfahrt();
     if (lageOn() && Date.now() - lageAt >= 300000) loadLage().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
+    if (group === 'oepnv' && lageOn() && Date.now() - mbAt >= 900000) loadMobiel().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
   }
   function sortedRoutes(group) {
     const now = new Date().getHours();
@@ -1705,6 +1707,11 @@
       label = 'Willkommen'; cls = 'neutral';
       title = 'Schön, dass du da bist.';
       sub = 'Wähle, womit du unterwegs bist, und starte deine erste Aufzeichnung.';
+    } else if (group === 'oepnv' && lageOn() && mbItems().mine.some((it) => mbState(it) === 'aktiv')) {
+      const ms = mbItems().mine.filter((it) => mbState(it) === 'aktiv'), x = ms[0];
+      cls = 'amber';
+      title = x.titel;
+      sub = [mbLines(x), mbWhen(x), ms.length > 1 ? `und ${ms.length - 1} weitere Umleitung${ms.length > 2 ? 'en' : ''} auf deinen Linien` : ''].filter(Boolean).join(' · ');
     } else if (lageOn() && lageCache) {
       const { lines, hits } = myLage(group);
       if (hits.length) {
@@ -1821,6 +1828,70 @@
     try { lageCache = await api('/api/lage'); lageAt = Date.now(); return true; }
     catch (e) { lageAt = Date.now() - 240000; return false; }   // in einer Minute noch einmal
     finally { lageLoading = false; }
+  }
+  // ---------- Bus und Bahn: Umleitungen von moBiel ----------
+  // Der Server liest die öffentliche Seite von moBiel. Welche Linien du fährst, bleibt auf dem Handy: gefiltert wird hier.
+  let mbCache = null, mbAt = 0, mbLoading = false, mbAdd = false, mbAll = false;
+  async function loadMobiel() {
+    if (!lageOn() || mbLoading || Date.now() - mbAt < 900000) return false;
+    mbLoading = true;
+    try { mbCache = await api('/api/oepnv'); mbAt = Date.now(); return true; }
+    catch (e) { mbAt = Date.now() - 840000; return false; }   // in einer Minute noch einmal
+    finally { mbLoading = false; }
+  }
+  const isoDay = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  function mbState(it) {
+    const today = isoDay(new Date());
+    if (it.vorbei || (it.bis && it.bis < today)) return 'vorbei';
+    if (it.von && it.von > today) return new Date(it.von + 'T00:00:00') - Date.now() <= 7 * 864e5 ? 'bald' : 'spaeter';
+    return 'aktiv';
+  }
+  const mbDay = (iso, wd) => { const d = new Date(iso + 'T12:00:00'); return (wd ? d.toLocaleDateString('de-DE', { weekday: 'short' }) + ' ' : '') + `${d.getDate()}.${d.getMonth() + 1}.`; };
+  function mbWhen(it) {
+    if (it.von && it.von === it.bis) return it.von === isoDay(new Date()) ? 'heute' : 'am ' + mbDay(it.von, true);
+    if (mbState(it) === 'bald') return `ab ${mbDay(it.von, true)}` + (it.bis ? ` bis ${mbDay(it.bis)}` : '');
+    if (it.bis) return `bis ${mbDay(it.bis, true)}`;
+    return it.offen ? 'bis auf Weiteres' : it.von ? `seit ${mbDay(it.von)}` : '';
+  }
+  // Meldungen ohne Liniennummer (etwa „Busse in der Innenstadt“) betreffen viele: sie zählen für alle, solange sie gelten
+  function mbItems() {
+    const rank = (it) => (mbState(it) === 'aktiv' ? 0 : 1);
+    const all = ((mbCache && mbCache.items) || []).filter((it) => ['aktiv', 'bald'].includes(mbState(it))).sort((a, b) => rank(a) - rank(b));
+    const mine = settings.linien;
+    const own = (it) => it.linien.some((l) => mine.includes(l));   // eigene Linien vor allgemeinen Meldungen
+    return { all, mine: mine.length ? all.filter((it) => own(it) || (!it.linien.length && rank(it) === 0)).sort((a, b) => rank(a) - rank(b) || own(b) - own(a)) : [] };
+  }
+  const mbLines = (it) => {
+    const m = it.linien.filter((l) => settings.linien.includes(l)), l = m.length ? m : it.linien;
+    return l.length ? `Linie${l.length > 1 ? 'n' : ''} ${l.join(', ')}` : 'mehrere Linien';
+  };
+  const mbRow = (it) => lageRow(mbState(it) === 'aktiv' ? 'baustelle' : 'warnung', `<a class="mb-link" href="${esc(it.link)}" target="_blank" rel="noopener">${esc(it.titel)}</a>`,
+    [mbLines(it), mbWhen(it)].filter(Boolean).map(esc).join(' · '), it.text);
+  function mobielSection() {
+    const mine = settings.linien;
+    const chips = mine.map((l) => `<button type="button" class="vf-chip on" data-linie-del="${esc(l)}" aria-label="Linie ${esc(l)} entfernen">${esc(l)}${ic('x')}</button>`).join('')
+      + (mine.length < 12 ? `<button type="button" class="vf-chip add${mbAdd ? ' on' : ''}" data-mb="add" aria-expanded="${mbAdd}">+ Linie</button>` : '');
+    const form = mbAdd ? `<form class="vf-form" data-mb="linie"><label class="sr-only" for="inp-linie">Linie</label><input id="inp-linie" type="text" maxlength="8" placeholder="z. B. 21 oder N4" autocomplete="off" enterkeyhint="done"><button class="btn" type="submit">Hinzufügen</button></form>
+      <div class="vf-chips" role="group" aria-label="StadtBahn-Linien">${['1', '2', '3', '4'].filter((l) => !mine.includes(l)).map((l) => `<button type="button" class="vf-chip" data-linie-add="${l}">StadtBahn ${l}</button>`).join('')}</div>` : '';
+    let body;
+    if (!mbCache) body = `<p class="small muted" role="status">${mbAt ? 'moBiel ist gerade nicht erreichbar.' : 'Umleitungen werden geladen …'}</p>`;
+    else {
+      const { all, mine: hits } = mbItems();
+      const list = mbAll ? all : hits;
+      const intro = mine.length ? (hits.length ? '' : '<p class="small">Auf deinen Linien ist gerade nichts gemeldet.</p>')
+        : `<p class="small">${all.length ? `${all.length} Umleitung${all.length === 1 ? '' : 'en'} gemeldet.` : 'Gerade keine Umleitungen gemeldet.'} Wähle deine Linien, dann siehst du nur, was dich betrifft.</p>`;
+      const more = all.length > hits.length ? `<button type="button" class="btn-link" data-mb="alle" aria-expanded="${mbAll}">${mbAll ? (mine.length ? 'Nur meine Linien' : 'Weniger') : `Alle ${all.length} zeigen`}</button>` : '';
+      body = `${intro}${list.length ? `<ul class="lg-list">${list.slice(0, mbAll ? 40 : 6).map(mbRow).join('')}</ul>` : ''}${more}
+        <p class="small muted lg-src">Stand ${clock(mbCache.t || Date.now())} Uhr · Quelle: <a href="${esc(mbCache.seite || 'https://www.mobiel.de/aktuelles/neueste-umleitungen/')}" target="_blank" rel="noopener">moBiel</a></p>`;
+    }
+    return `<section class="vf world-vor" aria-labelledby="mb-h"><h3 class="vf-title" id="mb-h">Umleitungen bei moBiel</h3>
+      <div class="vf-chips" role="group" aria-label="Deine Linien">${chips}</div>${form}${body}</section>`;
+  }
+  function addLinie(v) {
+    const l = String(v || '').toUpperCase().replace(/LINIE|\s/g, '');
+    if (!/^N?\d{1,3}$/.test(l)) return false;
+    if (!settings.linien.includes(l)) { settings.linien.push(l); store.set('settings', settings); }
+    return true;
   }
   const LAGE_RANK = { sperrung: 0, stau: 1, unfall: 2, zaeh: 3, baustelle: 4, warnung: 5 };
   const LAGE_LABEL = { sperrung: 'Sperrung', stau: 'Stau', unfall: 'Unfall', zaeh: 'zäh', baustelle: 'Baustelle', warnung: 'Hinweis' };
@@ -1950,6 +2021,11 @@
     if (!apiBase()) { el.hidden = true; el.innerHTML = ''; return; }
     el.hidden = false;
     const group = MODE_GROUP[selectedMode()];
+    // Bus und Bahn: statt Ziele prüfen die Umleitungen von moBiel
+    if (group === 'oepnv') {
+      if (lageOn()) el.innerHTML = mobielSection(); else { el.hidden = true; el.innerHTML = ''; }
+      return;
+    }
     const can = zielFor(group);
     const chips = settings.ziele.map((z) => `<button type="button" class="vf-chip${zielOpen === z.id ? ' on' : ''}" data-ziel="${z.id}" aria-expanded="${zielOpen === z.id}"${can ? '' : ' disabled'}>${esc(z.name)}</button>`).join('')
       + (settings.ziele.length < ZIEL_MAX ? `<button type="button" class="vf-chip add${zielOpen === 'neu' ? ' on' : ''}" data-ziel="neu" aria-expanded="${zielOpen === 'neu'}"${can ? '' : ' disabled'}>+ Ziel</button>` : '');
@@ -2064,6 +2140,16 @@
   ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => $('#vorfahrt').addEventListener(t, () => clearTimeout(pressTimer)));
   $('#vorfahrt').addEventListener('click', (ev) => {
     if (pressed) { pressed = false; ev.preventDefault(); return; }
+    const m = ev.target.closest('[data-mb]:not(form),[data-linie-del],[data-linie-add]');
+    if (m) {
+      if (m.dataset.linieDel) { settings.linien = settings.linien.filter((l) => l !== m.dataset.linieDel); store.set('settings', settings); }
+      else if (m.dataset.linieAdd) { addLinie(m.dataset.linieAdd); mbAdd = false; }
+      else if (m.dataset.mb === 'add') mbAdd = !mbAdd;
+      else if (m.dataset.mb === 'alle') mbAll = !mbAll;
+      renderToday();
+      if (mbAdd && m.dataset.mb === 'add') { const i = $('#inp-linie'); if (i) i.focus(); }
+      return;
+    }
     const c = ev.target.closest('[data-ziel]');
     if (c) {
       const id = c.dataset.ziel;
@@ -2099,7 +2185,13 @@
   });
   $('#vorfahrt').addEventListener('submit', (ev) => {
     ev.preventDefault();
-    const f = ev.target.closest('[data-vf]');
+    const f = ev.target.closest('[data-vf],[data-mb]');
+    if (!f) return;
+    if (f.dataset.mb === 'linie') {
+      const i = $('#inp-linie');
+      if (addLinie(i.value)) { mbAdd = false; renderToday(); } else { i.value = ''; i.placeholder = 'Nur Nummern wie 3, 21 oder N4'; }
+      return;
+    }
     if (f.dataset.vf === 'suche') { const q = $('#inp-ziel').value.trim(); if (q.length >= 2) searchOrt(q); }
     if (f.dataset.vf === 'rename') {
       const z = settings.ziele.find((x) => x.id === zielOpen), name = $('#inp-zielname').value.trim();

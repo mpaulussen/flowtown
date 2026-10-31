@@ -283,6 +283,85 @@ async function readLage() {
   };
 }
 
+// ---------- Bus und Bahn: Umleitungen von moBiel ----------
+// Liest die öffentliche Seite „Neueste Umleitungen“ höchstens alle MOBIEL_MIN Minuten, nur wenn jemand fragt.
+// Weitergegeben werden Titel, Linien, Zeitraum, der erste Satz und der Link zu moBiel. Die App filtert auf dem Gerät nach den eigenen Linien.
+const MOBIEL_URL = process.env.MOBIEL_URL || 'https://www.mobiel.de/aktuelles/neueste-umleitungen/';
+const MOBIEL_MIN = Number(process.env.MOBIEL_MIN || 15);
+let mobiel = { t: 0, items: [] }, mobielRun = null, mobielTry = 0;
+const MONATE = ['januar', 'februar', 'märz', 'april', 'mai', 'juni', 'juli', 'august', 'september', 'oktober', 'november', 'dezember'];
+const deText = (x) => String(x || '').replace(/<[^>]+>/g, ' ').replace(/&nbsp;|&#160;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&rsquo;/g, '’').replace(/&raquo;/g, '»').replace(/&laquo;/g, '«').replace(/&[a-z]+;/g, ' ').replace(/\s+/g, ' ').trim();
+// „Linien 31, 64 und N1“, „NachtBus-Linie N4“, „Linie 1:“ → ['31', '64', 'N1']
+function mobielLinien(txt) {
+  const out = [];
+  for (const m of txt.matchAll(/Linie[n]?\s+((?:N\s?\d{1,2}|\d{1,3})(?:\s*(?:,|und|&|sowie)\s*(?:N\s?\d{1,2}|\d{1,3})(?![.\d]))*)/g)) {
+    for (const l of m[1].match(/N\s?\d{1,2}|\d{1,3}/g)) { const v = l.replace(/\s/g, ''); if (!out.includes(v)) out.push(v); }
+  }
+  return out;
+}
+// Zeitraum aus dem Text: „Von Montag, 2. November bis Mittwoch, 18. November 2026“, „Ab sofort bis …“, „Am Dienstag, 3. November 2026“, „14.10. bis 1.11.2026“
+function mobielZeit(txt, heute) {
+  const found = [];
+  for (const m of txt.matchAll(/(\d{1,2})\.\s*(januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)(?:\s+(\d{4}))?/gi)) found.push({ i: m.index, d: +m[1], mo: MONATE.indexOf(m[2].toLowerCase()), y: m[3] ? +m[3] : null });
+  for (const m of txt.matchAll(/(?<![\d.])(\d{1,2})\.(\d{1,2})\.(\d{4})?(?![\d])/g)) found.push({ i: m.index, d: +m[1], mo: +m[2] - 1, y: m[3] ? +m[3] : null });
+  found.sort((a, b) => a.i - b.i);
+  const bisAt = txt.search(/\bbis\b(?!\s+auf\s+Weiteres)/i);
+  let von = null, bis = null;
+  for (const f of found) {
+    if (bisAt >= 0 && f.i > bisAt) { if (!bis) bis = f; } else if (!von) von = f;
+  }
+  if (!von && /ab sofort/i.test(txt)) von = { d: heute.getDate(), mo: heute.getMonth(), y: heute.getFullYear() };
+  // „bis vsl. November“: Ende des Monats
+  const nurMonat = !bis && bisAt >= 0 && txt.slice(bisAt).match(/^bis\s+(?:vsl\.\s*|voraussichtlich\s+)?(januar|februar|märz|april|mai|juni|juli|august|september|oktober|november|dezember)(?:\s+(\d{4}))?/i);
+  if (nurMonat) { const mo = MONATE.indexOf(nurMonat[1].toLowerCase()); bis = { d: new Date(nurMonat[2] ? +nurMonat[2] : heute.getFullYear(), mo + 1, 0).getDate(), mo, y: nurMonat[2] ? +nurMonat[2] : null }; }
+  const jahr = (bis && bis.y) || (von && von.y) || heute.getFullYear();
+  const iso = (f) => (f ? `${f.y || jahr}-${String(f.mo + 1).padStart(2, '0')}-${String(f.d).padStart(2, '0')}` : null);
+  if (von && !von.y && bis && (von.mo > bis.mo || (von.mo === bis.mo && von.d > bis.d))) von.y = jahr - 1;
+  let v = iso(von), b = iso(bis);
+  // „Am 3. November“, „Für Samstag, 31. Oktober“: ein einzelner Tag; „Ab Montag, …“ dagegen ohne Ende
+  if (v && !b && bisAt < 0 && !/\bab\s+(?:sofort|montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag|\d)|bis auf Weiteres/i.test(txt)) b = v;
+  return { von: v, bis: b, offen: /bis auf Weiteres/i.test(txt) };
+}
+function parseMobiel(html, heute) {
+  const items = [];
+  for (const box of html.split(/<div class="contentbox[^"]*">/).slice(1)) {
+    const h = box.match(/<h3>\s*<a href="([^"]+)">\s*<span>([\s\S]*?)<\/span>\s*(?:<div class="subheadline">([\s\S]*?)<\/div>)?/);
+    if (!h) continue;
+    const link = new URL(h[1], MOBIEL_URL).href;
+    if (!/neueste-umleitungen\//.test(link)) continue;
+    const titel = deText(h[2]), sub = deText(h[3]);
+    const body = box.split(/<p class="text-right">/)[0];
+    const ps = [...body.matchAll(/<p>([\s\S]*?)<\/p>/g)].map((m) => deText(m[1])).filter(Boolean);
+    const text = ps.join(' ');
+    const z = mobielZeit(`${sub} ${text}`, heute);
+    const vorbei = /aufgehoben|beendet|wieder (?:ihren|den) regul/i.test(text) || (z.bis && !z.offen && z.bis < heute.toISOString().slice(0, 10));
+    items.push({
+      id: 'mb' + crypto.createHash('sha1').update(link).digest('hex').slice(0, 10), quelle: 'moBiel',
+      titel: clip(titel, 90), linien: mobielLinien(`${titel} ${sub} ${text}`), von: z.von, bis: z.offen ? null : z.bis, offen: z.offen,
+      vorbei: !!vorbei, bahn: /StadtBahn|Linie [1-4](?!\d)\b/.test(`${titel} ${sub}`) && !/StadtBahn fährt regulär/i.test(text),
+      text: clip(ps[0] || '', 240), link
+    });
+  }
+  return items;
+}
+async function refreshMobiel() {
+  mobielTry = Date.now();
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 15000);
+  try {
+    const res = await fetch(MOBIEL_URL, { signal: ctrl.signal, headers: { 'User-Agent': 'Flowtown-Prototyp (info@barrierefrai.com)', Accept: 'text/html' } });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const items = parseMobiel(await res.text(), new Date());
+    if (items.length) mobiel = { t: Date.now(), items };   // leere Liste: Seite umgebaut? Dann die letzte gute behalten
+  } catch (e) { console.error('moBiel:', e.message); } finally { clearTimeout(timer); }
+}
+async function readMobiel() {
+  if (Date.now() - mobielTry > MOBIEL_MIN * 60000) {
+    mobielRun = mobielRun || refreshMobiel().finally(() => { mobielRun = null; });
+    await mobielRun;
+  }
+  return { t: mobiel.t || null, quelle: 'moBiel', seite: MOBIEL_URL, items: Date.now() - mobiel.t < 24 * 3600e3 ? mobiel.items : [] };
+}
+
 // ---------- Ziel prüfen: Strecke mit Verkehr, Meldungen entlang der Strecke, beste Abfahrt ----------
 // Nur auf Knopfdruck. Der Start kommt auf etwa 1 km gerundet an, gespeichert wird nichts außer einem kurzen Zwischenspeicher.
 const ROUTER_URL = process.env.HERE_ROUTER_URL || 'https://router.hereapi.com/v8/routes';
@@ -618,7 +697,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -630,6 +709,7 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, await askMistral(body.facts || {}), origin);
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
+    if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);
       if (p === '/api/ort') {

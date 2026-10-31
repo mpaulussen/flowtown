@@ -61,6 +61,10 @@ Autobahn-Meldungen laufen sofort. Für die Stadtstraßen:
 
 Bei 5 Minuten Abstand sind das höchstens knapp 600 HERE-Abfragen am Tag (Fluss und Störungen), egal wie viele Leute die App nutzen. Die aktuellen Freikontingente und Nutzungsbedingungen bitte bei HERE prüfen. Weitere Autobahnen: `LAGE_ROADS=A2,A33,A30`.
 
+### Umleitungen von moBiel
+
+Laufen ohne Einrichtung. Der Server liest höchstens alle 15 Minuten die öffentliche Seite https://www.mobiel.de/aktuelles/neueste-umleitungen/ (nur wenn jemand in der App „Bus und Bahn“ gewählt hat) und gibt Titel, Linien, Zeitraum, den ersten Satz und den Link weiter: `/api/oepnv`. Welche Linien jemand fährt, erfährt der Server nicht. Liefert die Seite nichts Lesbares mehr (etwa nach einem Umbau bei moBiel), bleibt die letzte gute Liste bis zu 24 Stunden stehen; im Protokoll steht dann `moBiel: …`. Abstand ändern: `MOBIEL_MIN=30`.
+
 ### Pilot: Codes vergeben und Fahrten exportieren
 
 Testpersonen bekommen einen Pilot-Code (Form `FT-XXXX-XXXX`). Mit Code und Einwilligung überträgt die App ihre Fahrten pseudonym an den Server (ohne Zielnamen). Der Server speichert nur einen Hash des Codes, nie einen Namen.

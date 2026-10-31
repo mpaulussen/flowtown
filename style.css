@@ -475,3 +475,8 @@ body[data-view="welcome"] .tabs{display:none}
 #pilot-card .btn{justify-content:flex-start}
 #pilot-card .danger-text{color:var(--bad)}
 h2[tabindex="-1"]:focus{outline:none}
+
+/* 0.22 Umleitungen von moBiel */
+.mb-link{color:inherit;text-decoration:underline;text-decoration-style:dotted;text-underline-offset:3px}
+.vf-chip .ic{width:1em;height:1em;margin-left:4px;vertical-align:-.15em}
+.world-vor .lg-src a{color:inherit;font-weight:700}
