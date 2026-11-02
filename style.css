@@ -697,3 +697,13 @@ a.tel:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-ra
 html.gross .view:not(.view-map),html.gross .view-map .page-head,html.gross .map-layers,html.gross .map-legend{zoom:1.18}
 html.gross .tabs button{font-size:14px}
 html.gross .tabs .ic{width:28px;height:28px}
+.faq-a{margin:0;line-height:1.5}
+.faq-rest{display:flex;flex-direction:column;gap:10px;margin-top:10px}
+details.faq-mini{border-top:1px solid var(--line);padding:6px 0}
+details.faq-mini summary{font-weight:700;cursor:pointer}
+details.faq-mini .faq-a{margin-top:6px;font-size:14px}
+.faq-pin{background:#1d5fa6;color:#fff;border:2px solid #fff;border-radius:50%;box-shadow:0 2px 6px rgba(0,0,0,.3);display:grid;place-items:center;font:700 15px/1 Georgia,serif}
+.faq-pin span{display:block;text-align:center;line-height:22px}
+details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;color:var(--fg);padding:4px 0;min-height:0;gap:8px}
+.leaflet-popup-content details.faq-mini .faq-a{font-size:13px}
+.bf-ziel details.faq-mini>summary{font-size:15px}

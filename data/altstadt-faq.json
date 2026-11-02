@@ -1,0 +1,607 @@
+{
+"quelle": "barrierefrAI, Projekt Bielefeld barrierefrAI (Altstadt)",
+"stand": "2026-11",
+"eintraege": [
+{
+"id": "AS-01",
+"kat": "Alter Markt",
+"frage": "Wie ist der Boden am Alten Markt?",
+"antwort": "Der Alte Markt hat wechselndes Pflaster. Rund um den Brunnen (ca. 4 Meter Durchmesser) liegt kleines Pflaster, in den Randbereichen größeres, unregelmäßiges Kopfsteinpflaster. Mit Rollstuhl oder Rollator ist beides anstrengend: Man kann hängen bleiben, und Reifen können beschädigt werden. Bei Nässe kann das Pflaster zusätzlich rutschig sein.",
+"orte": [
+"Alter Markt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Ältere Menschen"
+]
+},
+{
+"id": "AS-02",
+"kat": "Alter Markt",
+"frage": "Sollte ich den Alten Markt mit dem Rollstuhl meiden?",
+"antwort": "Den Bereich direkt um den Brunnen und Flächen mit starkem Kopfsteinpflaster besser meiden oder dort langsam und vorausschauend fahren. Deutlich angenehmer ist die Obernstraße mit ihrem gleichmäßigen Pflaster.",
+"orte": [
+"Alter Markt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator"
+]
+},
+{
+"id": "AS-03",
+"kat": "Alter Markt",
+"frage": "Woran kann ich mich am Alten Markt orientieren?",
+"antwort": "Der Brunnen in der Mitte ist der wichtigste Orientierungspunkt – gut sichtbar und durch das Plätschern auch hörbar. In Richtung der Stadtbahngleise stehen kleine Obelisken (Schutz für ein Schmuckgeschäft); sie sind Hindernis und Tastpunkt zugleich.",
+"orte": [
+"Alter Markt"
+],
+"gruppen": [
+"Sehbehinderung",
+"Alle"
+]
+},
+{
+"id": "AS-04",
+"kat": "Alter Markt",
+"frage": "Ist die Apotheke am Alten Markt barrierefrei?",
+"antwort": "Ja. Im hinteren Bereich gibt es eine Hightech-Rampe für Rollstuhlfahrende. Allerdings weist weder an der Vorderseite noch an der Hintertür oder den Klingelschildern etwas darauf hin. Am besten das Personal direkt ansprechen und nach dem Zugang fragen.",
+"orte": [
+"Alter Markt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator"
+]
+},
+{
+"id": "AS-05",
+"kat": "Alter Markt",
+"frage": "Komme ich in die Cafés und Restaurants am Alten Markt?",
+"antwort": "Das ist sehr unterschiedlich. Viele Betriebe haben bei schönem Wetter große Außenbereiche, die Wege und Plätze stark verengen. Eingänge sind nicht immer stufenlos, barrierefreie Toiletten fehlen häufig oder sind nicht nutzbar. Tipp: Vorher anrufen und nach Eingang, Platz und WC fragen und ruhigere Tageszeiten wählen.",
+"orte": [
+"Alter Markt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator"
+]
+},
+{
+"id": "AS-06",
+"kat": "Obernstraße und Fußgängerzone",
+"frage": "Ist die Obernstraße mit Rollstuhl oder Rollator gut befahrbar?",
+"antwort": "Ja. Die Obernstraße ist die Haupteinkaufsstraße und überwiegend gleichmäßig gepflastert, ohne größere Stolperfallen. Sie eignet sich gut für Rollstuhl, Rollator und Menschen mit Gehbehinderung. Die Straßenmitte ist meist der ebenste und freieste Bereich – dort kommt man am besten voran.",
+"orte": [
+"Obernstraße"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Ältere Menschen"
+]
+},
+{
+"id": "AS-07",
+"kat": "Obernstraße und Fußgängerzone",
+"frage": "Welche Hindernisse gibt es in der Obernstraße?",
+"antwort": "Vorübergehende Hindernisse: Werbeaufsteller und Warenauslagen vor Geschäften, an Hauswänden abgestellte Fahrräder, Fahrradständer, falsch geparkte Räder und E-Scooter. Vor Lebensmittelgeschäften verengen zusätzlich Buden, Stände und Regale den Weg. Dauerhafte Hindernisse: Bäume mit quadratischen Steineinfassungen (teils als Sitzplatz nutzbar), große Pflanzkübel und Bänke links und rechts der Hauptgehrichtung.",
+"orte": [
+"Obernstraße"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-08",
+"kat": "Obernstraße und Fußgängerzone",
+"frage": "Wann ist es in der Obernstraße ruhiger?",
+"antwort": "Besonders voll ist es samstagnachmittags; viele Menschen nehmen dann wenig Rücksicht. Ruhiger ist es an Wochentagen früh am Morgen – Dienstagvormittag hat sich bewährt. Wenn es voll ist, ist die Straßenmitte oft freier.",
+"orte": [
+"Obernstraße"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-09",
+"kat": "Obernstraße und Fußgängerzone",
+"frage": "Kann ich in den Geschäften gut einkaufen?",
+"antwort": "Nicht überall. Viele Läden haben enge Gänge, die das Rangieren mit Rollstuhl oder Rollator erschweren, und nicht alle Eingänge sind stufenlos. Tipp: Stoßzeiten meiden und bei Bedarf vorab anrufen.",
+"orte": [
+"Obernstraße"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator"
+]
+},
+{
+"id": "AS-10",
+"kat": "Haltestelle Rathaus und Nahverkehr",
+"frage": "Wie komme ich an der Haltestelle Rathaus mit dem Rollstuhl in die Stadtbahn?",
+"antwort": "Die Hochbahnsteige können große Kanten und teils gefährliche Lücken zwischen Bahnsteig und Bahn haben. Bewährte Technik: rückwärts aus der Bahn fahren, damit die großen Hinterräder die Kante zuerst überwinden und die kleinen Vorderräder nicht hängen bleiben – das braucht etwas Übung. Den blauen Taster nutzen, damit die Türen länger offen bleiben.",
+"orte": [
+"Haltestelle Rathaus"
+],
+"gruppen": [
+"Rollstuhl"
+]
+},
+{
+"id": "AS-11",
+"kat": "Haltestelle Rathaus und Nahverkehr",
+"frage": "Was ist der blaue Taster?",
+"antwort": "An den Türen der Stadtbahnen gibt es einen blauen Taster. Wer ihn drückt, bekommt eine längere Türöffnungszeit zum Ein- und Aussteigen. Unbedingt nutzen!",
+"orte": [
+"Haltestelle Rathaus"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Ältere Menschen",
+"Vorübergehende Einschränkung"
+]
+},
+{
+"id": "AS-12",
+"kat": "Haltestelle Rathaus und Nahverkehr",
+"frage": "Worauf muss ich bei Straßenbahngleisen achten?",
+"antwort": "Gleise sind oft gefährlicher als Kopfsteinpflaster, weil Räder – vor allem die kleinen Vorderräder von Rollstühlen – in den Schienenrillen stecken bleiben können. Gleise möglichst im rechten Winkel überqueren. Wer unsicher ist, sucht eine andere Querungsstelle oder bittet um Hilfe.",
+"orte": [
+"Haltestelle Rathaus",
+"Alter Markt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator"
+]
+},
+{
+"id": "AS-13",
+"kat": "Haltestelle Rathaus und Nahverkehr",
+"frage": "Ist Busfahren mit dem Rollstuhl zu empfehlen?",
+"antwort": "Viele Busse und Stadtbahnen von moBiel sind niederflurig und haben Rampen (auf das Rollstuhlsymbol achten). Einige Rollstuhlfahrende meiden Busse trotzdem – wegen überfüllter Fahrzeuge, unfreundlicher Fahrer oder umständlicher bzw. defekter Rampen. Tipp: außerhalb der Stoßzeiten fahren und bei moBiel nach der jeweiligen Linie fragen.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Rollstuhl"
+]
+},
+{
+"id": "AS-14",
+"kat": "Haltestelle Rathaus und Nahverkehr",
+"frage": "Wo bekomme ich Auskunft zu barrierefreiem Bus- und Bahnfahren?",
+"antwort": "Beim ServiceCenter von moBiel in der Haltestelle Jahnplatz sowie auf der moBiel-Webseite und in der moBiel-App (dort gibt es auch Infos zu barrierefreien Haltestellen). Der Jahnplatz ist der zentrale Umsteigepunkt, aber oft sehr belebt.",
+"orte": [
+"Jahnplatz"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-15",
+"kat": "Haltestelle Rathaus und Nahverkehr",
+"frage": "Bekomme ich Hilfe, wenn ich mit der Bahn am Hauptbahnhof ankomme?",
+"antwort": "Ja. Der Mobilitätsservice der Deutschen Bahn hilft beim Ein-, Aus- und Umsteigen am Bielefelder Hauptbahnhof; die Hilfe vorher anmelden. Der Hauptbahnhof hat ein Blindenleitsystem.",
+"orte": [
+"Hauptbahnhof"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Sehbehinderung",
+"Ältere Menschen"
+]
+},
+{
+"id": "AS-16",
+"kat": "Kunsthalle",
+"frage": "Ist die Kunsthalle barrierefrei zugänglich?",
+"antwort": "Die Kunsthalle gilt als meist gut zugänglich. Genaue Angaben zu Eingang, Aufzügen und Toiletten am besten direkt bei der Kunsthalle oder auf ihrer Webseite erfragen. Für Menschen mit Sehbehinderung gibt es teils Audioguides oder spezielle Führungen – vorher anfragen.",
+"orte": [
+"Kunsthalle"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-17",
+"kat": "Kunsthalle",
+"frage": "Wie finde ich von der Kunsthalle in die Altstadt?",
+"antwort": "Die Kreuzung an der Kunsthalle ist ein wichtiger Orientierungspunkt. Von der Kunsthalle kommend teilt sich der Weg in verschiedene Bereiche, was die Orientierung erschweren kann. Am besten die Route vorher in einer Karten-App ansehen.",
+"orte": [
+"Kunsthalle"
+],
+"gruppen": [
+"Sehbehinderung",
+"Alle"
+]
+},
+{
+"id": "AS-18",
+"kat": "Rollstuhl",
+"frage": "Welcher Weg durch die Altstadt ist mit dem Rollstuhl am besten?",
+"antwort": "Am besten durch die Obernstraße, möglichst in der Straßenmitte, und generell über asphaltierte oder gut gepflasterte Wege. Meiden oder nur vorsichtig befahren: den Brunnenbereich und das Kopfsteinpflaster am Alten Markt, Bereiche mit dichter Außengastronomie und Schotterwege.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Rollstuhl"
+]
+},
+{
+"id": "AS-19",
+"kat": "Rollstuhl",
+"frage": "Wo finde ich eine barrierefreie Toilette?",
+"antwort": "Vorab über Wheelmap.org, die Webseite der Stadt Bielefeld oder die App „Toiletten Scout“ prüfen. Oft wird der Euroschlüssel benötigt. Behindertentoiletten sind leider häufig zugestellt, defekt oder schwer zu finden – lieber eine Ausweichmöglichkeit einplanen.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Chronische Erkrankung",
+"Ältere Menschen"
+]
+},
+{
+"id": "AS-20",
+"kat": "Rollstuhl",
+"frage": "Was mache ich, wenn Fremde ungefragt meinen Rollstuhl schieben?",
+"antwort": "Das passiert leider öfter. Klare Ansagen machen. Umgekehrt gilt: Wer Unterstützung braucht, darf jederzeit um Hilfe bitten – Passanten und Personal sind meist hilfsbereit.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Rollstuhl"
+]
+},
+{
+"id": "AS-21",
+"kat": "Rollstuhl",
+"frage": "Wie ist es bei Konzerten und Veranstaltungen?",
+"antwort": "Viele Veranstaltungen haben eine Rollstuhl-Tribüne („Rollitribüne“) mit besserer Sicht und mehr Platz. In der Menschenmenge dagegen ist man im Rollstuhl oft schlecht zu sehen.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Rollstuhl"
+]
+},
+{
+"id": "AS-22",
+"kat": "Rollstuhl",
+"frage": "Wo kann ich in der Nähe der Altstadt parken?",
+"antwort": "Mit dem blauen EU-Parkausweis können Sie ausgewiesene Behindertenparkplätze nutzen. Mehrere Parkhäuser in der Innenstadt haben Aufzüge, z. B. das Parkhaus an der Kunsthalle und das Parkhaus am Welle-Haus. Auf die Höhe der Parkplätze und die Erreichbarkeit der Kassenautomaten achten.",
+"orte": [
+"Innenstadt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Vorübergehende Einschränkung"
+]
+},
+{
+"id": "AS-23",
+"kat": "Rollstuhl",
+"frage": "Wie bekomme ich ein Rollstuhltaxi?",
+"antwort": "Rollstuhltaxis rechtzeitig vorbestellen und bei der Bestellung ausdrücklich danach fragen. Es lohnt sich, die Nummer eines Taxiunternehmens mit Rollstuhltransport vorab zu speichern.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Rollstuhl"
+]
+},
+{
+"id": "AS-24",
+"kat": "Rollator",
+"frage": "Was sollte ich mit dem Rollator in der Altstadt beachten?",
+"antwort": "Schon zwei Stufen können ein großes Hindernis sein. Gut geeignet ist die Obernstraße mit ihrem gleichmäßigen Pflaster, am besten in der Straßenmitte. Meiden sollten Sie das Kopfsteinpflaster am Alten Markt, Schotterwege (sehr kraftraubend), dichte Menschenmengen und enge Gänge in Geschäften oder zwischen Außengastronomie. Bei Fragen zu Zugängen hilft ein kurzer Anruf vorab.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Rollator",
+"Ältere Menschen"
+]
+},
+{
+"id": "AS-25",
+"kat": "Sehbehinderung",
+"frage": "Gibt es Blindenleitsysteme in der Innenstadt?",
+"antwort": "Teilweise. In Teilen der Fußgängerzone gibt es kleine Orientierungsbordsteine, die man mit dem Langstock ertasten kann; taktile Leitsysteme gibt es z. B. in der Bahnhofstraße und in Teilen der Obernstraße. Vollständigkeit und Zustand sind unterschiedlich. Der Hauptbahnhof hat ein Blindenleitsystem.",
+"orte": [
+"Obernstraße",
+"Bahnhofstraße"
+],
+"gruppen": [
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-26",
+"kat": "Sehbehinderung",
+"frage": "Woran kann ich mich ohne Sicht orientieren?",
+"antwort": "Hilfreich sind: das Brunnenplätschern am Alten Markt, Kirchenglocken, Gerüche von Bäckereien oder Blumenläden, Hauswände, Bordstein- und Rasenkanten sowie das gleichmäßige Pflaster der Obernstraße, das die Tastorientierung erleichtert. Die Obernstraße hat ein leichtes Quergefälle zur Mitte, das sich ebenfalls zur Orientierung nutzen lässt.",
+"orte": [
+"Alter Markt",
+"Obernstraße"
+],
+"gruppen": [
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-27",
+"kat": "Sehbehinderung",
+"frage": "Welche Gefahren gibt es für Menschen mit Sehbehinderung?",
+"antwort": "Vor allem vorübergehende Hindernisse: Werbeaufsteller, Warenauslagen, abgestellte Fahrräder und E-Scooter sowie plötzlich auftauchende Tische, Stühle und Abgrenzungen der Außengastronomie. Menschenmengen erschweren die Orientierung. Nicht alle Ampeln haben akustische Signale – im Zweifel andere Wartende fragen. Auch Wechsel zwischen hellen und dunklen Bereichen können schwierig sein.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-28",
+"kat": "Sehbehinderung",
+"frage": "Welche Apps helfen bei Sehbehinderung?",
+"antwort": "Zum Beispiel Navigations-Apps für Blinde wie BlindSquare, Seeing AI zum Vorlesen und Erkennen sowie ÖPNV-Apps mit Vorlesefunktion. Viele Stadtbahnen und Busse haben zusätzlich akustische Haltestellenansagen.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-29",
+"kat": "Hörbehinderung",
+"frage": "Wie verständige ich mich in Geschäften und Cafés?",
+"antwort": "Viele Geschäfte stellen sich zunehmend auf visuelle Kommunikation ein. Weisen Sie aktiv auf Ihre Hörbehinderung hin und bitten Sie um langsames Sprechen, Blickkontakt (Lippenlesen) oder Aufschreiben. Schreibzeug oder eine Notiz-App griffbereit haben; Apps, die Sprache in Text umwandeln, helfen ebenfalls.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Hörbehinderung"
+]
+},
+{
+"id": "AS-30",
+"kat": "Hörbehinderung",
+"frage": "Gibt es Induktionsschleifen?",
+"antwort": "Vereinzelt, z. B. in Kirchen, Theatern, Museen oder an Schaltern – Informationen dazu sind aber oft Mangelware. Auf das Piktogramm für Induktionsschleifen achten und gezielt nachfragen. Die Tourist-Information kann möglicherweise Auskunft geben.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Hörbehinderung"
+]
+},
+{
+"id": "AS-31",
+"kat": "Hörbehinderung",
+"frage": "Worauf muss ich im Straßenverkehr achten?",
+"antwort": "Herannahende Fahrzeuge, Stadtbahnen und Warnsignale sind womöglich nicht zu hören. Besonders an den Gleisen und Kreuzungen auf visuelle Hinweise achten. In Bus und Bahn zeigen Displays die nächste Haltestelle an.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Hörbehinderung"
+]
+},
+{
+"id": "AS-32",
+"kat": "Vorübergehende Einschränkung",
+"frage": "Ich bin nach einer Operation vorübergehend gehbehindert. Was muss ich beachten?",
+"antwort": "Ohne Schwerbehindertenausweis haben Sie meist keinen Anspruch auf Behindertenparkplätze oder andere Nachteilsausgleiche. Parkscheinautomaten sind mit Gehhilfen oft zu weit weg. Planen Sie deshalb vorab: Parkhäuser mit Aufzug oder Kiss-&-Ride-Zonen. Eine Begleitperson ist oft hilfreich, und Unsicherheit in Menschenmengen ist ganz normal – ruhigere Zeiten wählen.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Vorübergehende Einschränkung"
+]
+},
+{
+"id": "AS-33",
+"kat": "Psychische Erkrankung",
+"frage": "Ich vertrage Trubel schlecht. Wann ist die Altstadt ruhiger?",
+"antwort": "Wochentags am frühen Vormittag. Samstags ist die Obernstraße sehr voll. Noise-Cancelling-Kopfhörer und feste Pausen an ruhigen Orten helfen gegen Reizüberflutung. Eine vertraute Begleitperson kann Sicherheit geben.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Psychische Erkrankung",
+"Neurodivergenz"
+]
+},
+{
+"id": "AS-34",
+"kat": "Psychische Erkrankung",
+"frage": "Wo finde ich ruhige Rückzugsorte?",
+"antwort": "Zum Beispiel im Ravensberger Park, im Bürgerpark, im Botanischen Garten, in den Grünzügen entlang der Lutter oder in der Stadtbibliothek am Neumarkt (außerhalb von Veranstaltungen). Manche Museen bieten nach Absprache einen ruhigen Raum an.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Psychische Erkrankung",
+"Neurodivergenz"
+]
+},
+{
+"id": "AS-35",
+"kat": "Psychische Erkrankung",
+"frage": "Wo bekomme ich in einer seelischen Krise Hilfe?",
+"antwort": "Im akuten Notfall: 112.\n- Telefonseelsorge: 0800 111 0 111 oder 0800 111 0 222 – rund um die Uhr, anonym, kostenlos, auch per Mail/Chat.\n- Krisendienst Bielefeld: 0521 3299285 – Mo–Fr 18:00–7:30 Uhr, Wochenende und Feiertage durchgehend.\n- Sozialpsychiatrischer Dienst der Stadt: 0521 512581, Nikolaus-Dürkopp-Str. 5–9 – Mo–Fr 7:30–15:00 Uhr.\n- Psychiatrische Institutsambulanz Bethel: 0521 77278526, Gadderbaumer Str. 33 – offene Sprechzeit Mo–Fr 9–11 Uhr.\n- Ev. Klinikum Bethel, Klinik für Psychiatrie und Psychotherapie: 0521 77277115, Remterweg 69–71.\n- Frauennotruf Bielefeld: 0521 124248, Jöllenbecker Str. 57 – Mo 16–22, Di 10–12, Do 14–18 Uhr.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Psychische Erkrankung"
+]
+},
+{
+"id": "AS-36",
+"kat": "Chronische Erkrankung",
+"frage": "Ich habe eine chronische Erkrankung. Was hilft beim Altstadtbummel?",
+"antwort": "Kräfte einteilen (Pacing): kurze Wege, häufige Pausen, Bänke in der Fußgängerzone und Cafés nutzen. Toiletten vorab heraussuchen (Euroschlüssel, App „Toiletten Scout“) – bei CED besonders wichtig. In der Innenstadt gibt es mehrere Apotheken, z. B. die Apotheke am Alten Markt und die Rathaus-Apotheke. Kunsthalle und Historisches Museum sind meist klimatisiert und haben Sitzgelegenheiten. Einen Notfallausweis mit Erkrankung, Medikamenten und Kontakten dabeihaben.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Chronische Erkrankung"
+]
+},
+{
+"id": "AS-37",
+"kat": "Neurodivergenz",
+"frage": "Ich bin autistisch oder habe ADHS. Wie bereite ich den Besuch vor?",
+"antwort": "Vorhersehbarkeit hilft: Fotos oder Videos der Orte vorher ansehen, einen (visuellen) Tagesplan machen und einen Plan B haben. Hilfsmittel wie Kopfhörer, Sonnenbrille oder Fidget-Toys einpacken. Belebte Orte wie Obernstraße, Jahnplatz und Alter Markt zu ruhigen Zeiten besuchen. Eine kleine Karte mit Ihren Bedürfnissen kann die Kommunikation erleichtern. Bei Autismus wird oft schriftliche, direkte Kommunikation bevorzugt; bei ADHS funktionieren kurze, abwechslungsreiche Etappen mit Pausen meist besser.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Neurodivergenz"
+]
+},
+{
+"id": "AS-38",
+"kat": "Ältere Menschen",
+"frage": "Was sollten ältere Menschen beim Besuch der Altstadt beachten?",
+"antwort": "Gemütliches Tempo und viele Pausen einplanen – Bänke gibt es in der Fußgängerzone, viele Cafés laden zum Sitzen ein. Vorsicht beim Kopfsteinpflaster am Alten Markt. Im Bus oder in der Bahn ruhig um einen Sitzplatz oder Hilfe beim Einsteigen bitten. Die Tourist-Information im Neuen Rathaus (Niederwall 23) hat Stadtpläne und berät. Ausreichend trinken, ein geladenes Handy und eine Liste mit Notfallkontakten und Medikamenten dabeihaben.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Ältere Menschen"
+]
+},
+{
+"id": "AS-39",
+"kat": "Leichte Sprache",
+"frage": "Ich brauche Leichte Sprache. Was hilft mir in der Altstadt?",
+"antwort": "Planen Sie nur wenige Dinge für einen Tag.\nSchreiben Sie wichtige Adressen auf.\nEine Begleit-Person kann Ihnen helfen.\nSagen Sie den Leuten: „Bitte sprechen Sie langsam und einfach.“\nFragen Sie nach, wenn Sie etwas nicht verstehen. Das ist okay.\nDie Tourist-Information ist im Neuen Rathaus, Niederwall 23. Dort bekommen Sie Hilfe und einen Stadt-Plan.\nDer Alte Markt ist ein Platz mit einem Brunnen.\nDie Obernstraße ist eine große Einkaufs-Straße nur für Fußgänger.\nAm Jahnplatz fahren viele Busse und Bahnen. Fragen Sie dort nach der richtigen Bahn.\nMachen Sie oft Pausen.\nWenn Sie Hilfe brauchen: Fragen Sie in einem Geschäft oder die Polizei.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Leichte Sprache"
+]
+},
+{
+"id": "AS-40",
+"kat": "Je nach Situation",
+"frage": "Was ändert sich im Frühjahr und Sommer?",
+"antwort": "Die Außengastronomie wächst: Tische, Stühle und Sonnenschirme verengen Wege und Plätze, und die Altstadt ist voller. Am entspanntesten sind die frühen Morgenstunden oder der späte Nachmittag bzw. frühe Abend an Wochentagen.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-41",
+"kat": "Je nach Situation",
+"frage": "Was muss ich am Wochenende oder bei Veranstaltungen beachten?",
+"antwort": "Volle Cafés am Alten Markt und viele Menschen in der Obernstraße machen das Vorankommen schwer. Wenn möglich diese Zeiten meiden, sonst mehr Zeit einplanen und besonders aufmerksam sein. Die Mitte der Obernstraße ist oft freier.",
+"orte": [
+"Alter Markt",
+"Obernstraße"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-42",
+"kat": "Je nach Situation",
+"frage": "Was ist vor Feiertagen und an Markttagen anders?",
+"antwort": "Zusätzliche Verkaufsstände, Warenauslagen und Warteschlangen vor den Geschäften engen die Wege ein. Markttermine vorher erfragen und einplanen. Für Rollstuhlfahrende gilt: Samstagnachmittag meiden, Dienstagvormittag ist oft ruhiger.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-43",
+"kat": "Je nach Situation",
+"frage": "Was ist bei Regen zu beachten?",
+"antwort": "Kopfsteinpflaster – etwa am Alten Markt – kann bei Nässe rutschig sein. Die gleichmäßig gepflasterte Obernstraße ist dann die sicherere Wahl.",
+"orte": [
+"Alter Markt"
+],
+"gruppen": [
+"Rollstuhl",
+"Rollator",
+"Ältere Menschen",
+"Sehbehinderung"
+]
+},
+{
+"id": "AS-44",
+"kat": "Apps und Hilfsmittel",
+"frage": "Welche Apps helfen bei der Planung?",
+"antwort": "Wheelmap.org zeigt rollstuhlgerechte Orte; die Qualität hängt von der Community ab – gern selbst Orte bewerten und ergänzen. Google Maps zeigt zunehmend barrierefreie Eingänge und Aufzüge; die Fotos verraten oft mehr über die echte Situation als Symbole. Für Bus und Bahn hilft die moBiel-App, für Notrufe ohne Sprechen die App nora.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-45",
+"kat": "Notfall und Hilfe",
+"frage": "Was mache ich, wenn ich vor Ort nicht weiterkomme?",
+"antwort": "Sprechen Sie Personal in Geschäften oder Cafés an – die meisten helfen gern, wenn sie auf eine Barriere hingewiesen werden. Auch Passanten sind in Bielefeld meist aufgeschlossen. Bei Unsicherheit können Sie sich an die Polizei wenden. Im Notfall: 112.",
+"orte": [
+"Altstadt"
+],
+"gruppen": [
+"Alle"
+]
+},
+{
+"id": "AS-46",
+"kat": "Notfall und Hilfe",
+"frage": "Wie setze ich einen Notruf ab, wenn ich nicht sprechen oder hören kann?",
+"antwort": "- nora: die offizielle Notruf-App der Bundesländer. Notruf ohne Sprechen, der Standort wird automatisch übermittelt. Vorher im App Store oder Google Play herunterladen und mit Handynummer registrieren (www.nora-notruf.de).\n- Tess Relay-Dienste: Notruf per Video- oder Textchat über Dolmetscher (www.tess-relay-dienste.de).\n- WIS Notrufsystem: Notruf-App mit Gebärdensprache, auch über externe Taster auslösbar (worldinsign.de).\n- Notruf-SMS ist nur nach vorheriger Anmeldung möglich.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Hörbehinderung",
+"Alle"
+]
+},
+{
+"id": "AS-47",
+"kat": "Notfall und Hilfe",
+"frage": "Wie bereite ich mich auf einen Notfall vor?",
+"antwort": "Handy geladen dabeihaben, Notrufnummern so speichern, dass sie leicht (auch per Sprachbefehl) wählbar sind, und einen Notfallpass mit Name, Kontaktperson und wichtigen Gesundheitsinfos mitführen. Allgemeiner Notruf für Polizei, Feuerwehr und Rettungsdienst: 112.",
+"orte": [
+"Bielefeld (allgemein)"
+],
+"gruppen": [
+"Alle"
+]
+}
+]
+}

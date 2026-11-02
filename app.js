@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.37.0';
+  const VERSION = '0.38.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -31,7 +31,7 @@
   const AREA_RADIUS = 5000;       // Umkreis für das Laden der Ampeln
   const TAGS = ['zu lange gewartet', 'Grün zu kurz', 'unübersichtlich', 'Anschluss verpasst', 'alles gut'];
   const ACC_TAGS = ['Grün zu kurz zum Queren', 'kein Tonsignal', 'Taster schlecht erreichbar', 'Bordstein zu hoch'];   // Profil barrierefrei
-  const ACCESS_LABEL = { rollstuhl: 'Rollstuhl', rollator: 'Rollator, Gehhilfe oder langsamer zu Fuß', sehen: 'Sehbehinderung', hoeren: 'Hörbehinderung', lernen: 'Einfache Sprache und klare Wege', andere: 'andere Einschränkung' };
+  const ACCESS_LABEL = { rollstuhl: 'Rollstuhl', rollator: 'Rollator, Gehhilfe oder langsamer zu Fuß', sehen: 'Sehbehinderung', hoeren: 'Hörbehinderung', lernen: 'Einfache Sprache und klare Wege', ruhe: 'Ruhe und Pausen', andere: 'andere Einschränkung' };
   // Zu Fuß ist man einen Weg gegangen, nicht gefahren
   const DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   const WORDS = {
@@ -1695,6 +1695,7 @@
     sehen: [['stufenkante', 'Stufenkanten kontrastreich'], ['leit|taktil', 'Leitsystem oder Tastplan'], ['licht', 'helle Beleuchtung'], ['hund', 'Assistenzhund willkommen'], ['fuehrung|audio', 'Führung oder Audioguide']],
     hoeren: [['hoeranlage|fm', 'Höranlage'], ['dolmetsch', 'Gebärden- oder Schriftdolmetschen anfragbar'], ['gebaerde', 'Infos in Gebärdensprache']],
     lernen: [['leicht', 'Infos in Leichter Sprache'], ['pikto', 'Bilder und Piktogramme'], ['bildleit', 'Leitsystem mit Farben oder Bildern'], ['hilfe', 'Hilfe vor Ort']],
+    ruhe: [['ruhe', 'Ruheraum'], ['wc', 'Behinderten-WC'], ['anmelden', 'Unterstützung vorab anmeldbar'], ['hilfe', 'Hilfe vor Ort']],
     andere: [['stufenlos', 'stufenloser Zugang'], ['wc', 'Behinderten-WC'], ['hilfe', 'Hilfe vor Ort'], ['ruhe', 'Ruheraum']]
   };
   const bfProfile = () => (settings.access.on && BF_CHECK[settings.access.type] ? settings.access.type : 'andere');
@@ -1720,6 +1721,11 @@
     return best;
   }
   function bfZielBlock(z) {
+    const tips = settings.access.on ? faqNear(z, settings.access.type) : [];
+    const tipHtml = tips.length ? `<div class="bf-ziel"><h4 class="vf-h4">${ic('info')} Gut zu wissen</h4>${tips.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}</div>` : '';
+    return bfOrtBlock(z) + tipHtml;
+  }
+  function bfOrtBlock(z) {
     const o = bfNear(z);
     if (!o) return '';
     const items = BF_CHECK[bfProfile()].map(([k, label]) => `<span>${bfMark(bfGet(o, k))} ${esc(label)}</span>`).join('');
@@ -1732,6 +1738,55 @@
     const words = n(q).split(/\s+/).filter(Boolean);
     return bfData.orte.filter((o) => words.every((w) => n(o.n + ' ' + o.adr).includes(w))).slice(0, 4)
       .map((o) => ({ name: o.n, sub: (o.adr ? o.adr + ' · ' : '') + 'barrierefrei geprüft', lat: o.lat, lon: o.lon, bf: o.id }));
+  }
+  // ---------- Gut zu wissen: Altstadt-FAQ von barrierefrAI, nach Profil ----------
+  let faq = null, faqOpen = null;
+  async function loadFaq() {
+    if (faq) return faq;
+    try { faq = await (await fetch('data/altstadt-faq.json')).json(); } catch (e) { faq = null; }
+    return faq;
+  }
+  const FAQ_GROUPS = {
+    rollstuhl: ['Rollstuhl'], rollator: ['Rollator', 'Ältere Menschen', 'Vorübergehende Einschränkung'], sehen: ['Sehbehinderung'],
+    hoeren: ['Hörbehinderung'], lernen: ['Leichte Sprache', 'Neurodivergenz'], ruhe: ['Psychische Erkrankung', 'Neurodivergenz', 'Chronische Erkrankung'],
+    andere: ['Vorübergehende Einschränkung', 'Chronische Erkrankung', 'Ältere Menschen']
+  };
+  // Orte der FAQ: Mittelpunkt und Umkreis in Metern (die Kunsthalle kommt, wenn vorhanden, aus den Daten von Bethel)
+  const FAQ_PLACES = {
+    'Alter Markt': [52.02137, 8.53375, 150], 'Obernstraße': [52.0212, 8.5305, 250], 'Haltestelle Rathaus': [52.0196, 8.5352, 150],
+    'Jahnplatz': [52.0226, 8.5319, 150], 'Hauptbahnhof': [52.0292, 8.5326, 200], 'Bahnhofstraße': [52.0257, 8.5328, 200],
+    'Kunsthalle': [52.0153, 8.5300, 150], 'Altstadt': [52.0205, 8.5335, 600], 'Innenstadt': [52.0215, 8.5325, 900]
+  };
+  function faqPlace(name) {
+    if (name === 'Kunsthalle' && bfData && bfData.orte) { const o = bfData.orte.find((x) => /^Kunsthalle/.test(x.n)); if (o) return [o.lat, o.lon, 150]; }
+    return FAQ_PLACES[name] || null;
+  }
+  // Einträge für das Profil: erst die eigenen Gruppen, dann „Alle“; die Krisen-Nummern stehen unter „Hilfe“
+  function faqFor(type) {
+    if (!faq) return [];
+    const mine = FAQ_GROUPS[type] || [];
+    const hit = (e) => e.gruppen.some((g) => mine.includes(g));
+    return faq.eintraege.filter((e) => e.id !== 'AS-35' && (hit(e) || e.gruppen.includes('Alle'))).sort((a, b) => hit(b) - hit(a));
+  }
+  const firstSentence = (t) => { const m = /^(.{20,140}?[.!?])(\s|$)/.exec(t.replace(/\n/g, ' ')); return m ? m[1] : t.slice(0, 120) + (t.length > 120 ? ' …' : ''); };
+  const faqHtml = (e) => `<p class="faq-a">${esc(e.antwort).replace(/\n/g, '<br>')}</p><p class="small muted">${esc(e.orte.join(', '))} · barrierefrAI</p>`;
+  function faqCards() {
+    if (!settings.access.on || !faq) return '';
+    const list = faqFor(settings.access.type);
+    if (!list.length) return '';
+    const card = (e) => `<div class="tipcard" data-world="tip"><button type="button" class="tip-row" data-faq="${e.id}" aria-expanded="${faqOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${faqOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`;
+    const top = list.slice(0, 4), rest = list.slice(4);
+    return `<h3 class="eyebrow">Gut zu wissen · ${esc(ACCESS_LABEL[settings.access.type])}</h3>${top.map(card).join('')}`
+      + (rest.length ? `<details class="more-box"><summary>${ic('list')}Weitere Fragen (${rest.length})</summary><div class="faq-rest">${rest.map(card).join('')}</div></details>` : '');
+  }
+  // Ziel in der Nähe eines Ortes aus der FAQ: bis zu zwei passende Hinweise
+  function faqNear(z, type) {
+    if (!faq) return [];
+    const places = Object.keys(FAQ_PLACES).filter((n) => { const p = faqPlace(n); return p && dist({ lat: p[0], lon: p[1] }, z) <= p[2]; });
+    if (!places.length) return [];
+    const mine = FAQ_GROUPS[type] || [];
+    return faq.eintraege.filter((e) => e.orte.some((o) => places.includes(o)) && e.gruppen.some((g) => mine.includes(g)))
+      .sort((a, b) => (b.orte.some((o) => o !== 'Altstadt' && places.includes(o)) - a.orte.some((o) => o !== 'Altstadt' && places.includes(o)))).slice(0, 2);
   }
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
   const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc'];
@@ -1867,6 +1922,18 @@
     }
     for (const a of bfData.lift || []) {
       L.circleMarker([a[0], a[1]], { radius: 4, color: '#1d5fa6', weight: 2, fillColor: '#ffffff', fillOpacity: 1 }).bindPopup('<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
+    }
+    await loadFaq();
+    if (faq && mapLayers.acc) {
+      const type = settings.access.on ? settings.access.type : null;
+      for (const name of Object.keys(FAQ_PLACES)) {
+        if (name === 'Altstadt' || name === 'Innenstadt') continue;
+        const p = faqPlace(name);
+        const list = faq.eintraege.filter((e) => e.orte.includes(name) && e.id !== 'AS-35' && (!type || e.gruppen.includes('Alle') || e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))));
+        if (!p || !list.length) continue;
+        L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'faq-pin', html: '<span>i</span>', iconSize: [26, 26] }), keyboard: true, title: 'Gut zu wissen: ' + name })
+          .bindPopup(`<strong>${esc(name)}</strong>${list.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}<p class="small muted">Aus der Altstadt-FAQ von barrierefrAI</p>`, { maxWidth: 290, maxHeight: 300 }).addTo(g);
+      }
     }
     for (const o of bfData.orte || []) {
       L.circleMarker([o.lat, o.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: bfColor(bfScore(o)), fillOpacity: 1 }).bindPopup(() => bfPopup(o), { maxWidth: 280, maxHeight: 260, autoPanPaddingTopLeft: [10, 60] }).addTo(g);
@@ -2768,6 +2835,7 @@
     zielRes[key] = { loading: true };
     renderVorfahrt();
     if (!bfData) loadBf().then(() => { if (zielOpen === z.id && bfNear(z)) renderVorfahrt(); }).catch(() => {});
+    if (!faq && settings.access.on) loadFaq().then(() => { if (zielOpen === z.id) renderVorfahrt(); });
     // Bus und Bahn ab einer eigenen Haltestelle: deren Lage ist öffentlich und darf genau mit
     const halt = group === 'oepnv' && zielAb && fp && fp.byName[zielAb] ? fp.stops[fp.byName[zielAb][0]] : null;
     const pos = halt ? [halt[2], halt[3]] : await myStart();
@@ -3061,7 +3129,8 @@
     const news = '';   // Meldungen erscheinen nur, wenn es welche für die eigenen Wege gibt
     $('#tips-body').innerHTML = (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${tips.map(card).join('')}`
       : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
-      + `<h3 class="eyebrow">Mehr Hilfe</h3>${kiCard()}` + news;
+      + faqCards() + `<h3 class="eyebrow">Mehr Hilfe</h3>${kiCard()}` + news;
+    if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
     requestNames([].concat(...trips.map((t) => t.events.filter((e) => e.signal))), () => { if (!$('#view-tips').hidden) renderTips(); });
     // Werte anderer und Meldungen nachladen, dann einmal neu zeichnen
     if (!tipsLoading && apiBase() && (Date.now() - newsAt > 600000 || (settings.server.wir && Date.now() - wirAt > 600000))) {
@@ -3414,6 +3483,8 @@
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
     const t = ev.target.closest('.tip-row[data-tip]');
     if (t) { const i = Number(t.dataset.tip); tipOpen = tipOpen === i ? null : i; renderTips(); }
+    const fq = ev.target.closest('.tip-row[data-faq]');
+    if (fq) { faqOpen = faqOpen === fq.dataset.faq ? null : fq.dataset.faq; renderTips(); }
   });
   const saveServer = () => {
     settings.server = { url: $('#inp-server').value.trim(), wir: $('#inp-wir').checked, ki: $('#inp-ki').checked, lage: $('#inp-lage').checked };
