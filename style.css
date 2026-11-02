@@ -828,3 +828,7 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 #view-plan .acc-chip{border:0;box-shadow:0 0 0 1.5px #c5d6ea inset;color:var(--w-vor-ink)}
 #view-plan .acc-chip[aria-pressed="true"]{background:var(--w-vor-ink);color:#fff;box-shadow:none}
 #view-plan .switch input:focus-visible+span,#view-plan .acc-chip:focus-visible{outline:3px solid var(--plan);outline-offset:2px}
+/* 0.47 Stadtbahn: Hochbahnsteig laut Liste, Aufzüge */
+.con-hst{display:inline-block;margin-top:2px;color:var(--bad);line-height:1.35}
+.con-step{white-space:nowrap;font-weight:700}
+.acc-pick{margin:0;padding:8px 12px;border-radius:12px;background:var(--surface);line-height:1.4}

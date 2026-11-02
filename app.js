@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.46.0';
+  const VERSION = '0.47.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2202,7 +2202,7 @@
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
     }
     if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
-    if (mapLayers.tram) parts.push('<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>');
+    if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI. Weiße Punkte: noch keine Angabe.</p>` : ''}`);
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
     if (mapLayers.stau) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#d64933"></i>Stau</span><span class="rad-key"><i style="background:#e0a326;opacity:.75"></i>stockend</span></div><p class="muted">Stau jetzt${n('stau')}: Verkehrsfluss von HERE, alle paar Minuten neu.</p>`);
@@ -2308,9 +2308,11 @@
   }
   // Stadtbahn aus dem Fahrplan: je Linie die längste Haltefolge, Haltestellen mit den nächsten Abfahrten
   const TRAM_COL = ['#1d5fa6', '#17784f', '#d64933', '#7a3fa0', '#b8650a', '#0b7a8a'];
+  const HST_COL = { ja: '#17784f', nein: '#c4382a', teilweise: '#e0a000' };
   async function drawTram() {
     const g = groups.tram;
     g.clearLayers();
+    if (!hst || Date.now() - hst.geladen > 3600e3) await loadHst();
     if (!fp) {
       mapStatus('Stadtbahn wird geladen …');
       fpAt = 0;
@@ -2338,11 +2340,14 @@
       }
     });
     for (const n of Object.keys(stopsShown)) {
-      L.circleMarker(stopsShown[n].slice(0, 2), { radius: 5, color: '#15191e', weight: 2, fillColor: '#ffffff', fillOpacity: 1 })
+      const e = hstOf(n), lift = liftNear({ lat: stopsShown[n][0], lon: stopsShown[n][1] }, [hstNorm(n)]);
+      L.circleMarker(stopsShown[n].slice(0, 2), { radius: e ? 7 : 5, color: '#15191e', weight: 2, fillColor: e ? HST_COL[e.hbs] : '#ffffff', fillOpacity: 1 })
         .bindPopup(() => {
           const deps = departures(n, new Date(), 30).slice(0, 4);
           const w = stopsShown[n][2];
-          return `<strong>${esc(n)}</strong>${w === 1 ? '<br>' + bfMark(1) + ' stufenlos zugänglich' : w === 2 ? '<br>' + bfMark(0) + ' nicht stufenlos' : ''}${deps.length ? '<br>' + deps.map((d) => `${hhmm(d.t % 1440)} · ${esc(d.line)} → ${esc(d.head)}`).join('<br>') : '<br>In der nächsten halben Stunde keine Abfahrt.'}`;
+          const acc = e ? `<br>${e.hbs === 'ja' ? bfMark(1) + ' Hochbahnsteig, stufenlos' : e.hbs === 'nein' ? bfMark(0) + ' kein Hochbahnsteig' : '<b class="bf-offen">!</b> nur teilweise stufenlos'}${e.hinweis ? '<br><span class="small">' + esc(e.hinweis) + '</span>' : ''}`
+            : w === 1 ? '<br>' + bfMark(1) + ' stufenlos zugänglich' : w === 2 ? '<br>' + bfMark(0) + ' nicht stufenlos' : '';
+          return `<strong>${esc(n)}</strong>${acc}${lift ? '<br>' + bfMark(1) + ' Aufzug' : ''}${deps.length ? '<br>' + deps.map((d) => `${hhmm(d.t % 1440)} · ${esc(d.line)} → ${esc(d.head)}`).join('<br>') : '<br>In der nächsten halben Stunde keine Abfahrt.'}`;
         }).addTo(g);
     }
   }
@@ -2860,7 +2865,7 @@
     if (!lageOn() || fpLoading || Date.now() - fpAt < 6 * 3600e3) return false;
     fpLoading = true;
     try {
-      const d = await api('/api/fahrplan', { cache: 'no-cache' });
+      const [d] = await Promise.all([api('/api/fahrplan', { cache: 'no-cache' }), loadHst()]);
       // Haltestellen nach Namen zusammenfassen (je Steig ein Eintrag), Haltefolgen je Haltestelle
       const byName = {}, patsOf = {};
       d.stops.forEach((st, i) => { const n = st[1].replace(/^Bielefeld,\s*/, ''); (byName[n] = byName[n] || []).push(i); });
@@ -3150,11 +3155,48 @@
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
     return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
-  // Barrierefrei bei Bus und Bahn: Haltestellen stufenlos laut Fahrplan, Fußwege mit Weg-Check
-  function stopAccess(pos) {
+  // Barrierefrei bei Bus und Bahn: Stadtbahn mit oder ohne Hochbahnsteig laut Liste der Redaktion,
+  // sonst stufenlos laut Fahrplan (für Bielefeld meist leer); Aufzüge aus den Wegen im Bauwerk (Fahrplan); Fußwege mit Weg-Check
+  const hstNorm = (n) => String(n || '').toLowerCase().replace(/^(bielefeld|bi-[^,]*),\s*/, '').replace(/ß/g, 'ss').replace(/strasse|str\.?/g, 'str').replace(/[^a-z0-9äöü]/g, '');
+  let hst = store.get('hst', null), hstLoading = null;
+  function loadHst() {
+    if (!apiBase()) return Promise.resolve(false);
+    if (hstLoading) return hstLoading;
+    if (hst && Date.now() - hst.geladen < 3600e3) return Promise.resolve(true);
+    hstLoading = api('/api/haltestellen').then((d) => {
+      hst = { geladen: Date.now(), map: Object.fromEntries((d.liste || []).map((e) => [e.k, e])) };
+      store.set('hst', hst);
+      return true;
+    }).catch(() => false).finally(() => { hstLoading = null; });
+    return hstLoading;
+  }
+  const hstOf = (name) => (hst && hst.map[hstNorm(name)]) || null;
+  // Station mit Aufzug: gleicher Name wie eine Haltestelle in der Nähe, oder höchstens 150 m entfernt
+  const liftNear = (p, names) => !!((fp && fp.stationen) || []).find((s) => s[3] > 0 && ((names && names.includes(hstNorm(s[0])) && dist(p, { lat: s[1], lon: s[2] }) <= 400) || dist(p, { lat: s[1], lon: s[2] }) <= 150));
+  // ok: 1 stufenlos, 0 nicht stufenlos, 2 teilweise, null unbekannt; e: Eintrag der Liste; aufzug: Station mit Aufzug
+  function stopInfo(pos, art) {
     if (!pos || !fp) return null;
-    const near = fpStopsNear({ lat: pos[0], lon: pos[1] }, 80).map((i) => fp.stops[i][4]).filter((v) => v === 1 || v === 2);
-    return near.includes(1) ? 1 : near.length ? 0 : null;
+    const p = { lat: pos[0], lon: pos[1] };
+    const idx = fpStopsNear(p, 80, art === 'bahn' ? 0 : undefined);
+    let e = null;
+    if (art === 'bahn') for (const i of idx) { e = hstOf(fp.stops[i][1]); if (e) break; }
+    let ok = null;
+    if (e) ok = e.hbs === 'ja' ? 1 : e.hbs === 'nein' ? 0 : 2;
+    else { const w = idx.map((i) => fp.stops[i][4]).filter((v) => v === 1 || v === 2); ok = w.includes(1) ? 1 : w.length ? 0 : null; }
+    return { ok, e, aufzug: liftNear(p, idx.map((i) => hstNorm(fp.stops[i][1]))) };
+  }
+  function stopInfoHtml(s) {
+    if (!s) return '';
+    const what = s.ok === 1 ? `${bfMark(1)} ${s.e ? 'Hochbahnsteig' : 'stufenlos'}` : s.ok === 0 ? `${bfMark(0)} ${s.e ? 'kein Hochbahnsteig' : 'nicht stufenlos'}` : s.ok === 2 ? '<b class="bf-offen">!</b> nur teilweise stufenlos' : '';
+    const parts = (what ? `<span class="con-acc${s.ok === 1 ? ' ok' : ''}">${what}</span>` : '') + (s.aufzug ? ` <span class="con-acc ok">${bfMark(1)} Aufzug</span>` : '');
+    return (parts ? ' ' + parts : '') + (s.e && s.e.hinweis && s.ok !== 1 ? `<br><span class="small con-hst">${esc(s.e.hinweis)}</span>` : '');
+  }
+  const consOf = (d) => (d.verbindungen || []).filter((c) => Date.parse(c.ab) > Date.now() - 60000);
+  // schlechtester Wert der Haltestellen einer Verbindung (für Rollstuhl und Rollator)
+  function conStufen(c) {
+    let bad = false;
+    for (const x of c.teile) if (isTransit(x.art)) for (const pos of [x.vonPos, x.nachPos]) { const s = stopInfo(pos, x.art); if (s && s.ok === 0) bad = true; }
+    return bad;
   }
   function fussSummary(r, type) {
     const important = FUSS_WEIGHT[type] || FUSS_BAD;
@@ -3183,16 +3225,26 @@
     const r = zielRes[zKey(z, group)];
     if (!r || r.loading) return `<div class="vf-panel">${head}${abs}<p class="small muted" role="status">Verbindungen werden gesucht …</p></div>`;
     if (r.error) return `<div class="vf-panel">${head}${abs}<p class="small" role="status">${esc(r.error)}</p><button type="button" class="btn quiet" data-vf="again">Noch einmal suchen</button></div>`;
-    const d = r.data, now = Date.now();
-    const cons = (d.verbindungen || []).filter((c) => Date.parse(c.ab) > now - 60000);
+    const d = r.data;
+    const cons = consOf(d);
     if (conOpen >= cons.length) conOpen = 0;
+    // Rollstuhl und Rollator: die erste Verbindung ohne bekannte Stufen an Haltestellen vorwählen
+    const stepFree = settings.access.on && (settings.access.type === 'rollstuhl' || settings.access.type === 'rollator');
+    if (!hst && stepFree) loadHst().then((ok) => { if (ok && zielOpen === z.id) renderVorfahrt(); });
+    const bad = stepFree ? cons.map(conStufen) : [];
+    let pickNote = '';
+    if (stepFree && bad.some(Boolean)) {
+      const i = bad.indexOf(false);
+      if (!r.accPick) { r.accPick = true; if (i > 0) conOpen = i; }
+      pickNote = i < 0 ? `<p class="small acc-pick">${bfMark(0)} Alle gefundenen Verbindungen haben eine Stadtbahn-Haltestelle ohne Hochbahnsteig.</p>` : i > 0 ? `<p class="small acc-pick">${bfMark(1)} Vorgewählt: die erste Verbindung ohne bekannte Stufen an Haltestellen.</p>` : '';
+    }
     const badge = (x) => `<span class="dep-line${ART_LABEL[x.art] ? ' ' + ART_LABEL[x.art] : ''}">${esc(x.linie || '?')}</span>`;
     const rows = cons.map((c, i) => {
       const dur = (Date.parse(c.an) - Date.parse(c.ab)) / 1000, fahrt = c.teile.filter((x) => x.art !== 'fuss');
       const late = fahrt.some((x) => x.plus) ? ` · <b class="con-late">+${Math.max(...fahrt.map((x) => x.plus || 0))} min</b>` : '';
       if (i === conOpen) conCheck(c, z);
       const acc = settings.access.on;
-      const stufe = (pos) => { if (!acc) return ''; const a = stopAccess(pos); return a === 1 ? ` <span class="con-acc ok">${bfMark(1)} stufenlos</span>` : a === 0 ? ` <span class="con-acc">${bfMark(0)} nicht stufenlos</span>` : ''; };
+      const stufe = (pos, art) => (acc ? stopInfoHtml(stopInfo(pos, art)) : '');
       const walkCheck = (x) => {
         if (!acc || !x.pts) return '';
         if (!x.wc || x.wc.loading) return ' · <span class="small muted">wird geprüft …</span>';
@@ -3202,13 +3254,13 @@
       };
       const legs = i === conOpen ? `<ol class="con-legs">${c.teile.map((x) => x.art === 'fuss'
         ? `<li class="small muted">${ic('walk')}<span>${Math.max(1, Math.round((Date.parse(x.an) - Date.parse(x.ab)) / 60000))} min zu Fuß${walkCheck(x)}</span></li>`
-        : `<li>${badge(x)}<span><b>${clock(x.ab)}</b> ${esc(x.von)}${x.gleis ? `, Gleis ${esc(x.gleis)}` : ''}${x.plus ? ` <b class="con-late">+${x.plus}</b>` : ''}${stufe(x.vonPos)}<br><span class="small">Richtung ${esc(x.ziel)}</span><br><b>${clock(x.an)}</b> ${esc(x.nach)}${stufe(x.nachPos)}</span></li>`).join('')}</ol>` : '';
-      return `<li><button type="button" class="con${i === conOpen ? ' on' : ''}" data-con="${i}" aria-expanded="${i === conOpen}"><span class="con-t"><b>${clock(c.ab)} → ${clock(c.an)}</b><span class="small">${hm(dur)} · ${c.umstiege ? `${c.umstiege}× umsteigen` : 'direkt'}${late}</span></span><span class="con-lines">${fahrt.map(badge).join('')}</span></button>${legs}</li>`;
+        : `<li>${badge(x)}<span><b>${clock(x.ab)}</b> ${esc(x.von)}${x.gleis ? `, Gleis ${esc(x.gleis)}` : ''}${x.plus ? ` <b class="con-late">+${x.plus}</b>` : ''}${stufe(x.vonPos, x.art)}<br><span class="small">Richtung ${esc(x.ziel)}</span><br><b>${clock(x.an)}</b> ${esc(x.nach)}${stufe(x.nachPos, x.art)}</span></li>`).join('')}</ol>` : '';
+      return `<li><button type="button" class="con${i === conOpen ? ' on' : ''}" data-con="${i}" aria-expanded="${i === conOpen}"><span class="con-t"><b>${clock(c.ab)} → ${clock(c.an)}</b><span class="small">${hm(dur)} · ${c.umstiege ? `${c.umstiege}× umsteigen` : 'direkt'}${late}${bad[i] ? ` · <span class="con-step">${bfMark(0)} Stufen</span>` : ''}</span></span><span class="con-lines">${fahrt.map(badge).join('')}</span></button>${legs}</li>`;
     }).join('');
     const list = rows ? `<ul class="con-list">${rows}</ul>` : '<p class="small">Gerade keine Verbindung gefunden.</p>';
     const go = cons.length ? `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>` : '';
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · © HERE${d.quellen && d.quellen.length ? ', ' + esc(d.quellen.join(', ')) : ''}${r.fallback ? ' · Start: Bielefeld' : ''} · <button type="button" class="btn-link" data-vf="again">neu suchen</button></p>`;
-    return `<div class="vf-panel">${head}${abs}${list}${bfZielBlock(z, group)}${zielHistory(z)}${go}${foot}</div>`;
+    return `<div class="vf-panel">${head}${abs}${pickNote}${list}${bfZielBlock(z, group)}${zielHistory(z)}${go}${foot}</div>`;
   }
   // Aus deinen Fahrten: frühere Fahrten zu diesem Ziel, nur angekommene
   // Rad: wie gut ist die Strecke für das Rad, und wo fehlt ein Radweg
@@ -3383,7 +3435,7 @@
       const d = r.data;
       if (d.mode === 'oepnv') {
         // geplant: von jetzt bis zur Ankunft der gewählten Verbindung; aufgezeichnet wird mit dem ersten Verkehrsmittel
-        const c = d.verbindungen[conOpen] || d.verbindungen[0], first = c.teile.find((x) => isTransit(x.art));
+        const cs = consOf(d), c = cs[conOpen] || cs[0] || d.verbindungen[0], first = c.teile.find((x) => isTransit(x.art));
         const dauer = Math.max(60, Math.round((Date.parse(c.an) - Date.now()) / 1000));
         pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: Date.now(), dauer, basis: dauer, km: null, meldungen: [],
           verbindung: c.teile.filter((x) => x.art !== 'fuss').map((x) => `${x.linie} ${clock(x.ab)}`).join(', ') };

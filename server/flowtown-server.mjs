@@ -409,6 +409,7 @@ async function refreshFahrplan() {
       p.on('close', (code) => (code === 0 ? resolve(log.trim()) : reject(new Error('Auszug: ' + log.trim().slice(-300)))));
     });
     loadFahrplan();
+    hstTick();
     return out;
   } finally { fs.rmSync(zip, { force: true }); }
 }
@@ -1363,6 +1364,98 @@ function sendFaq(req, res, origin) {
   res.end(gz ? faqData.gz : faqData.raw);
 }
 
+// ---------- Stadtbahn: Haltestellen mit und ohne Hochbahnsteig (Redaktion) ----------
+// Der DELFI-Fahrplan kennt für Bielefeld bei keiner Haltestelle, ob sie stufenlos ist. Diese Liste füllt die Lücke.
+// Quelle: HALTESTELLEN_CSV_URL (z. B. ein zweites Blatt der Redaktions-Tabelle), sonst /var/lib/flowtown/haltestellen.csv,
+// sonst server/haltestellen.csv aus dem Repository. Spalten: Haltestelle, Hochbahnsteig (ja, nein, teilweise), Hinweis, Quelle.
+const HST_URL = process.env.HALTESTELLEN_CSV_URL || '';
+const HST_CSV = path.join(DATA_DIR, 'haltestellen.csv'), HST_REPO = path.join(path.dirname(new URL(import.meta.url).pathname), 'haltestellen.csv');
+let hst = null, hstRun = null;
+const hstNorm = (n) => String(n || '').toLowerCase().replace(/^(bielefeld|bi-[^,]*),\s*/, '').replace(/ß/g, 'ss').replace(/strasse|str\.?/g, 'str').replace(/[^a-z0-9äöü]/g, '');
+let fpParsed = null;
+function fpData() {
+  if (!fahrplan) return null;
+  if (!fpParsed || fpParsed.etag !== fahrplan.etag) { fpParsed = JSON.parse(fahrplan.raw); fpParsed.etag = fahrplan.etag; }
+  return fpParsed;
+}
+// Stadtbahn-Haltestellen aus dem Fahrplan: Name (ohne „Bielefeld, “) → Bahnsteige
+function tramStops() {
+  const d = fpData();
+  if (!d) return null;
+  const tram = new Set();
+  for (const t of d.trips) if (d.routes[t[0]][1] === 0) for (const si of d.patterns[t[1]]) tram.add(si);
+  const by = new Map();
+  for (const si of tram) {
+    const st = d.stops[si], k = hstNorm(st[1]);
+    if (!by.has(k)) by.set(k, { name: st[1].replace(/^(Bielefeld|Bi-[^,]*),\s*/i, ''), pos: [] });
+    by.get(k).pos.push([st[2], st[3]]);
+  }
+  return by;
+}
+function readHstCsv(text) {
+  const rows = parseCsv(text);
+  if (!rows.length) throw new Error('Tabelle ist leer');
+  const head = rows[0].map((h) => h.trim().toLowerCase().replace(/ä/g, 'ae').replace(/ü/g, 'ue').replace(/ö/g, 'oe').replace(/[^a-z]/g, ''));
+  const col = (...n) => head.findIndex((h) => n.includes(h));
+  const c = { name: col('haltestelle', 'name'), hbs: col('hochbahnsteig', 'stufenlos'), hinweis: col('hinweis'), quelle: col('quelle') };
+  if (c.name < 0 || c.hbs < 0) throw new Error('Spalten „Haltestelle“ und „Hochbahnsteig“ fehlen');
+  const stops = tramStops(), out = [], fehler = [], seen = new Set();
+  rows.slice(1).forEach((r, i) => {
+    const v = (k) => (c[k] >= 0 ? String(r[c[k]] || '').trim() : '');
+    const zeile = i + 2, name = v('name'), w = v('hbs').toLowerCase();
+    if (!name) return;
+    const hbs = /^(ja|j|1|yes)$/.test(w) ? 'ja' : /^(nein|n|0|no)$/.test(w) ? 'nein' : /^teil/.test(w) ? 'teilweise' : null;
+    if (!hbs) { fehler.push(`Zeile ${zeile}: Hochbahnsteig „${v('hbs')}“, bitte ja, nein oder teilweise`); return; }
+    const k = hstNorm(name);
+    if (seen.has(k)) { fehler.push(`Zeile ${zeile}: ${name} doppelt`); return; }
+    const st = stops && stops.get(k);
+    if (stops && !st) { fehler.push(`Zeile ${zeile}: ${name} ist keine Stadtbahn-Haltestelle im Fahrplan`); return; }
+    seen.add(k);
+    const e = { name: st ? st.name : name, k, hbs, hinweis: clip(v('hinweis'), 300), quelle: clip(v('quelle'), 80) };
+    if (st) { e.lat = r5(st.pos.reduce((a, p) => a + p[0], 0) / st.pos.length); e.lon = r5(st.pos.reduce((a, p) => a + p[1], 0) / st.pos.length); }
+    out.push(e);
+  });
+  return { liste: out, fehler };
+}
+async function refreshHst() {
+  let text, quelle;
+  if (HST_URL) {
+    const res = await fetch(HST_URL, { headers: { 'User-Agent': 'Flowtown/1.0' }, redirect: 'follow' });
+    if (!res.ok) throw new Error('Tabelle nicht erreichbar: HTTP ' + res.status);
+    text = await res.text(); quelle = 'Tabelle';
+    if (/^\s*<!doctype html|<html/i.test(text)) throw new Error('Der Link liefert eine Webseite statt CSV');
+  } else if (fs.existsSync(HST_CSV)) { text = fs.readFileSync(HST_CSV, 'utf8'); quelle = HST_CSV; }
+  else if (fs.existsSync(HST_REPO)) { text = fs.readFileSync(HST_REPO, 'utf8'); quelle = 'server/haltestellen.csv'; }
+  else return 'keine Liste';
+  const r = readHstCsv(text);
+  hst = { t: Date.now(), liste: r.liste, fehler: r.fehler, quelle };
+  return `${r.liste.length} Haltestellen (${quelle})${r.fehler.length ? ', Hinweise zur Liste: ' + r.fehler.join(' · ') : ''}`;
+}
+function hstTick() {
+  if (hstRun) return;
+  hstRun = refreshHst().then((m) => console.log('Haltestellen:', m)).catch((e) => console.error('Haltestellen:', e.message)).finally(() => { hstRun = null; });
+}
+// Vorschlag aus OpenStreetMap: Bahnsteige an jeder Stadtbahn-Haltestelle, mit Höhe und Rollstuhl-Angabe
+async function hstOsm() {
+  const stops = tramStops();
+  if (!stops) throw new Error('Noch kein Fahrplan auf dem Server');
+  const b = '51.90,8.38,52.12,8.70';
+  const j = await overpass(`[out:json][timeout:90];(nwr["railway"="platform"](${b});nwr["public_transport"="platform"]["tram"="yes"](${b}););out tags center;`, 120000);
+  const plats = (j.elements || []).map((e) => ({ lat: e.lat != null ? e.lat : e.center && e.center.lat, lon: e.lon != null ? e.lon : e.center && e.center.lon, tags: e.tags || {} })).filter((p) => p.lat != null && p.tags.bus !== 'yes');
+  const height = (t) => { const m = /([\d.,]+)\s*(cm|m)?/.exec(t.height || ''); if (!m) return null; const x = Number(m[1].replace(',', '.')); return m[2] === 'cm' || x > 5 ? x / 100 : x; };
+  const out = [];
+  for (const [k, st] of stops) {
+    const near = plats.filter((p) => st.pos.some((q) => Math.hypot((q[0] - p.lat) * 111320, (q[1] - p.lon) * 68500) <= 35));
+    const hs = near.map((p) => height(p.tags)).filter((x) => x != null), wc = near.map((p) => p.tags.wheelchair).filter(Boolean);
+    let v = '?', grund = near.length ? 'Bahnsteig ohne Angaben' : 'kein Bahnsteig eingetragen';
+    if (wc.includes('no') || (hs.length && Math.max(...hs) < 0.4)) { v = 'nein'; grund = wc.includes('no') ? 'wheelchair=no' : 'Höhe ' + Math.max(...hs) + ' m'; }
+    else if (wc.includes('yes') || hs.some((x) => x >= 0.7)) { v = wc.includes('limited') ? 'teilweise' : 'ja'; grund = wc.includes('yes') ? 'wheelchair=yes' : 'Höhe ' + Math.max(...hs) + ' m'; }
+    else if (wc.includes('limited')) { v = 'teilweise'; grund = 'wheelchair=limited'; }
+    out.push({ k, name: st.name, v, grund });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name, 'de'));
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -1385,7 +1478,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1399,6 +1492,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
     if (req.method === 'GET' && p === '/api/faq') return faqData && faqData.eintraege ? sendFaq(req, res, origin) : send(res, 404, { fehler: 'Keine Redaktions-Tabelle eingerichtet.' }, origin);
+    if (req.method === 'GET' && p === '/api/haltestellen') return send(res, 200, hst ? { t: hst.t, liste: hst.liste.map(({ name, k, hbs, hinweis, quelle, lat, lon }) => ({ name, k, hbs, hinweis, quelle, lat, lon })) } : { t: 0, liste: [] }, origin);
     if (req.method === 'GET' && p === '/api/hinweise') return send(res, 200, { t: Date.now(), hinweise: hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).map(({ id, lat, lon, art, t, t2, ok, weg, geprueft }) => ({ id, lat, lon, art, t, t2, ok, weg, geprueft })) }, origin);
     if (req.method === 'POST' && p === '/api/hinweis') {
       if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
@@ -1504,17 +1598,42 @@ if (cli === 'faq') {
     if (bf && Object.keys(o).length >= 4) { bf.faqOrte = o; bf.faqOrteV = 3; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('Gespeichert. Jetzt neu starten: sudo systemctl restart flowtown'); }
     process.exit(0);
   }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli === 'haltestellen') {
+  // alle Stadtbahn-Haltestellen mit Eintrag in der Liste und Vorschlag aus OpenStreetMap; schreibt haltestellen-vorschlag.csv
+  loadFahrplan();
+  (async () => {
+    const m = await refreshHst().catch((e) => 'Liste: ' + e.message);
+    console.log(m);
+    let osm = null;
+    try { osm = await hstOsm(); } catch (e) { console.error('OpenStreetMap:', e.message); }
+    const stops = tramStops();
+    if (!stops) { console.error('Noch kein Fahrplan auf dem Server.'); process.exit(1); }
+    const inList = new Map((hst ? hst.liste : []).map((e) => [e.k, e]));
+    const rows = [['Haltestelle', 'Hochbahnsteig', 'Hinweis', 'Quelle']];
+    const all = osm || [...stops].map(([k, st]) => ({ k, name: st.name, v: '?', grund: '' })).sort((a, b) => a.name.localeCompare(b.name, 'de'));
+    for (const o of all) {
+      const e = inList.get(o.k);
+      console.log(o.name.padEnd(32), ('Liste: ' + (e ? e.hbs : '–')).padEnd(18), osm ? `OSM: ${o.v} (${o.grund})` : '');
+      rows.push(e ? [o.name, e.hbs, e.hinweis, e.quelle] : [o.name, o.v === '?' ? '' : o.v, '', osm && o.v !== '?' ? 'OpenStreetMap, bitte prüfen' : '']);
+    }
+    const file = path.join(DATA_DIR, 'haltestellen-vorschlag.csv');
+    fs.writeFileSync(file, rows.map((r) => r.map((x) => (/[;"\n]/.test(x) ? '"' + String(x).replace(/"/g, '""') + '"' : x)).join(';')).join('\n') + '\n');
+    console.log(`\n${all.length} Stadtbahn-Haltestellen. Vorschlag gespeichert: ${file}`);
+    console.log('Prüfen, leere Zeilen ausfüllen, dann als Blatt in die Tabelle (HALTESTELLEN_CSV_URL) oder nach /var/lib/flowtown/haltestellen.csv kopieren.');
+    process.exit(0);
+  })();
 } else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
   setTimeout(() => radTick().then(fussTick), 20000); setInterval(() => radTick().then(fussTick), 1800e3);
   setTimeout(bfTick, 10000); setInterval(bfTick, 900e3);
   setTimeout(faqTick, 5000); setInterval(faqTick, 3600e3);
+  setTimeout(hstTick, 3000); setInterval(hstTick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

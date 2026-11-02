@@ -124,6 +124,23 @@ Regeln für die Spalten:
 
 Statt eines Links geht auch eine Datei: `/var/lib/flowtown/faq.csv` (gleicher Aufbau, Komma oder Semikolon).
 
+### Stadtbahn: Haltestellen mit und ohne Hochbahnsteig
+
+Der DELFI-Fahrplan sagt für Bielefeld bei keiner Haltestelle, ob sie stufenlos ist. Diese Angabe kommt deshalb aus einer kleinen Liste der Redaktion. Die App zeigt sie in Bus & Bahn bei jeder Verbindung („✗ kein Hochbahnsteig“ mit Hinweis), markiert Verbindungen mit „✗ Stufen“ und wählt mit Profil Rollstuhl oder Rollator die erste Verbindung ohne bekannte Stufen vor. Auf der Karte unter „Stadtbahn“ sind die Haltestellen grün (Hochbahnsteig), rot (keiner) oder gelb (teilweise).
+
+Spalten: **Haltestelle** (Name wie im Fahrplan, z. B. Teutoburger Straße; „Str.“ geht auch), **Hochbahnsteig** (ja, nein oder teilweise), **Hinweis** (z. B. „Nur Richtung Sieker mit Hochbahnsteig“), **Quelle**. Trenner Komma oder Semikolon.
+
+Der Server nimmt die erste vorhandene Quelle:
+1. `HALTESTELLEN_CSV_URL` in `/etc/flowtown.env`, z. B. ein zweites Blatt der Redaktions-Tabelle, veröffentlicht als CSV (wie oben),
+2. die Datei `/var/lib/flowtown/haltestellen.csv`,
+3. `server/haltestellen.csv` aus dem Repository (Grundstock).
+
+Er liest die Liste beim Start und dann stündlich und nennt im Protokoll jede Zeile, die er nicht zuordnen kann. `/api/health` zeigt unter `haltestellen` Anzahl und Quelle.
+
+**Liste vervollständigen:** `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs haltestellen'` listet alle Stadtbahn-Haltestellen aus dem Fahrplan mit dem Eintrag der Liste und einem Vorschlag aus OpenStreetMap (Bahnsteig mit Höhe oder Rollstuhl-Angabe), und schreibt `/var/lib/flowtown/haltestellen-vorschlag.csv`. Die Datei in die Tabelle importieren, die Vorschläge prüfen (am besten mit der offiziellen Liste von moBiel), leere Zeilen ausfüllen.
+
+**Aufzüge:** Der Fahrplan-Auszug zieht aus DELFI die Wege in Stationen (Aufzüge, Rolltreppen, Treppen), z. B. Hauptbahnhof, Jahnplatz, Nordpark. Die App zeigt dann „✓ Aufzug“. Dafür den Fahrplan einmal neu holen: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown` (dauert einige Minuten).
+
 ### Gemeldete Hindernisse prüfen
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.

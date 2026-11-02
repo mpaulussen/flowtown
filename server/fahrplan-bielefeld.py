@@ -6,7 +6,8 @@ Aufruf: python3 fahrplan-bielefeld.py <gtfs.zip> <ziel.json> [Betreiber-Muster]
 Liest die ZIP-Datei Zeile für Zeile, ohne sie auszupacken (stop_times.txt allein hat ausgepackt
 etwa 4 GB). Behält die Fahrten der Betreiber, deren Name auf das Muster passt (Standard: moBiel),
 und alle Züge (Nah- und Fernverkehr), die in Bielefeld halten, mit ihren Halten in der Region.
-Schreibt eine kleine JSON-Datei: Haltestellen, Linien, Haltefolgen, Verkehrstage und Abfahrten.
+Schreibt eine kleine JSON-Datei: Haltestellen, Linien, Haltefolgen, Verkehrstage und Abfahrten,
+dazu die Stationen mit Aufzügen, Rolltreppen und Treppen.
 Nur Standardbibliothek, damit es auf jedem Server mit Python 3 läuft.
 """
 import csv
@@ -31,6 +32,35 @@ def kind(rt):
 
 def inside(box, lat, lon):
     return box[0] <= lat <= box[1] and box[2] <= lon <= box[3]
+
+
+def stations(z, rows):
+    """Stationen mit Wegen im Bauwerk (GTFS pathways): Aufzüge, Rolltreppen, Treppen in Bielefeld.
+    Ergebnis je Station: [Name, Breite, Länge, Aufzüge, Rolltreppen, Treppen]; gezählt werden Verbindungen, nicht Geräte."""
+    if 'pathways.txt' not in z.namelist():
+        return []
+    parent = lambda sid: ':'.join(sid.split(':')[:3])
+    count = {}
+    for p in rows('pathways.txt'):
+        a, b = p['from_stop_id'], p['to_stop_id']
+        if not a.startswith('de:05711:'):
+            continue
+        mode = {'5': 0, '4': 1, '2': 2}.get(p['pathway_mode'])
+        if mode is None:
+            continue
+        c = count.setdefault(parent(a), [set(), set(), set()])
+        c[mode].add(tuple(sorted((a, b))))
+    if not count:
+        return []
+    names = {}
+    for s in rows('stops.txt'):
+        pid = parent(s['stop_id'])
+        if pid in count and (pid not in names or s['stop_id'] == pid):
+            try:
+                names[pid] = [s['stop_name'], round(float(s['stop_lat']), 5), round(float(s['stop_lon']), 5)]
+            except ValueError:
+                pass
+    return sorted([names[k] + [len(v[0]), len(v[1]), len(v[2])] for k, v in count.items() if k in names and inside(CITY, names[k][1], names[k][2])])
 
 
 def main():
@@ -157,6 +187,7 @@ def main():
         'stops': stops, 'routes': [routes[i] for i in used_routes], 'heads': heads, 'patterns': patterns,
         'services': {k: sorted(v) for k, v in days.items() if v and k in used_services}, 'trips': out_trips
     }
+    out['stationen'] = stations(z, rows)
     with open(dst + '.tmp', 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     os.replace(dst + '.tmp', dst)
