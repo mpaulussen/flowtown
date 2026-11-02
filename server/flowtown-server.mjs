@@ -1639,6 +1639,7 @@ async function stadtCsv(dienst, typ) {
       const o = Object.fromEntries(head.map((h, i) => [h, String(r[i] == null ? '' : r[i]).trim()]));
       const m = /(-?[\d.]+)\s+(-?[\d.]+)/.exec(r[w] || '');
       o.pos = m ? anyToWgs(Number(m[1]), Number(m[2])) : null;
+      o.wkt = r[w] || '';
       return o;
     }).filter((o) => o.pos && inBox(o.pos[0], o.pos[1], 0.1));
   } finally { clearTimeout(timer); }
@@ -1688,6 +1689,64 @@ async function stadtBaustellen() {
   return out;
 }
 
+// Park + Ride (moBiel) und das Radverkehrsnetz der Stadt: wöchentlich, gemeinsam in einer Datei
+// pr: [Breite, Länge, Plätze, Name, Adresse]; Anlagen gleichen Namens bis 400 m zusammengefasst
+// netz: [[Punkte…], Alltag 1/0, Freizeit 1/0, Netzstufe]
+const STADT2_FILE = path.join(DATA_DIR, 'stadt-pr-radnetz.json');
+let stadt2 = null, stadt2Run = null, stadt2Try = 0;
+try { stadt2 = JSON.parse(fs.readFileSync(STADT2_FILE, 'utf8')); } catch (e) { stadt2 = null; }
+function lineWgs(wkt) {
+  const pts = [...String(wkt).matchAll(/(-?[\d.]+)\s+(-?[\d.]+)/g)].map((m) => anyToWgs(Number(m[1]), Number(m[2]))).filter(Boolean).map((p) => [r5(p[0]), r5(p[1])]);
+  // ausdünnen: Punkte näher als 8 m am vorigen weglassen, Endpunkt behalten
+  const out = [];
+  for (const p of pts) if (!out.length || Math.hypot((p[0] - out[out.length - 1][0]) * 111320, (p[1] - out[out.length - 1][1]) * 68500) >= 8) out.push(p);
+  if (pts.length && out[out.length - 1] !== pts[pts.length - 1]) out.push(pts[pts.length - 1]);
+  return out;
+}
+async function refreshStadt2() {
+  const msgs = [];
+  let pr = stadt2 ? stadt2.pr : [], netz = stadt2 ? stadt2.netz : [];
+  try {
+    const rows = await stadtCsv('park_ride_parkplatze', 'park_and_ride_p');
+    const by = [];
+    for (const o of rows) {
+      const n = Number(o.parkplaetz) || 0;
+      const same = by.find((x) => x[3] === o.name && Math.hypot((x[0] - o.pos[0]) * 111320, (x[1] - o.pos[1]) * 68500) < 400);
+      if (same) { if (n > same[5]) { same[0] = r5(o.pos[0]); same[1] = r5(o.pos[1]); same[4] = clip(o.adresse, 60); same[5] = n; } same[2] += n; continue; }
+      by.push([r5(o.pos[0]), r5(o.pos[1]), n, clip(o.name, 40), clip(o.adresse, 60), n]);
+    }
+    if (by.length) pr = by.map((x) => x.slice(0, 5));
+    msgs.push(`${pr.length} Park + Ride-Anlagen mit ${pr.reduce((a, x) => a + x[2], 0)} Plätzen`);
+  } catch (e) { msgs.push('Park + Ride: ' + e.message); }
+  try {
+    const rows = await stadtCsv('radverkehrskonzepte', 'rvn_kommunales_netz_l');
+    const lines = rows.map((o) => [lineWgs(o.wkt), o.alltag === '1' ? 1 : 0, o.freizeit === '1' ? 1 : 0, Number(o.svk_netz) || 0]).filter((l) => l[0].length > 1);
+    if (lines.length > 50) netz = lines;
+    msgs.push(`Radverkehrsnetz: ${lines.length} Abschnitte, ${Math.round(rows.reduce((a, o) => a + (Number(o.laenge) || 0), 0) / 1000)} km`);
+  } catch (e) { msgs.push('Radverkehrsnetz: ' + e.message); }
+  if (!pr.length && !netz.length) throw new Error(msgs.join(' · '));
+  stadt2 = { t: Date.now(), quelle: 'Stadt Bielefeld (Open Data, CC BY 4.0)', pr, netz };
+  fs.writeFileSync(STADT2_FILE + '.tmp', JSON.stringify(stadt2));
+  fs.renameSync(STADT2_FILE + '.tmp', STADT2_FILE);
+  stadt2.gz = null;
+  return msgs.join(' · ');
+}
+function stadt2Tick() {
+  if (!STADT_ON || stadt2Run || (stadt2 && Date.now() - stadt2.t < 7 * 864e5) || Date.now() - stadt2Try < 3600e3) return;
+  stadt2Try = Date.now();
+  stadt2Run = refreshStadt2().then((m) => console.log('Stadtdaten:', m)).catch((e) => console.error('Stadtdaten:', e.message)).finally(() => { stadt2Run = null; });
+}
+function sendStadt2(req, res, origin) {
+  if (!stadt2.gz) { const raw = JSON.stringify({ t: stadt2.t, quelle: stadt2.quelle, pr: stadt2.pr, netz: stadt2.netz }); stadt2.raw = raw; stadt2.gz = zlib.gzipSync(raw, { level: 9 }); stadt2.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: stadt2.etag, Vary: 'Origin, Accept-Encoding' };
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
+  if (req.headers['if-none-match'] === stadt2.etag) { res.writeHead(304, h); return res.end(); }
+  const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  if (gz) h['Content-Encoding'] = 'gzip';
+  res.writeHead(200, h);
+  res.end(gz ? stadt2.gz : stadt2.raw);
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -1710,7 +1769,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1724,6 +1783,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
     if (req.method === 'GET' && p === '/api/faq') return faqData && faqData.eintraege ? sendFaq(req, res, origin) : send(res, 404, { fehler: 'Keine Redaktions-Tabelle eingerichtet.' }, origin);
+    if (req.method === 'GET' && p === '/api/stadt-pr-radnetz') { if (!stadt2) { stadt2Tick(); return send(res, 200, { t: 0, pr: [], netz: [] }, origin); } return sendStadt2(req, res, origin); }
     if (req.method === 'GET' && p === '/api/ampelanlagen') { if (!lsa) lsaTick(); return send(res, 200, lsa || { t: 0, anlagen: [] }, origin); }
     if (req.method === 'GET' && p === '/api/behindertenparkplaetze') { if (!bpp) bppTick(); return send(res, 200, bpp ? { t: bpp.t, quellen: bpp.quellen, plaetze: bpp.plaetze } : { t: 0, quellen: [], plaetze: [] }, origin); }
     if (req.method === 'GET' && p === '/api/haltestellen') return send(res, 200, hst ? { t: hst.t, liste: hst.liste.map(({ name, k, hbs, hinweis, quelle, lat, lon }) => ({ name, k, hbs, hinweis, quelle, lat, lon })) } : { t: 0, liste: [] }, origin);
@@ -1868,6 +1928,7 @@ if (cli === 'faq') {
   // Ampelanlagen und Baustellen der Stadt holen und zeigen
   (async () => {
     try { console.log(await refreshLsa()); } catch (e) { console.error('Ampelanlagen:', e.message); }
+    try { console.log(await refreshStadt2()); } catch (e) { console.error(e.message); }
     try {
       const b = await stadtBaustellen();
       console.log(`${b.length} aktuelle Baustellen der Stadt, davon ${b.filter((x) => x.art === 'sperrung').length} Sperrungen, ${b.filter((x) => x.fuss).length} mit Hinweis für den Fuß- und Radverkehr`);
@@ -1891,5 +1952,6 @@ if (cli === 'faq') {
   setTimeout(hstTick, 3000); setInterval(hstTick, 3600e3);
   setTimeout(bppTick, 40000); setInterval(bppTick, 3600e3);
   setTimeout(lsaTick, 15000); setInterval(lsaTick, 3600e3);
+  setTimeout(stadt2Tick, 25000); setInterval(stadt2Tick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

@@ -846,3 +846,16 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .bpp-none .ic{width:18px;height:18px}
 .bpp-pin{background:#1d5fa6;color:#fff;border:2px solid #fff;border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,.35);display:grid;place-items:center}
 .bpp-pin span{font:800 13px/18px system-ui;display:block;text-align:center}
+/* 0.50 Park + Ride, Radverkehrsnetz der Stadt */
+.pr-tip{background:var(--surface);border-radius:14px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.pr-tip p{margin:0;line-height:1.45}
+.pr-tip b{display:inline-flex;align-items:center;gap:6px}
+.pr-tip b .ic{width:18px;height:18px}
+.pr-btns{display:flex;flex-wrap:wrap;gap:6px}
+.pr-btns .btn{min-height:44px;font-size:15px}
+.pr-pin{background:#1d5fa6;color:#fff;border:2px solid #fff;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.35);display:grid;place-items:center}
+.pr-pin span{font:800 11px/16px system-ui;display:block;text-align:center;white-space:nowrap}
+.rad-netz{margin:4px 0 0;display:flex;align-items:center;gap:8px;font-size:15px}
+.rad-netz .ic{width:18px;height:18px;flex:none}
+.rad-key i.dash.dark{background:repeating-linear-gradient(90deg,#15191e 0 5px,transparent 5px 10px);height:3px}
+.pr-btns .btn{justify-content:flex-start;text-align:left}

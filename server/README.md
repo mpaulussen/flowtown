@@ -153,11 +153,14 @@ Der Server erkennt Koordinaten in Breite/Länge oder UTM 32 (Rechtswert/Hochwert
 
 Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs parkplaetze'` zeigt die Zahl je Quelle, welche Spalten erkannt wurden, und die ersten Einträge. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
 
-### Daten der Stadt Bielefeld: Ampelanlagen und Baustellen
+### Daten der Stadt Bielefeld: Ampelanlagen, Baustellen, Park + Ride, Radverkehrsnetz
 
 Der Server holt von selbst aus dem Geodienst der Stadt (Open Data Bielefeld, CC BY 4.0, www.bielefeld01.de):
 - **Ampelanlagen** (wöchentlich): 322 Anlagen mit Nummer und Art (Kreuzung, Fußgängerampel, Stadtwerke, Straßen.NRW). Die App ergänzt damit OpenStreetMap: Wo im geladenen Gebiet bis 80 m keine Ampel aus OpenStreetMap steht, nimmt sie die Anlage der Stadt dazu. Jede Kreuzung bekommt die Nummer der nächsten Anlage (bis 50 m); „Meine Ampeln“ auf der Karte zeigt sie, z. B. „Anlage Nr. 723 · Fußgängerampel“. Bestehende Kreuzungen behalten ihre Kennung, ältere Fahrten passen weiter.
 - **Aktuelle Baustellen** (alle 30 Minuten, zusammen mit der Verkehrslage): Straße, Abschnitt, Art der Arbeiten, Zeitraum und, wo vorhanden, der Hinweis für den Fuß- und Radverkehr. Sie erscheinen auf der Karte unter „Baustellen“, in „Dein Weg heute“ und bei „Wohin?“ entlang der Strecke; zu Fuß mit dem Hinweis für den Fußverkehr.
+
+- **Park + Ride** (wöchentlich): 7 Anlagen mit Zahl der Plätze. Fährt man mit dem Auto in die Innenstadt (Ziel bis 2,5 km vom Jahnplatz, Strecke ab 4 km) und liegt eine Anlage bis 800 m an der Strecke, schlägt „Wohin?“ sie vor, mit Stadtbahn-Haltestelle und Linien; ein Knopf plant ab dort mit Bus und Bahn weiter. Auf der Karte unter „Stadtbahn“ als blaues P+R.
+- **Radverkehrsnetz** (wöchentlich, Datensatz „Radverkehrskonzepte“): 545 Abschnitte, etwa 417 km. Auf der Karte unter „Radwege“ als dünne gestrichelte Linie, auch weit herausgezoomt; bei „Wohin?“ mit dem Rad steht, zu wie viel Prozent die Strecke darauf liegt.
 
 Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs stadtdaten'`. Abschalten mit `STADT_DATEN=0` in `/etc/flowtown.env`. `/api/health` zeigt `ampelanlagen` und `baustellenStadt`.
 

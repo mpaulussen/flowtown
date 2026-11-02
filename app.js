@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.49.0';
+  const VERSION = '0.50.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2217,6 +2217,7 @@
     // Radwege, Stadtbahn, Verkehrslage
     if (mapLayers.rad && !mapFitted && map.getZoom() < 14) { map.setView(meMarker ? meMarker.getLatLng() : map.getCenter(), 15, { animate: false }); mapFitted = true; }
     if (mapLayers.rad) drawRad(); else { groups.rad.clearLayers(); radDrawn = ''; }
+    drawNetz();
     if (mapLayers.tram) drawTram(); else groups.tram.clearLayers();
     if (mapLayers.lage || mapLayers.stau) drawLage(); else { groups.lage.clearLayers(); groups.stau.clearLayers(); }
     if (mapLayers.acc) drawAcc(); else groups.acc.clearLayers();
@@ -2232,10 +2233,10 @@
     if (mapLayers.grid) parts.push('<p><b>Flow-Raster:</b> Felder von etwa 150 × 150 m. Grün: es fließt, rot: es hakt.</p>');
     if (mapLayers.rad) {
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
-      parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
+      parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}${stadt2 ? '<span class="rad-key"><i class="dash dark"></i>Radverkehrsnetz der Stadt</span>' : ''}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig${stadt2 ? '; Radverkehrsnetz: Stadt Bielefeld (Open Data)' : ''}.</p>`);
     }
     if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
-    if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}`);
+    if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}${stadt2 && stadt2.pr.length ? '<p class="muted">Blaues P+R: Park + Ride mit Anzahl der Plätze (Stadt Bielefeld).</p>' : ''}`);
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
     if (mapLayers.stau) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#d64933"></i>Stau</span><span class="rad-key"><i style="background:#e0a326;opacity:.75"></i>stockend</span></div><p class="muted">Stau jetzt${n('stau')}: Verkehrsfluss von HERE, alle paar Minuten neu.</p>`);
@@ -2243,10 +2244,22 @@
   }
   // Radwege der sichtbaren Kacheln, eine nach der anderen (der Dienst erlaubt nur zwei Anfragen gleichzeitig)
   let radRenderer = null, radDrawn = '', radRun = 0;
+  // Radverkehrsnetz der Stadt: dünne gestrichelte Linie über den Radwegen, auch weit herausgezoomt
+  let netzLayer = null;
+  async function drawNetz() {
+    if (!map) return;
+    if (!netzLayer) { map.createPane('netz').style.zIndex = 450; netzLayer = L.layerGroup().addTo(map); }
+    netzLayer.clearLayers();
+    if (!mapLayers.rad) return;
+    if (!stadt2) await loadStadt2();
+    if (!stadt2 || !mapLayers.rad) return;
+    const rend = L.canvas({ pane: 'netz', padding: 0.3 });
+    for (const l of stadt2.netz) L.polyline(l[0], { renderer: rend, pane: 'netz', color: '#15191e', weight: 2, opacity: 0.75, dashArray: '5 5', interactive: false }).addTo(netzLayer);
+  }
   async function drawRad() {
     if (!map || !mapLayers.rad) return;
     const g = groups.rad, b = map.getBounds();
-    if (map.getZoom() < 14) { g.clearLayers(); radDrawn = ''; mapStatus('Für die Radwege näher heranzoomen.'); return; }
+    if (map.getZoom() < 14) { g.clearLayers(); radDrawn = ''; mapStatus('Für die Radwege näher heranzoomen. Gestrichelt: Radverkehrsnetz der Stadt.'); return; }
     const keys = [];
     for (let a = Math.floor(b.getSouth() / RAD_TILE); a <= Math.floor(b.getNorth() / RAD_TILE); a++)
       for (let o = Math.floor(b.getWest() / RAD_TILE); o <= Math.floor(b.getEast() / RAD_TILE); o++) keys.push(a + '_' + o);
@@ -2377,6 +2390,12 @@
         else if (fp.stops[si][4] && !stopsShown[n][2]) stopsShown[n][2] = fp.stops[si][4];
       }
     });
+    if (!stadt2) await loadStadt2();
+    for (const p of (stadt2 && stadt2.pr) || []) {
+      const st = tramNear([p[0], p[1]], 600);
+      L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'pr-pin', html: '<span>P+R</span>', iconSize: [34, 20] }), title: 'Park + Ride ' + p[3] })
+        .bindPopup(`<strong>Park + Ride ${esc(p[3])}</strong><br>${esc(p[4])}<br>${p[2]} Plätze${st ? `<br>${ic('tram')} ${esc(st.name)}${st.lines.length ? ': Linie ' + esc(st.lines.join(', ')) : ''}${st.m > 120 ? ` · ${fmtLen(st.m)} zu Fuß` : ''}` : ''}<br><span class="muted">Stadt Bielefeld (Open Data)</span>`).addTo(g);
+    }
     for (const n of Object.keys(stopsShown)) {
       const e = hstOf(n), lift = liftNear({ lat: stopsShown[n][0], lon: stopsShown[n][1] }, [hstNorm(n)]);
       L.circleMarker(stopsShown[n].slice(0, 2), { radius: e ? 7 : 5, color: '#15191e', weight: 2, fillColor: e ? HST_COL[e.hbs] : '#ffffff', fillOpacity: 1 })
@@ -3191,7 +3210,91 @@
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
     const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}${group === 'fuss' ? 'Losgehen mit Ziel' : 'Fahrt starten mit Ziel'}</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
-    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+  }
+  // ---------- Park + Ride und Radverkehrsnetz der Stadt Bielefeld (Open Data) ----------
+  let stadt2 = store.get('stadt2', null), stadt2Loading = null, netzGrid = null;
+  function loadStadt2() {
+    if (!apiBase()) return Promise.resolve(false);
+    if (stadt2Loading) return stadt2Loading;
+    if (stadt2 && Date.now() - stadt2.geladen < 7 * 864e5) return Promise.resolve(true);
+    stadt2Loading = api('/api/stadt-pr-radnetz').then((d) => {
+      if (!d.pr || (!d.pr.length && !(d.netz || []).length)) return !!stadt2;
+      stadt2 = { geladen: Date.now(), pr: d.pr, netz: d.netz || [] };
+      netzGrid = null;
+      store.set('stadt2', stadt2);
+      return true;
+    }).catch(() => false).finally(() => { stadt2Loading = null; });
+    return stadt2Loading;
+  }
+  const netzSegM = (p, a, b) => { const ax = (a[1] - p[1]) * 68500, ay = (a[0] - p[0]) * 111320, dx = (b[1] - a[1]) * 68500, dy = (b[0] - a[0]) * 111320; const l2 = dx * dx + dy * dy; const u = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0; return Math.hypot(ax + u * dx, ay + u * dy); };
+  // Raster von etwa 200 m: jeder Abschnitt in allen Feldern, die er berührt
+  function netzIndex() {
+    if (netzGrid || !stadt2 || !stadt2.netz.length) return netzGrid;
+    netzGrid = {};
+    const add = (p, v) => { const k = Math.floor(p[0] / 0.0018) + '_' + Math.floor(p[1] / 0.0029); const c = netzGrid[k] || (netzGrid[k] = []); if (c[c.length - 1] !== v) c.push(v); };
+    stadt2.netz.forEach((l, li) => {
+      for (let i = 0; i < l[0].length - 1; i++) {
+        const a = l[0][i], b = l[0][i + 1], n = Math.max(1, Math.ceil(netzSegM(a, a, b) / 100));
+        for (let k = 0; k <= n; k++) add([a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n], li * 10000 + i);
+      }
+    });
+    return netzGrid;
+  }
+  function onNetz(p) {
+    const g = netzIndex();
+    if (!g) return null;
+    const ki = Math.floor(p[0] / 0.0018), kj = Math.floor(p[1] / 0.0029);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const v of g[(ki + a) + '_' + (kj + b)] || []) {
+      const l = stadt2.netz[Math.floor(v / 10000)], i = v % 10000;
+      if (netzSegM(p, l[0][i], l[0][i + 1]) <= 20) return l;
+    }
+    return null;
+  }
+  // Anteil einer Strecke auf dem Radverkehrsnetz der Stadt, Punkte etwa alle 25 m
+  function netzShare(pts) {
+    if (!netzIndex() || !pts || pts.length < 2) return null;
+    let n = 0, on = 0;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1], k = Math.max(1, Math.round(netzSegM(a, a, b) / 25));
+      for (let j = 0; j < k; j++) { n++; if (onNetz([a[0] + (b[0] - a[0]) * j / k, a[1] + (b[1] - a[1]) * j / k])) on++; }
+    }
+    return n ? on / n : null;
+  }
+  // nächste Stadtbahn-Haltestelle zu einem Punkt und ihre Linien (aus dem Fahrplan)
+  function tramNear(p, r) {
+    if (!fp) return null;
+    let best = null, bd = r;
+    for (const i of fpStopsNear({ lat: p[0], lon: p[1] }, r, 0)) { const d = dist({ lat: p[0], lon: p[1] }, { lat: fp.stops[i][2], lon: fp.stops[i][3] }); if (d < bd) { bd = d; best = i; } }
+    if (best == null) return null;
+    if (!fp.tramLines) {
+      fp.tramLines = {};
+      for (const t of fp.trips) { const rt = fp.routes[t[0]]; if (rt[1] !== 0) continue; for (const si of fp.patterns[t[1]]) (fp.tramLines[si] = fp.tramLines[si] || new Set()).add(rt[0]); }
+    }
+    const name = fp.stops[best][1].replace(/^Bielefeld,\s*/, '');
+    const lines = new Set();
+    for (const si of fp.byName[name] || [best]) for (const l of fp.tramLines[si] || []) lines.add(l);
+    return { name, m: bd, lines: Array.from(lines).sort((a, b) => a.localeCompare(b, 'de', { numeric: true })) };
+  }
+  // Mit dem Auto in die Innenstadt: Park + Ride an der Strecke vorschlagen, weiter mit der Stadtbahn
+  const CITY = { lat: 52.0237, lon: 8.5339 };
+  function prBlock(z, d) {
+    if (!stadt2) { loadStadt2().then((ok) => { if (ok && zielOpen === z.id) renderVorfahrt(); }); return ''; }
+    if (!d.pts || d.pts.length < 2 || d.km < 4 || dist(CITY, { lat: z.lat, lon: z.lon }) > 2500) return '';
+    let best = null;
+    for (const p of stadt2.pr) {
+      if (dist({ lat: p[0], lon: p[1] }, { lat: z.lat, lon: z.lon }) < 2000) continue;
+      let bd = 800, bi = -1;
+      d.pts.forEach((q, i) => { const m = dist({ lat: p[0], lon: p[1] }, { lat: q[0], lon: q[1] }); if (m < bd) { bd = m; bi = i; } });
+      if (bi < 0 || bi > d.pts.length * 0.85) continue;
+      if (!best || bd < best.m) best = { p, m: bd };
+    }
+    if (!best) return '';
+    if (!fp) loadFahrplan().then((ok) => { if (ok && zielOpen === z.id) renderVorfahrt(); });
+    const p = best.p, st = tramNear([p[0], p[1]], 600);
+    const weiter = st ? `weiter mit der Stadtbahn${st.lines.length ? ` (Linie ${esc(st.lines.join(', '))})` : ''} ab ${esc(st.name)}${st.m > 120 ? ` (${fmtLen(st.m)} zu Fuß)` : ''}` : 'weiter mit der Stadtbahn';
+    return `<div class="pr-tip"><p><b>${ic('route')}Park + Ride ${esc(p[3])}</b> liegt an deiner Strecke: ${p[2]} Plätze, ${weiter}. Spart die Parkplatzsuche in der Innenstadt.</p>
+      <div class="pr-btns">${st ? `<button type="button" class="btn" data-pr-ab="${esc(st.name)}">${ic('tram')}Ab ${esc(st.name)} mit Bus &amp; Bahn planen</button>` : ''}<button type="button" class="btn quiet" data-peek="r" data-name="Park + Ride ${esc(p[3])}" data-meta="Grün: Park + Ride ${esc(p[3])} (${esc(p[4])}), rot: dein Ziel" data-pts="${p[0]},${p[1]};${z.lat},${z.lon}">${ic('map')}Wo genau?</button></div></div>`;
   }
   // Behindertenparkplätze (Stadt Bielefeld und OpenStreetMap): am Ziel mit dem Auto und auf der Karte
   let bpp = store.get('bpp', null), bppLoading = null;
@@ -3288,7 +3391,8 @@
     if (!z) return '';
     if (zielEdit) return zielPanel(z, group);
     const head = `<div class="vf-phead"><b>${esc(z.name)}</b><button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
-    const abs = settings.haltestellen.length && fp ? `<div class="vf-chips" role="group" aria-label="Start"><span class="small muted">Ab</span>${settings.haltestellen.map((n) => `<button type="button" class="vf-chip${zielAb === n ? ' on' : ''}" data-zab="${esc(n)}" aria-pressed="${zielAb === n}">${esc(n)}</button>`).join('')}<button type="button" class="vf-chip${zielAb ? '' : ' on'}" data-zab="" aria-pressed="${!zielAb}">${ic('pin')}Standort</button></div>` : '';
+    const abList = settings.haltestellen.concat(zielAb && !settings.haltestellen.includes(zielAb) ? [zielAb] : []);
+    const abs = abList.length && fp ? `<div class="vf-chips" role="group" aria-label="Start"><span class="small muted">Ab</span>${abList.map((n) => `<button type="button" class="vf-chip${zielAb === n ? ' on' : ''}" data-zab="${esc(n)}" aria-pressed="${zielAb === n}">${esc(n)}</button>`).join('')}<button type="button" class="vf-chip${zielAb ? '' : ' on'}" data-zab="" aria-pressed="${!zielAb}">${ic('pin')}Standort</button></div>` : '';
     const r = zielRes[zKey(z, group)];
     if (!r || r.loading) return `<div class="vf-panel">${head}${abs}<p class="small muted" role="status">Verbindungen werden gesucht …</p></div>`;
     if (r.error) return `<div class="vf-panel">${head}${abs}<p class="small" role="status">${esc(r.error)}</p><button type="button" class="btn quiet" data-vf="again">Noch einmal suchen</button></div>`;
@@ -3337,7 +3441,10 @@
     if (r.loading) return '<p class="small muted" role="status">Radwege entlang der Strecke werden geprüft …</p>';
     if (r.error) return `<p class="small muted">${esc(r.error)}</p>`;
     const known = r.total - r.m.unbekannt;
-    if (known < r.total * 0.3) return '<p class="small muted">Zu dieser Strecke gibt es kaum Angaben zu Radwegen.</p>';
+    const share = netzShare(route.split(';').map((x) => x.split(',').map(Number)));
+    if (share == null && !stadt2) loadStadt2();
+    const netz = share != null ? `<p class="rad-netz">${ic('bike')}<span>${share >= 0.05 ? `Zu <b>${Math.round(share * 100)} %</b> auf dem Radverkehrsnetz der Stadt` : 'Kaum auf dem Radverkehrsnetz der Stadt'}</span></p>` : '';
+    if (known < r.total * 0.3) return `<p class="small muted">Zu dieser Strecke gibt es kaum Angaben zu Radwegen.</p>${netz}`;
     const order = ['gut', 'ruhig', 'mittel', 'schlecht'];
     const pct = (k) => Math.round(r.m[k] / known * 100);
     const good = pct('gut') + pct('ruhig');
@@ -3346,7 +3453,7 @@
     const bar = `<div class="rad-bar" role="img" aria-label="${esc(say)}">${order.map((k) => (r.m[k] ? `<i style="width:${(r.m[k] / known * 100).toFixed(1)}%;background:${RAD_CLS[k].col}"></i>` : '')).join('')}</div>`;
     const legend = `<p class="rad-legend small">${order.filter((k) => pct(k)).map((k) => `<span><i style="background:${RAD_CLS[k].col}"></i>${pct(k)} % ${esc(RAD_CLS[k].kurz)}</span>`).join('')}</p>`;
     const rows = r.ohne.slice(0, 3).map((x) => `<li class="vf-line"><button type="button" class="place" data-peek="l" data-name="${esc(x.name)}" data-art="rad" data-lines="${x.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${route}">${esc(x.name)}</button><span class="small muted"> · ${fmtLen(x.m)} ohne Radweg</span></li>`).join('');
-    return `<div class="rad-rate"><h4 class="vf-h4">${title}</h4>${bar}${legend}${rows ? `<ul class="rad-ohne">${rows}</ul>` : ''}<p class="small muted">Laut OpenStreetMap, nicht überall vollständig.</p></div>`;
+    return `<div class="rad-rate"><h4 class="vf-h4">${title}</h4>${bar}${legend}${netz}${rows ? `<ul class="rad-ohne">${rows}</ul>` : ''}<p class="small muted">Radwege laut OpenStreetMap, nicht überall vollständig${share != null ? '; Radverkehrsnetz: Stadt Bielefeld' : ''}.</p></div>`;
   }
   function zielHistory(z) {
     const mine = trips.filter((t) => t.plan && t.plan.ziel === z.id && !(t.plan.rest > 2));
@@ -3480,6 +3587,15 @@
     }
     const o = ev.target.closest('[data-ort]');
     if (o && ortList) { addZiel(ortList[Number(o.dataset.ort)]); return; }
+    const prAb = ev.target.closest('[data-pr-ab]');
+    if (prAb) {
+      const zz = settings.ziele.find((x) => x.id === zielOpen);
+      setModeUI('bahn'); settings.mode = 'bahn'; store.set('settings', settings); applyModeWords('bahn');
+      zielAb = prAb.dataset.prAb; conOpen = 0;
+      renderToday();   // prüft das offene Ziel mit Bus und Bahn ab der Haltestelle
+      if (zz && !zielRes[zKey(zz, 'oepnv')]) checkZiel(zz);
+      return;
+    }
     const ab = ev.target.closest('[data-zab]');
     if (ab) {
       zielAb = ab.dataset.zab || null; conOpen = 0;
