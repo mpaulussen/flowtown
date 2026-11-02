@@ -646,7 +646,7 @@ async function checkZiel(from, to, mode) {
 const TRANSIT_URL = process.env.HERE_TRANSIT_URL || 'https://transit.router.hereapi.com/v8/routes';
 const transitArt = (m) => (/Train$/.test(m) ? 'zug' : /^(lightRail|subway|tram|monorail|inclined|aerial)$/.test(m) ? 'bahn' : /bus/i.test(m) ? 'bus' : m === 'ferry' ? 'faehre' : 'zug');
 async function hereTransit(from, to) {
-  const q = new URLSearchParams({ origin: from.join(','), destination: to.join(','), alternatives: '5', lang: 'de-DE', return: 'travelSummary', apiKey: HERE_KEY });
+  const q = new URLSearchParams({ origin: from.join(','), destination: to.join(','), alternatives: '5', lang: 'de-DE', return: 'travelSummary,polyline', apiKey: HERE_KEY });
   let j;
   try { j = await getJson(`${TRANSIT_URL}?${q}`, 12000); }
   catch (e) {
@@ -658,10 +658,12 @@ async function hereTransit(from, to) {
     const teile = (r.sections || []).map((sec) => {
       const dep = sec.departure || {}, arr = sec.arrival || {}, tr = sec.transport || {}, dp = dep.place || {}, ap = arr.place || {};
       for (const a of sec.attributions || []) if (a.text) quellen.add(clip(a.text, 120));
-      if (sec.type === 'pedestrian') return { art: 'fuss', ab: dep.time, an: arr.time };
+      // Fußwege mit Linie (für den Weg-Check), Haltestellen mit Lage (stufenlos laut Fahrplan)
+      const pos = (pl) => (pl.location && isFinite(pl.location.lat) ? [r5(pl.location.lat), r5(pl.location.lng)] : undefined);
+      if (sec.type === 'pedestrian') { let pts; try { pts = sec.polyline ? thin2(decodeFlex(sec.polyline), 80) : undefined; } catch (e) { pts = undefined; } return { art: 'fuss', ab: dep.time, an: arr.time, pts }; }
       const delay = Number(dep.delay);
       return { art: transitArt(tr.mode || ''), linie: clip(tr.name || tr.shortName || tr.category || '', 20), ziel: clip(tr.headsign || '', 40),
-        von: clip(dp.name || '', 50), ab: dep.time, nach: clip(ap.name || '', 50), an: arr.time, gleis: dp.platform ? clip(dp.platform, 8) : undefined,
+        von: clip(dp.name || '', 50), vonPos: pos(dp), ab: dep.time, nach: clip(ap.name || '', 50), nachPos: pos(ap), an: arr.time, gleis: dp.platform ? clip(dp.platform, 8) : undefined,
         plus: delay >= 60 ? Math.round(delay / 60) : undefined };
     }).filter((x) => x.ab && x.an);
     const fahrt = teile.filter((x) => x.art !== 'fuss');

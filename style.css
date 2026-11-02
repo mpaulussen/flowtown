@@ -754,3 +754,5 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .leg-suggest[hidden]{display:none}
 .leg-suggest p{margin:0;font-size:18px;font-weight:700;line-height:1.35}
 .leg-suggest-btns{display:grid;grid-template-columns:2fr 1fr;gap:8px}
+.con-acc{font-size:13px;white-space:nowrap}
+.con-legs li .btn-link{font-size:13px}

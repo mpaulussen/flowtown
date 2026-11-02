@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.42.0';
+  const VERSION = '0.43.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3131,6 +3131,29 @@
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
     return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
+  // Barrierefrei bei Bus und Bahn: Haltestellen stufenlos laut Fahrplan, Fußwege mit Weg-Check
+  function stopAccess(pos) {
+    if (!pos || !fp) return null;
+    const near = fpStopsNear({ lat: pos[0], lon: pos[1] }, 80).map((i) => fp.stops[i][4]).filter((v) => v === 1 || v === 2);
+    return near.includes(1) ? 1 : near.length ? 0 : null;
+  }
+  function fussSummary(r, type) {
+    const important = FUSS_WEIGHT[type] || FUSS_BAD;
+    const parts = r.stellen.filter((x) => important.includes(x.c)).slice(0, 2).map((x) => (x.c === 'stufen' ? 'Stufen' : `${fmtLen(x.m)} ${FUSS_CLS[x.c].label}`));
+    if (r.bord && (type === 'rollstuhl' || type === 'rollator')) parts.push(r.bord === 1 ? 'hoher Bordstein' : r.bord + ' hohe Bordsteine');
+    const near = r.pts ? hinwNear(r.pts) : [];
+    if (near.length) parts.push(HINW[near[0].art] + ' (gemeldet)');
+    return { ok: !parts.length, text: parts.join(', ') };
+  }
+  // Fußwege der aufgeklappten Verbindung prüfen, einmal je Verbindung
+  function conCheck(c, z) {
+    if (!settings.access.on || c.wcStarted) return;
+    c.wcStarted = true;
+    const walks = c.teile.filter((x) => x.art === 'fuss' && x.pts && x.pts.length > 1);
+    walks.forEach((x) => { x.wc = { loading: true }; });
+    Promise.all([loadHinweise().catch(() => null)].concat(walks.map((x) => fussRate(x.pts).then((r) => { x.wc = r || { error: true }; }).catch(() => { x.wc = { error: true }; }))))
+      .then(() => { if (zielOpen === z.id) renderVorfahrt(); });
+  }
   // Bus und Bahn: die nächsten Verbindungen, ab Standort oder einer eigenen Haltestelle
   const ART_LABEL = { zug: 'rail', bahn: 'tram', bus: '' };
   function zielPanelOepnv(z, group) {
@@ -3148,9 +3171,19 @@
     const rows = cons.map((c, i) => {
       const dur = (Date.parse(c.an) - Date.parse(c.ab)) / 1000, fahrt = c.teile.filter((x) => x.art !== 'fuss');
       const late = fahrt.some((x) => x.plus) ? ` · <b class="con-late">+${Math.max(...fahrt.map((x) => x.plus || 0))} min</b>` : '';
+      if (i === conOpen) conCheck(c, z);
+      const acc = settings.access.on;
+      const stufe = (pos) => { if (!acc) return ''; const a = stopAccess(pos); return a === 1 ? ` <span class="con-acc ok">${bfMark(1)} stufenlos</span>` : a === 0 ? ` <span class="con-acc">${bfMark(0)} nicht stufenlos</span>` : ''; };
+      const walkCheck = (x) => {
+        if (!acc || !x.pts) return '';
+        if (!x.wc || x.wc.loading) return ' · <span class="small muted">wird geprüft …</span>';
+        if (x.wc.error) return '';
+        const f = fussSummary(x.wc, settings.access.type);
+        return ` · ${f.ok ? bfMark(1) + ' keine Hindernisse bekannt' : bfMark(0) + ' ' + esc(f.text)} <button type="button" class="btn-link" data-peek="l" data-name="Fußweg" data-art="alt" data-lines="${x.pts.map((q) => q.join(',')).join(';')}" data-pts="">Karte</button>`;
+      };
       const legs = i === conOpen ? `<ol class="con-legs">${c.teile.map((x) => x.art === 'fuss'
-        ? `<li class="small muted">${ic('walk')}${Math.max(1, Math.round((Date.parse(x.an) - Date.parse(x.ab)) / 60000))} min zu Fuß</li>`
-        : `<li>${badge(x)}<span><b>${clock(x.ab)}</b> ${esc(x.von)}${x.gleis ? `, Gleis ${esc(x.gleis)}` : ''}${x.plus ? ` <b class="con-late">+${x.plus}</b>` : ''}<br><span class="small">Richtung ${esc(x.ziel)}</span><br><b>${clock(x.an)}</b> ${esc(x.nach)}</span></li>`).join('')}</ol>` : '';
+        ? `<li class="small muted">${ic('walk')}<span>${Math.max(1, Math.round((Date.parse(x.an) - Date.parse(x.ab)) / 60000))} min zu Fuß${walkCheck(x)}</span></li>`
+        : `<li>${badge(x)}<span><b>${clock(x.ab)}</b> ${esc(x.von)}${x.gleis ? `, Gleis ${esc(x.gleis)}` : ''}${x.plus ? ` <b class="con-late">+${x.plus}</b>` : ''}${stufe(x.vonPos)}<br><span class="small">Richtung ${esc(x.ziel)}</span><br><b>${clock(x.an)}</b> ${esc(x.nach)}${stufe(x.nachPos)}</span></li>`).join('')}</ol>` : '';
       return `<li><button type="button" class="con${i === conOpen ? ' on' : ''}" data-con="${i}" aria-expanded="${i === conOpen}"><span class="con-t"><b>${clock(c.ab)} → ${clock(c.an)}</b><span class="small">${hm(dur)} · ${c.umstiege ? `${c.umstiege}× umsteigen` : 'direkt'}${late}</span></span><span class="con-lines">${fahrt.map(badge).join('')}</span></button>${legs}</li>`;
     }).join('');
     const list = rows ? `<ul class="con-list">${rows}</ul>` : '<p class="small">Gerade keine Verbindung gefunden.</p>';
