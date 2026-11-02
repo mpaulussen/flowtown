@@ -147,7 +147,7 @@ Mit dem Auto zeigt „Wohin?“ beim Ziel die Behindertenparkplätze bis 400 m e
 
 Der Server holt sie einmal am Tag aus zwei Quellen:
 1. **OpenStreetMap** (Stellplätze mit `parking_space=disabled`, Parkplätze mit `capacity:disabled`). Das geht ohne Einrichtung.
-2. **Stadt Bielefeld, Open Data** „Schwerbehindertenparkplätze“ (CC BY 4.0). Auf open-data.bielefeld.de beim Datensatz den Link zur **CSV**- oder **GeoJSON**-Datei kopieren (nicht WMS/WFS/Shape) und in `/etc/flowtown.env` eintragen: `BEHINDERTENPARKPLAETZE_URL="…"`. Alternativ die Datei als `/var/lib/flowtown/behindertenparkplaetze.csv` (oder `.geojson`) ablegen.
+2. **Stadt Bielefeld, Open Data** „Schwerbehindertenparkplätze“ (CC BY 4.0). Der Server holt die CSV-Ausgabe des Geodienstes der Stadt (www.bielefeld01.de) von selbst, ohne Einrichtung. Eine andere Quelle geht mit `BEHINDERTENPARKPLAETZE_URL="…"` in `/etc/flowtown.env` (CSV oder GeoJSON), abschalten mit `BEHINDERTENPARKPLAETZE_URL=0`; dann gilt auch eine Datei `/var/lib/flowtown/behindertenparkplaetze.csv` (oder `.geojson`).
 
 Der Server erkennt Koordinaten in Breite/Länge oder UTM 32 (Rechtswert/Hochwert, EPSG:25832) und sucht sich Spalten für Standort und Anzahl. Stellen aus OpenStreetMap, die die Stadt schon hat, fallen weg.
 

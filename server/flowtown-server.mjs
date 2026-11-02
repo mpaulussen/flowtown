@@ -1461,7 +1461,9 @@ async function hstOsm() {
 // /var/lib/flowtown/behindertenparkplaetze.csv bzw. .geojson. Koordinaten in WGS84 oder UTM 32 (EPSG:25832) werden erkannt.
 // Dazu OpenStreetMap: einzelne Stellplätze (parking_space=disabled) und Parkplätze mit capacity:disabled.
 // Einmal am Tag neu; fällt eine Quelle aus, bleibt deren letzter Stand.
-const BPP_URL = process.env.BEHINDERTENPARKPLAETZE_URL || '';
+// Standard: CSV-Ausgabe des Geodienstes der Stadt (Open Data Bielefeld, Datensatz „Schwerbehindertenparkplätze“, CC BY 4.0); mit 0 abschalten
+const BPP_DEFAULT = 'https://www.bielefeld01.de/md/WFS/schwerbehindertenparkplatze/01?SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature&TYPENAME=parken_schwerbehinderte_p&SRSNAME=EPSG:25832&OUTPUTFORMAT=text/csv';
+const BPP_URL = process.env.BEHINDERTENPARKPLAETZE_URL === '0' ? '' : process.env.BEHINDERTENPARKPLAETZE_URL || BPP_DEFAULT;
 const BPP_FILE = path.join(DATA_DIR, 'behindertenparkplaetze.json');
 const BPP_LOCAL = ['behindertenparkplaetze.csv', 'behindertenparkplaetze.geojson', 'behindertenparkplaetze.json.src'].map((f) => path.join(DATA_DIR, f));
 let bpp = null, bppRun = null, bppTry = 0;
@@ -1489,7 +1491,6 @@ function anyToWgs(a, b) {
   if (a > 1e5 && a < 9e5 && b > 5e6 && b < 7e6) return utm32(a, b);
   return null;
 }
-const wktPoint = (s) => { const m = /(-?[\d.]+)\s+(-?[\d.]+)/.exec(String(s || '')); return m ? anyToWgs(Number(m[1]), Number(m[2])) : null; };
 const normKey = (h) => String(h).trim().toLowerCase().replace(/ä/g, 'ae').replace(/ü/g, 'ue').replace(/ö/g, 'oe').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
 // Text und Anzahl aus beliebigen Spalten
 function bppProps(o) {
@@ -1527,10 +1528,13 @@ function bppParse(text) {
     const find = (re) => head.findIndex((h) => re.test(h));
     const cLat = find(/^(lat|latitude|breite|breitengrad|ywgs84|wgs84lat|geolat)$/), cLon = find(/^(lon|lng|long|longitude|laenge|laengengrad|xwgs84|wgs84lon|geolon)$/);
     const cX = find(/^(x|rechtswert|rw|east|easting|xkoordinate|koordx|xkoord|utmx|ostwert)$/), cY = find(/^(y|hochwert|hw|north|northing|ykoordinate|koordy|ykoord|utmy|nordwert)$/);
-    const cW = find(/^(wkt|geom|geometry|thegeom|shape|geometrie)$/);
+    let cW = find(/^(wkt|geom|geometry|thegeom|shape|geometrie|msgeometry|geometriewkt)$/);
+    if (cW < 0) cW = rows[0].findIndex((h, i) => /^\s*(MULTI)?(POINT|POLYGON|LINESTRING)\s*\(/i.test(rows[1][i] || ''));   // Geometrie als WKT in irgendeiner Spalte
     if (cLat < 0 && cX < 0 && cW < 0) throw new Error('keine Koordinaten-Spalten gefunden, Spalten: ' + rows[0].join(', '));
+    // bei Flächen und Linien: Mittelpunkt aller Punkte der Geometrie
+    const wktMid = (w) => { const ps = [...String(w || '').matchAll(/(-?[\d.]+)\s+(-?[\d.]+)/g)].map((m) => anyToWgs(Number(m[1]), Number(m[2]))).filter(Boolean); return ps.length ? [ps.reduce((a, p) => a + p[0], 0) / ps.length, ps.reduce((a, p) => a + p[1], 0) / ps.length] : null; };
     for (const r of rows.slice(1)) {
-      const pos = cLat >= 0 && cLon >= 0 ? anyToWgs(num(r[cLon]), num(r[cLat])) : cX >= 0 && cY >= 0 ? anyToWgs(num(r[cX]), num(r[cY])) : cW >= 0 ? wktPoint(r[cW]) : null;
+      const pos = cLat >= 0 && cLon >= 0 ? anyToWgs(num(r[cLon]), num(r[cLat])) : cX >= 0 && cY >= 0 ? anyToWgs(num(r[cX]), num(r[cY])) : cW >= 0 ? wktMid(r[cW]) : null;
       if (!pos) continue;
       const p = bppProps(Object.fromEntries(rows[0].map((h, i) => [h, r[i]])));
       out.push([r5(pos[0]), r5(pos[1]), p.n, p.text, 's']);
