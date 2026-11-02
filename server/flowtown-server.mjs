@@ -180,6 +180,18 @@ function thin(pts) {
   return Array.from({ length: 24 }, (_, i) => ok[Math.round(i * step)]);
 }
 const herePts = (loc) => thin([].concat(...((loc && loc.shape && loc.shape.links) || []).map((l) => (l.points || []).map((q) => [q.lat, q.lng]))));
+// Straßenstücke einer Meldung einzeln lassen: nur aneinanderhängende Abschnitte zu einer Linie verbinden,
+// sonst zeichnet die Karte Querlinien (etwa zwischen beiden Fahrtrichtungen)
+function hereSegs(loc) {
+  const links = ((loc && loc.shape && loc.shape.links) || []).map((l) => (l.points || []).map((q) => [q.lat, q.lng])).filter((l) => l.length > 1);
+  const touch = (a, b) => Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1]) * 68500) < 25;
+  const chains = [];
+  for (const l of links) {
+    const last = chains[chains.length - 1];
+    if (last && touch(last[last.length - 1], l[0])) last.push(...l.slice(1)); else chains.push(l.slice());
+  }
+  return chains.length > 1 ? chains.map(thin) : undefined;
+}
 const kmh = (ms) => Math.round(ms * 3.6);
 const clip = (s, n) => { s = String(s || '').replace(/\s+/g, ' ').trim(); return s.length > n ? s.slice(0, n - 1) + '…' : s; };
 
@@ -199,7 +211,7 @@ async function hereFlow() {
     out.push({
       id: 'hf' + crypto.createHash('sha1').update(JSON.stringify(pts[0]) + JSON.stringify(pts[pts.length - 1])).digest('hex').slice(0, 10),
       quelle: 'HERE', richtung: true, art: closed ? 'sperrung' : cf.jamFactor >= 8 ? 'stau' : 'zaeh', richtung: true,
-      titel: clip(loc.description || 'Straße', 60), text: closed ? 'gesperrt' : `Ø ${kmh(spd)} km/h statt ${kmh(ff)} km/h`, delay, pts
+      titel: clip(loc.description || 'Straße', 60), text: closed ? 'gesperrt' : `Ø ${kmh(spd)} km/h statt ${kmh(ff)} km/h`, delay, pts, segs: hereSegs(loc), fluss: true
     });
   }
   return out;
@@ -216,7 +228,7 @@ async function hereIncidents(box) {
     out.push({
       id: 'hi' + String(d.id || d.originalId || out.length).slice(-16), quelle: 'HERE', richtung: pts.length > 1,
       art: d.roadClosed ? 'sperrung' : HERE_ART[d.type] || 'warnung',
-      titel: clip(loc.description || sum || 'Meldung', 60), text: clip(desc || sum || '', 220), bis: d.endTime || null, pts
+      titel: clip(loc.description || sum || 'Meldung', 60), text: clip(desc || sum || '', 220), bis: d.endTime || null, pts, segs: hereSegs(loc)
     });
   }
   return out;

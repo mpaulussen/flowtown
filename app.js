@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.35.0';
+  const VERSION = '0.36.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1676,8 +1676,8 @@
     if (b) { ev.preventDefault(); ev.stopPropagation(); openPeek(b); }
   }, true);
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
-  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage'];
-  let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false }, settings.mapLayers || {});
+  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau'];
+  let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false }, settings.mapLayers || {});
   const groups = {};
   const mapStatus = (t) => { $('#map-status').textContent = t || ''; $('#map-status').hidden = !t; };
   function renderMap() {
@@ -1722,7 +1722,7 @@
     if (mapLayers.rad && !mapFitted && map.getZoom() < 14) { map.setView(meMarker ? meMarker.getLatLng() : map.getCenter(), 15, { animate: false }); mapFitted = true; }
     if (mapLayers.rad) drawRad(); else { groups.rad.clearLayers(); radDrawn = ''; }
     if (mapLayers.tram) drawTram(); else groups.tram.clearLayers();
-    if (mapLayers.lage) drawLage(); else groups.lage.clearLayers();
+    if (mapLayers.lage || mapLayers.stau) drawLage(); else { groups.lage.clearLayers(); groups.stau.clearLayers(); }
     renderMapLegend();
     mapHasData = fit.length > 0;
     if (!mapFitted && fit.length && !mapLayers.rad) { map.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }); mapFitted = true; }
@@ -1737,7 +1737,9 @@
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
     }
     if (mapLayers.tram) parts.push('<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>');
-    if (mapLayers.lage) parts.push('<p><b>Baustellen und Stau:</b> rot Stau, Sperrung oder Unfall, gelb Baustelle oder zäh.</p>');
+    const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
+    if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
+    if (mapLayers.stau) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#d64933"></i>Stau</span><span class="rad-key"><i style="background:#e0a326;opacity:.75"></i>stockend</span></div><p class="muted">Stau jetzt${n('stau')}: Verkehrsfluss von HERE, alle paar Minuten neu.</p>`);
     $('#map-legend').innerHTML = parts.join('') || '<p class="muted">Schalte oben eine Ebene ein.</p>';
   }
   // Radwege der sichtbaren Kacheln, eine nach der anderen (der Dienst erlaubt nur zwei Anfragen gleichzeitig)
@@ -1825,24 +1827,42 @@
         }).addTo(g);
     }
   }
-  // Baustellen, Sperrungen und Stau in Bielefeld
+  // Baustellen und Sperrungen (Meldungen) getrennt vom Verkehrsfluss (Stau jetzt)
+  const isBau = (it) => !it.fluss && (it.art === 'baustelle' || it.art === 'sperrung');
+  const isStau = (it) => it.fluss || it.art === 'stau' || it.art === 'zaeh' || it.art === 'unfall';
+  let lageCounts = {};
   async function drawLage() {
-    const g = groups.lage;
-    g.clearLayers();
+    groups.lage.clearLayers(); groups.stau.clearLayers();
+    if (!mapLayers.lage && !mapLayers.stau) return;
     if (!lageCache || Date.now() - lageAt > 300000) {
       mapStatus('Verkehrslage wird geladen …');
       const ok = await loadLage();
-      if (!mapLayers.lage) return;
+      if (!mapLayers.lage && !mapLayers.stau) return;
       if (!ok && !lageCache) { mapStatus('Die Verkehrslage ist gerade nicht erreichbar.'); return; }
       mapStatus('');
+      groups.lage.clearLayers(); groups.stau.clearLayers();
     }
+    const fmtBis = (b) => { const d = new Date(b); return isNaN(d) || d - Date.now() > 400 * 864e5 ? '' : ` bis ${d.toLocaleDateString('de-DE', { day: 'numeric', month: 'numeric', year: d.getFullYear() !== new Date().getFullYear() ? 'numeric' : undefined })}`; };
+    lageCounts = { baustelle: 0, sperrung: 0, stau: 0 };
     for (const it of (lageCache && lageCache.items) || []) {
       if (!it || !Array.isArray(it.pts) || !it.pts.length) continue;
-      const col = LAGE_CLS[it.art] === 'red' ? '#d64933' : '#e0a326';
-      const pop = `<strong>${esc(it.titel || LAGE_LABEL[it.art] || 'Meldung')}</strong><br>${esc(LAGE_LABEL[it.art] || '')}${it.text ? '<br>' + esc(it.text) : ''}`;
-      (it.pts.length > 1 ? L.polyline(it.pts, { color: col, weight: 6, opacity: 0.9 }) : L.circleMarker(it.pts[0], { radius: 8, color: '#ffffff', weight: 2, fillColor: col, fillOpacity: 1 })).bindPopup(pop).addTo(g);
+      const bau = isBau(it), stau = !bau && isStau(it);
+      if (!(bau && mapLayers.lage) && !(stau && mapLayers.stau)) continue;
+      const g = bau ? groups.lage : groups.stau;
+      if (bau) lageCounts[it.art]++; else lageCounts.stau++;
+      const red = LAGE_CLS[it.art] === 'red';
+      const style = bau
+        ? (it.art === 'sperrung' ? { color: '#b3261e', weight: 6, opacity: 0.95, dashArray: '10 7' } : { color: '#e0a326', weight: 7, opacity: 0.95 })
+        : { color: red ? '#d64933' : '#e0a326', weight: red ? 5 : 4, opacity: 0.75 };
+      const pop = `<strong>${esc(it.titel || LAGE_LABEL[it.art] || 'Meldung')}</strong><br>${esc(it.fluss && it.art !== 'sperrung' ? (it.art === 'stau' ? 'Stau' : 'stockender Verkehr') : LAGE_LABEL[it.art] || '')}${it.bis ? esc(fmtBis(it.bis)) : ''}${it.text ? '<br>' + esc(it.text) : ''}<br><span style="color:#5b636b">${esc(it.quelle || '')}</span>`;
+      const lines = (it.segs || [it.pts]).filter((l) => l.length);
+      for (const l of lines) {
+        (l.length > 1 ? L.polyline(l, style) : L.circleMarker(l[0], { radius: 8, color: '#ffffff', weight: 2, fillColor: style.color, fillOpacity: 1 })).bindPopup(pop).addTo(g);
+      }
     }
+    renderMapLegend();
   }
+
 
   // Eigener Standort auf der Karte, nur solange die Karte offen ist
   let meMarker = null, meCircle = null, meWatch = null, meCenterNext = false, mapHasData = false;
@@ -2497,7 +2517,7 @@
         const h = by[k] || (by[k] = { titel: k, art: it.art, delay: 0, parts: [], texts: [], quellen: new Set(), richtungText: it.richtungText || '', line });
         if (LAGE_RANK[it.art] < LAGE_RANK[h.art]) h.art = it.art;
         if (it.delay) h.delay += it.delay;
-        h.parts.push(it.pts);
+        h.parts.push(...(it.segs || [it.pts]));
         if (it.text && !h.texts.includes(it.text)) h.texts.push(it.text);
         h.quellen.add(it.quelle);
       }
@@ -2568,7 +2588,7 @@
     // in Fahrtreihenfolge, damit man die Strecke von vorn nach hinten liest
     const items = d.items.slice().sort((a, b) => (a.km != null && b.km != null ? a.km - b.km : 0) || LAGE_RANK[a.art] - LAGE_RANK[b.art]);
     const extra = (it) => (it.art !== 'zaeh' && it.text && it.text.length > 14 && it.text.toLowerCase() !== LAGE_LABEL[it.art].toLowerCase() ? it.text : '');
-    const btn = (it) => `<button type="button" class="place" data-peek="l" data-name="${esc(it.titel)}" data-art="${it.art}" data-lines="${it.pts.map((q) => q.join(',')).join(';')}" data-pts="${route}">${esc(it.titel)}</button>`;
+    const btn = (it) => `<button type="button" class="place" data-peek="l" data-name="${esc(it.titel)}" data-art="${it.art}" data-lines="${(it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')}" data-pts="${route}">${esc(it.titel)}</button>`;
     const rows = items.length
       ? `<ul class="lg-list">${items.slice(0, 4).map((it) => lageRow(it.art, btn(it), [it.km != null ? `nach ${it.km} km` : '', LAGE_LABEL[it.art], delayText(it.delay), it.richtungText && !/Richtung/.test(it.titel) ? it.richtungText : ''].filter(Boolean).map(esc).join(' · '), extra(it))).join('')}</ul>${items.length > 4 ? `<p class="small muted">und ${items.length - 4} weitere, alle auf der Karte</p>` : ''}`
       : `<p class="vf-line ok">${ic('check')}<span>Keine Meldungen entlang der Strecke</span></p>`;
@@ -2583,7 +2603,7 @@
       bars = `<h4 class="vf-h4">Wann losfahren?</h4><div class="vf-bars" role="img" aria-label="${esc(say)}">${d.abfahrt.map((a) => `<div class="vf-col${a === best ? ' best' : ''}"><span class="vf-bar" style="height:${Math.round(12 + (hi > lo ? (a.dauer - lo) / (hi - lo) : 0) * 44)}px"></span><span class="vf-v">${hm(a.dauer).replace(' h', '')}</span><span class="vf-t">${label(a)}</span></div>`).join('')}</div>`
         + (best.t && gain >= 300 ? `<p class="tip">${ic('clock')}<span>Um ${clock(best.t)} bist du etwa ${Math.round(gain / 60)} min kürzer unterwegs als jetzt.</span></p>` : '');
     }
-    const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => it.pts.map((q) => q.join(',')).join(';')).join('|')}" data-arts="${items.map((it) => it.art).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
+    const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
     const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
     return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : ''}${alt}${rows}${bars}${zielHistory(z)}${go}${all}${foot}</div>`;
