@@ -1403,7 +1403,7 @@ function readHstCsv(text) {
   rows.slice(1).forEach((r, i) => {
     const v = (k) => (c[k] >= 0 ? String(r[c[k]] || '').trim() : '');
     const zeile = i + 2, name = v('name'), w = v('hbs').toLowerCase();
-    if (!name) return;
+    if (!name || !w) return;   // ohne Angabe: noch unbekannt
     const hbs = /^(ja|j|1|yes)$/.test(w) ? 'ja' : /^(nein|n|0|no)$/.test(w) ? 'nein' : /^teil/.test(w) ? 'teilweise' : null;
     if (!hbs) { fehler.push(`Zeile ${zeile}: Hochbahnsteig „${v('hbs')}“, bitte ja, nein oder teilweise`); return; }
     const k = hstNorm(name);

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.47.0';
+  const VERSION = '0.47.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2202,7 +2202,7 @@
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
     }
     if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
-    if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI. Weiße Punkte: noch keine Angabe.</p>` : ''}`);
+    if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}`);
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
     if (mapLayers.stau) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#d64933"></i>Stau</span><span class="rad-key"><i style="background:#e0a326;opacity:.75"></i>stockend</span></div><p class="muted">Stau jetzt${n('stau')}: Verkehrsfluss von HERE, alle paar Minuten neu.</p>`);
@@ -2345,7 +2345,7 @@
         .bindPopup(() => {
           const deps = departures(n, new Date(), 30).slice(0, 4);
           const w = stopsShown[n][2];
-          const acc = e ? `<br>${e.hbs === 'ja' ? bfMark(1) + ' Hochbahnsteig, stufenlos' : e.hbs === 'nein' ? bfMark(0) + ' kein Hochbahnsteig' : '<b class="bf-offen">!</b> nur teilweise stufenlos'}${e.hinweis ? '<br><span class="small">' + esc(e.hinweis) + '</span>' : ''}`
+          const acc = e ? `<br>${e.hbs === 'ja' ? bfMark(1) + ' Hochbahnsteig, stufenlos' : e.hbs === 'nein' ? bfMark(0) + ' kein Hochbahnsteig' : '<b class="bf-offen">!</b> nur teilweise stufenlos'}${e.hinweis ? '<br><span class="small">' + esc(e.hinweis) + '</span>' : ''}${e.quelle ? '<br><span class="small muted">Quelle: ' + esc(e.quelle) + '</span>' : ''}`
             : w === 1 ? '<br>' + bfMark(1) + ' stufenlos zugänglich' : w === 2 ? '<br>' + bfMark(0) + ' nicht stufenlos' : '';
           return `<strong>${esc(n)}</strong>${acc}${lift ? '<br>' + bfMark(1) + ' Aufzug' : ''}${deps.length ? '<br>' + deps.map((d) => `${hhmm(d.t % 1440)} · ${esc(d.line)} → ${esc(d.head)}`).join('<br>') : '<br>In der nächsten halben Stunde keine Abfahrt.'}`;
         }).addTo(g);
