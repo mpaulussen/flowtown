@@ -1456,6 +1456,155 @@ async function hstOsm() {
   return out.sort((a, b) => a.name.localeCompare(b.name, 'de'));
 }
 
+// ---------- Behindertenparkplätze: Stadt Bielefeld (Open Data) und OpenStreetMap ----------
+// Stadt: BEHINDERTENPARKPLAETZE_URL (CSV oder GeoJSON von open-data.bielefeld.de) oder die Datei
+// /var/lib/flowtown/behindertenparkplaetze.csv bzw. .geojson. Koordinaten in WGS84 oder UTM 32 (EPSG:25832) werden erkannt.
+// Dazu OpenStreetMap: einzelne Stellplätze (parking_space=disabled) und Parkplätze mit capacity:disabled.
+// Einmal am Tag neu; fällt eine Quelle aus, bleibt deren letzter Stand.
+const BPP_URL = process.env.BEHINDERTENPARKPLAETZE_URL || '';
+const BPP_FILE = path.join(DATA_DIR, 'behindertenparkplaetze.json');
+const BPP_LOCAL = ['behindertenparkplaetze.csv', 'behindertenparkplaetze.geojson', 'behindertenparkplaetze.json.src'].map((f) => path.join(DATA_DIR, f));
+let bpp = null, bppRun = null, bppTry = 0;
+try { bpp = JSON.parse(fs.readFileSync(BPP_FILE, 'utf8')); } catch (e) { bpp = null; }
+// UTM Zone 32 Nord (ETRS89/WGS84) nach Breite und Länge
+function utm32(e, n) {
+  const a = 6378137, f = 1 / 298.257222101, k0 = 0.9996, e2 = f * (2 - f), ep2 = e2 / (1 - e2);
+  const x = e - 500000, mu = n / k0 / (a * (1 - e2 / 4 - 3 * e2 * e2 / 64 - 5 * e2 ** 3 / 256));
+  const e1 = (1 - Math.sqrt(1 - e2)) / (1 + Math.sqrt(1 - e2));
+  const p1 = mu + (3 * e1 / 2 - 27 * e1 ** 3 / 32) * Math.sin(2 * mu) + (21 * e1 * e1 / 16 - 55 * e1 ** 4 / 32) * Math.sin(4 * mu) + (151 * e1 ** 3 / 96) * Math.sin(6 * mu) + (1097 * e1 ** 4 / 512) * Math.sin(8 * mu);
+  const sp = Math.sin(p1), cp = Math.cos(p1), tp = Math.tan(p1);
+  const N1 = a / Math.sqrt(1 - e2 * sp * sp), T1 = tp * tp, C1 = ep2 * cp * cp, R1 = a * (1 - e2) / (1 - e2 * sp * sp) ** 1.5, D = x / (N1 * k0);
+  const lat = p1 - (N1 * tp / R1) * (D * D / 2 - (5 + 3 * T1 + 10 * C1 - 4 * C1 * C1 - 9 * ep2) * D ** 4 / 24 + (61 + 90 * T1 + 298 * C1 + 45 * T1 * T1 - 252 * ep2 - 3 * C1 * C1) * D ** 6 / 720);
+  const lon = (D - (1 + 2 * T1 + C1) * D ** 3 / 6 + (5 - 2 * C1 + 28 * T1 - 3 * C1 * C1 + 8 * ep2 + 24 * T1 * T1) * D ** 5 / 120) / cp;
+  return [lat * 180 / Math.PI, 9 + lon * 180 / Math.PI];
+}
+const num = (v) => { const x = Number(String(v == null ? '' : v).trim().replace(/\s/g, '').replace(',', '.')); return String(v || '').trim() && isFinite(x) ? x : null; };
+// zwei Zahlen (erst x/Rechtswert/Länge, dann y) nach [Breite, Länge]; null, wenn nicht deutbar
+function anyToWgs(a, b) {
+  if (a == null || b == null) return null;
+  if (a > 5 && a < 12 && b > 50 && b < 54) return [b, a];
+  if (b > 5 && b < 12 && a > 50 && a < 54) return [a, b];
+  if (a > 5e6 && b < 1e6) [a, b] = [b, a];
+  if (a > 3e7) a -= 32e6;   // Rechtswert mit Zonenkennung 32
+  if (a > 1e5 && a < 9e5 && b > 5e6 && b < 7e6) return utm32(a, b);
+  return null;
+}
+const wktPoint = (s) => { const m = /(-?[\d.]+)\s+(-?[\d.]+)/.exec(String(s || '')); return m ? anyToWgs(Number(m[1]), Number(m[2])) : null; };
+const normKey = (h) => String(h).trim().toLowerCase().replace(/ä/g, 'ae').replace(/ü/g, 'ue').replace(/ö/g, 'oe').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+// Text und Anzahl aus beliebigen Spalten
+function bppProps(o) {
+  const keys = Object.keys(o);
+  const pick = (re) => keys.find((k) => re.test(normKey(k)) && String(o[k] == null ? '' : o[k]).trim());
+  const tk = pick(/^(standort|lage|adresse|strasse|strassenname|bezeichnung|name|ort|beschreibung|bemerkung)/);
+  const hk = pick(/^(hausnummer|hausnr|nr)$/);
+  const nk = pick(/(anzahl|stellplaetze|plaetze|anz$|kapazitaet)/);
+  const text = clip([tk ? o[tk] : '', hk ? o[hk] : ''].filter(Boolean).join(' '), 60);
+  const n = nk ? num(o[nk]) : null;
+  return { text, n: n != null && n > 0 && n < 100 ? Math.round(n) : null, spalten: { text: tk || null, anzahl: nk || null } };
+}
+function bppParse(text) {
+  const out = [];
+  let info = '';
+  const t = text.replace(/^﻿/, '').trim();
+  if (t.startsWith('{')) {
+    const j = JSON.parse(t);
+    for (const f of j.features || []) {
+      const g = f.geometry || {};
+      let c = g.coordinates;
+      while (Array.isArray(c) && Array.isArray(c[0])) c = c[0];   // Linie, Fläche, Mehrfachpunkt: erster Punkt
+      const pos = Array.isArray(c) ? anyToWgs(c[0], c[1]) : null;
+      if (!pos) continue;
+      const p = bppProps(f.properties || {});
+      out.push([r5(pos[0]), r5(pos[1]), p.n, p.text, 's']);
+      if (!info) info = `GeoJSON, Text aus „${p.spalten.text || '–'}“, Anzahl aus „${p.spalten.anzahl || '–'}“`;
+    }
+  } else if (t.startsWith('<')) {
+    throw new Error('XML/GML wird nicht gelesen, bitte den Link zur CSV- oder GeoJSON-Datei nehmen');
+  } else {
+    const rows = parseCsv(t);
+    if (rows.length < 2) throw new Error('Tabelle ist leer');
+    const head = rows[0].map(normKey);
+    const find = (re) => head.findIndex((h) => re.test(h));
+    const cLat = find(/^(lat|latitude|breite|breitengrad|ywgs84|wgs84lat|geolat)$/), cLon = find(/^(lon|lng|long|longitude|laenge|laengengrad|xwgs84|wgs84lon|geolon)$/);
+    const cX = find(/^(x|rechtswert|rw|east|easting|xkoordinate|koordx|xkoord|utmx|ostwert)$/), cY = find(/^(y|hochwert|hw|north|northing|ykoordinate|koordy|ykoord|utmy|nordwert)$/);
+    const cW = find(/^(wkt|geom|geometry|thegeom|shape|geometrie)$/);
+    if (cLat < 0 && cX < 0 && cW < 0) throw new Error('keine Koordinaten-Spalten gefunden, Spalten: ' + rows[0].join(', '));
+    for (const r of rows.slice(1)) {
+      const pos = cLat >= 0 && cLon >= 0 ? anyToWgs(num(r[cLon]), num(r[cLat])) : cX >= 0 && cY >= 0 ? anyToWgs(num(r[cX]), num(r[cY])) : cW >= 0 ? wktPoint(r[cW]) : null;
+      if (!pos) continue;
+      const p = bppProps(Object.fromEntries(rows[0].map((h, i) => [h, r[i]])));
+      out.push([r5(pos[0]), r5(pos[1]), p.n, p.text, 's']);
+      if (!info) info = `CSV, Koordinaten aus ${cLat >= 0 ? `„${rows[0][cLat]}/${rows[0][cLon]}“` : cX >= 0 ? `„${rows[0][cX]}/${rows[0][cY]}“` : `„${rows[0][cW]}“`}, Text aus „${p.spalten.text || '–'}“, Anzahl aus „${p.spalten.anzahl || '–'}“`;
+    }
+  }
+  const inside = out.filter((p) => inBox(p[0], p[1], 0.1));
+  if (!inside.length) throw new Error(out.length ? `${out.length} Punkte, aber keiner in Bielefeld (Koordinaten falsch gedeutet?)` : 'keine Punkte gelesen');
+  return { plaetze: inside, info: info + (inside.length < out.length ? `, ${out.length - inside.length} außerhalb übersprungen` : '') };
+}
+async function bppStadt() {
+  let text;
+  if (BPP_URL) {
+    const res = await fetch(BPP_URL, { headers: { 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, redirect: 'follow' });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const buf = Buffer.from(await res.arrayBuffer());
+    text = new TextDecoder('utf-8').decode(buf);
+    if (text.includes('\uFFFD')) text = new TextDecoder('windows-1252').decode(buf);   // ältere Exporte in Windows-Zeichensatz
+    if (/^\s*<!doctype html|<html/i.test(text)) throw new Error('Der Link liefert eine Webseite statt einer Datei');
+  } else {
+    const f = BPP_LOCAL.find((x) => fs.existsSync(x));
+    if (!f) return null;
+    text = fs.readFileSync(f, 'utf8');
+  }
+  return bppParse(text);
+}
+async function bppOsm() {
+  const bb = `${LAGE_BBOX[1]},${LAGE_BBOX[0]},${LAGE_BBOX[3]},${LAGE_BBOX[2]}`;
+  const j = await overpass(`[out:json][timeout:90];(nwr["amenity"="parking_space"]["parking_space"="disabled"](${bb});nwr["amenity"="parking"]["capacity:disabled"](${bb}););out center tags;`, 120000);
+  const raw = [];
+  for (const e of j.elements || []) {
+    const lat = e.lat != null ? e.lat : e.center && e.center.lat, lon = e.lon != null ? e.lon : e.center && e.center.lon;
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const t = e.tags || {};
+    if (t.amenity === 'parking') {
+      const c = t['capacity:disabled'];
+      if (/^(no|0)$/i.test(c || '')) continue;
+      raw.push({ lat, lon, n: num(c) || null, text: clip(t.name || t.operator || 'Parkplatz', 60), area: true });
+    } else raw.push({ lat, lon, n: num(t.capacity) || 1, text: clip(t.name || '', 60) });
+  }
+  // einzelne Stellplätze, die nebeneinander liegen, zu einer Stelle zusammenfassen
+  const out = [];
+  for (const p of raw.filter((x) => !x.area)) {
+    const near = out.find((q) => !q.area && Math.hypot((q.lat - p.lat) * 111320, (q.lon - p.lon) * 68500) < 25);
+    if (near) { near.n += p.n; continue; }
+    out.push(Object.assign({}, p));
+  }
+  out.push(...raw.filter((x) => x.area));
+  return out.map((p) => [r5(p.lat), r5(p.lon), p.n, p.text, 'o']);
+}
+async function refreshBpp() {
+  const old = bpp ? bpp.plaetze : [];
+  const msgs = [];
+  let stadt = null, osm = null, info = '';
+  try { const r = await bppStadt(); if (r) { stadt = r.plaetze; info = r.info; } } catch (e) { msgs.push('Stadt: ' + e.message); }
+  try { osm = await bppOsm(); } catch (e) { msgs.push('OpenStreetMap: ' + e.message); }
+  if (!stadt && (BPP_URL || BPP_LOCAL.some((x) => fs.existsSync(x)))) stadt = old.filter((p) => p[4] === 's');
+  if (!osm) osm = old.filter((p) => p[4] === 'o');
+  if (!stadt) stadt = [];
+  // Stellen aus OpenStreetMap, die die Stadt schon hat (bis 25 m), weglassen
+  const extra = osm.filter((o) => !stadt.some((s) => Math.hypot((s[0] - o[0]) * 111320, (s[1] - o[1]) * 68500) < 25));
+  const plaetze = stadt.concat(extra);
+  if (!plaetze.length) throw new Error(msgs.join(' · ') || 'keine Daten');
+  bpp = { t: Date.now(), plaetze, quellen: [stadt.length ? 'Stadt Bielefeld, Amt für Verkehr (Open Data, CC BY 4.0)' : '', extra.length ? 'OpenStreetMap-Mitwirkende (ODbL)' : ''].filter(Boolean), stadt: stadt.length, osm: extra.length };
+  fs.writeFileSync(BPP_FILE + '.tmp', JSON.stringify(bpp));
+  fs.renameSync(BPP_FILE + '.tmp', BPP_FILE);
+  return `${plaetze.length} Stellen: ${stadt.length} von der Stadt${info ? ' (' + info + ')' : ''}, ${extra.length} zusätzlich aus OpenStreetMap${msgs.length ? '. Hinweise: ' + msgs.join(' · ') : ''}`;
+}
+function bppTick() {
+  if (bppRun || (bpp && Date.now() - bpp.t < 864e5) || Date.now() - bppTry < 3600e3) return;
+  bppTry = Date.now();
+  bppRun = refreshBpp().then((m) => console.log('Behindertenparkplätze:', m)).catch((e) => console.error('Behindertenparkplätze:', e.message)).finally(() => { bppRun = null; });
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -1478,7 +1627,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1492,6 +1641,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
     if (req.method === 'GET' && p === '/api/faq') return faqData && faqData.eintraege ? sendFaq(req, res, origin) : send(res, 404, { fehler: 'Keine Redaktions-Tabelle eingerichtet.' }, origin);
+    if (req.method === 'GET' && p === '/api/behindertenparkplaetze') { if (!bpp) bppTick(); return send(res, 200, bpp ? { t: bpp.t, quellen: bpp.quellen, plaetze: bpp.plaetze } : { t: 0, quellen: [], plaetze: [] }, origin); }
     if (req.method === 'GET' && p === '/api/haltestellen') return send(res, 200, hst ? { t: hst.t, liste: hst.liste.map(({ name, k, hbs, hinweis, quelle, lat, lon }) => ({ name, k, hbs, hinweis, quelle, lat, lon })) } : { t: 0, liste: [] }, origin);
     if (req.method === 'GET' && p === '/api/hinweise') return send(res, 200, { t: Date.now(), hinweise: hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).map(({ id, lat, lon, art, t, t2, ok, weg, geprueft }) => ({ id, lat, lon, art, t, t2, ok, weg, geprueft })) }, origin);
     if (req.method === 'POST' && p === '/api/hinweis') {
@@ -1622,12 +1772,20 @@ if (cli === 'faq') {
     console.log('Prüfen, leere Zeilen ausfüllen, dann als Blatt in die Tabelle (HALTESTELLEN_CSV_URL) oder nach /var/lib/flowtown/haltestellen.csv kopieren.');
     process.exit(0);
   })();
+} else if (cli === 'parkplaetze') {
+  // Behindertenparkplätze neu holen und zeigen, was erkannt wurde
+  refreshBpp().then((m) => {
+    console.log(m);
+    for (const p of bpp.plaetze.slice(0, 5)) console.log('  ', p[4] === 's' ? 'Stadt' : 'OSM  ', `${p[0]}, ${p[1]}`.padEnd(20), p[2] ? p[2] + (p[2] === 1 ? ' Platz ' : ' Plätze') : '', p[3]);
+    console.log('Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
+    process.exit(0);
+  }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, parkplaetze, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
@@ -1635,5 +1793,6 @@ if (cli === 'faq') {
   setTimeout(bfTick, 10000); setInterval(bfTick, 900e3);
   setTimeout(faqTick, 5000); setInterval(faqTick, 3600e3);
   setTimeout(hstTick, 3000); setInterval(hstTick, 3600e3);
+  setTimeout(bppTick, 40000); setInterval(bppTick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

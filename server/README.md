@@ -141,6 +141,18 @@ Er liest die Liste beim Start und dann stündlich und nennt im Protokoll jede Ze
 
 **Aufzüge:** Der Fahrplan-Auszug zieht aus DELFI die Wege in Stationen (Aufzüge, Rolltreppen, Treppen), z. B. Hauptbahnhof, Jahnplatz, Nordpark. Die App zeigt dann „✓ Aufzug“. Dafür den Fahrplan einmal neu holen: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown` (dauert einige Minuten).
 
+### Behindertenparkplätze
+
+Mit dem Auto zeigt „Wohin?“ beim Ziel die Behindertenparkplätze bis 400 m entfernt. Mit Profil ist der Abschnitt offen, ohne Profil eingeklappt. Auf der Karte erscheinen sie unter „Barrierefrei“ als blaues P.
+
+Der Server holt sie einmal am Tag aus zwei Quellen:
+1. **OpenStreetMap** (Stellplätze mit `parking_space=disabled`, Parkplätze mit `capacity:disabled`). Das geht ohne Einrichtung.
+2. **Stadt Bielefeld, Open Data** „Schwerbehindertenparkplätze“ (CC BY 4.0). Auf open-data.bielefeld.de beim Datensatz den Link zur **CSV**- oder **GeoJSON**-Datei kopieren (nicht WMS/WFS/Shape) und in `/etc/flowtown.env` eintragen: `BEHINDERTENPARKPLAETZE_URL="…"`. Alternativ die Datei als `/var/lib/flowtown/behindertenparkplaetze.csv` (oder `.geojson`) ablegen.
+
+Der Server erkennt Koordinaten in Breite/Länge oder UTM 32 (Rechtswert/Hochwert, EPSG:25832) und sucht sich Spalten für Standort und Anzahl. Stellen aus OpenStreetMap, die die Stadt schon hat, fallen weg.
+
+Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs parkplaetze'` zeigt die Zahl je Quelle, welche Spalten erkannt wurden, und die ersten Einträge. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
+
 ### Gemeldete Hindernisse prüfen
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.

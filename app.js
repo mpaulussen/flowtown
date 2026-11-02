@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.47.1';
+  const VERSION = '0.48.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1713,7 +1713,7 @@
     const arts = (btn.dataset.arts || '').split('|');
     const parts = kind === 'l' ? (btn.dataset.lines || '').split('|').map((x, i) => Object.assign(parse(x), { art: arts[i] || btn.dataset.art })).filter((x) => x.length) : [];
     const route = kind === 'l' ? parse(btn.dataset.pts) : [];
-    $('#peek-meta').textContent = kind === 'r' ? `${pts.length} Ampeln auf diesem Weg · grün: erste, rot: letzte Ampel`
+    $('#peek-meta').textContent = btn.dataset.meta ? btn.dataset.meta : kind === 'r' ? `${pts.length} Ampeln auf diesem Weg · grün: erste, rot: letzte Ampel`
       : kind === 'l' ? (btn.dataset.art === 'alt' ? 'Besserer Weg · grün durchgezogen: für dich, grün gestrichelt: der übliche Weg' : btn.dataset.art === 'rad' ? 'Rot: diese Stelle, grün gestrichelt: dein Weg' : btn.dataset.arts != null ? `Strecke · ${parts.length ? 'rot und gelb: Meldungen' : 'keine Meldungen'}` : `${LAGE_LABEL[btn.dataset.art] || 'Meldung'} · farbig: betroffener Abschnitt, grün gestrichelt: dein Weg`) : 'Ampel, an der du gewartet hast';
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
     if (typeof L === 'undefined' || !(pts.length || parts.length || route.length)) { $('#peek-meta').textContent = 'Die Karte braucht eine Internetverbindung.'; return; }
@@ -2201,7 +2201,7 @@
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
     }
-    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
+    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
     if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}`);
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
@@ -2270,6 +2270,11 @@
       if (w[2] !== 1) continue;
       L.circleMarker([w[0], w[1]], { radius: 6, color: '#ffffff', weight: 2, fillColor: '#1d5fa6', fillOpacity: 1 })
         .bindPopup(`<strong>Rollstuhlgerechte Toilette</strong>${w[3] ? '<br>' + esc(w[3]) : ''}${w[4] ? '<br>mit Euroschlüssel' : ''}<br><span class="muted">Laut OpenStreetMap</span>`).addTo(g);
+    }
+    if (!bpp) await loadBpp();
+    for (const p of (bpp && bpp.plaetze) || []) {
+      L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'bpp-pin', html: '<span>P</span>', iconSize: [22, 22] }), title: 'Behindertenparkplatz' })
+        .bindPopup(`<strong>Behindertenparkplatz</strong>${p[3] ? '<br>' + esc(p[3]) : ''}${p[2] ? `<br>${p[2]} ${p[2] === 1 ? 'Platz' : 'Plätze'}` : ''}<br><span class="muted">Nur mit Parkausweis · ${esc(bppSrc(p))}</span>`).addTo(g);
     }
     for (const a of bfData.lift || []) {
       L.circleMarker([a[0], a[1]], { radius: 4, color: '#1d5fa6', weight: 2, fillColor: '#ffffff', fillOpacity: 1 }).bindPopup('<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
@@ -3153,7 +3158,36 @@
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
     const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}${group === 'fuss' ? 'Losgehen mit Ziel' : 'Fahrt starten mit Ziel'}</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
-    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+  }
+  // Behindertenparkplätze (Stadt Bielefeld und OpenStreetMap): am Ziel mit dem Auto und auf der Karte
+  let bpp = store.get('bpp', null), bppLoading = null;
+  function loadBpp() {
+    if (!apiBase()) return Promise.resolve(false);
+    if (bppLoading) return bppLoading;
+    if (bpp && Date.now() - bpp.geladen < 12 * 3600e3) return Promise.resolve(true);
+    bppLoading = api('/api/behindertenparkplaetze').then((d) => {
+      if (!d.plaetze || !d.plaetze.length) return !!bpp;
+      bpp = { geladen: Date.now(), quellen: d.quellen || [], plaetze: d.plaetze };
+      store.set('bpp', bpp);
+      return true;
+    }).catch(() => false).finally(() => { bppLoading = null; });
+    return bppLoading;
+  }
+  const bppNear = (lat, lon, r) => (bpp ? bpp.plaetze.map((p) => ({ p, d: dist({ lat, lon }, { lat: p[0], lon: p[1] }) })).filter((x) => x.d <= r).sort((a, b) => a.d - b.d) : []);
+  const bppName = (p) => p[3] || 'Behindertenparkplatz';
+  const bppSrc = (p) => (p[4] === 's' ? 'Stadt Bielefeld, Amt für Verkehr (Open Data)' : 'OpenStreetMap');
+  function bppBlock(z) {
+    if (!bpp) { loadBpp().then((ok) => { if (ok && zielOpen === z.id) renderVorfahrt(); }); return ''; }
+    const near = bppNear(z.lat, z.lon, 400).slice(0, 3);
+    const open = settings.access.on;
+    if (!near.length) return open ? `<p class="small muted bpp-none">${ic('access')} Keine Behindertenparkplätze bis 400 m vom Ziel bekannt.</p>` : '';
+    const rows = near.map(({ p, d }) => `<li><button type="button" class="place" data-peek="r" data-name="${esc(bppName(p))}" data-meta="Grün: Behindertenparkplatz, rot: dein Ziel (Luftlinie)" data-pts="${p[0]},${p[1]};${z.lat},${z.lon}">${esc(bppName(p))}</button><span class="small muted"> · ${fmtLen(Math.max(10, d))} bis zum Ziel${p[2] ? ` · ${p[2]} ${p[2] === 1 ? 'Platz' : 'Plätze'}` : ''}</span></li>`).join('');
+    const src = Array.from(new Set(near.map(({ p }) => bppSrc(p)))).join(', ');
+    const body = `<ul class="bpp-list">${rows}</ul><p class="small muted">Quelle: ${esc(src)}. Nur mit Parkausweis (blau, Rollstuhlsymbol).</p>`;
+    const title = `${near.length === 1 ? 'Ein Behindertenparkplatz' : near.length + ' Behindertenparkplätze'} in der Nähe`;
+    return open ? `<div class="bpp"><h4 class="vf-h4">${ic('access')}${title}</h4>${body}</div>`
+      : `<details class="bpp"><summary>${ic('access')}${title}</summary>${body}</details>`;
   }
   // Barrierefrei bei Bus und Bahn: Stadtbahn mit oder ohne Hochbahnsteig laut Liste der Redaktion,
   // sonst stufenlos laut Fahrplan (für Bielefeld meist leer); Aufzüge aus den Wegen im Bauwerk (Fahrplan); Fußwege mit Weg-Check

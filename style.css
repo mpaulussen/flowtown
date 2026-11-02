@@ -832,3 +832,17 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .con-hst{display:inline-block;margin-top:2px;color:var(--bad);line-height:1.35}
 .con-step{white-space:nowrap;font-weight:700}
 .acc-pick{margin:0;padding:8px 12px;border-radius:12px;background:var(--surface);line-height:1.4}
+/* 0.48 Behindertenparkplätze */
+.bpp{display:flex;flex-direction:column;gap:6px}
+.bpp .vf-h4,.bpp summary{display:flex;align-items:center;gap:8px}
+.bpp .vf-h4 .ic,.bpp summary .ic{width:20px;height:20px;color:#1d5fa6}
+.bpp summary{cursor:pointer;font-weight:700;min-height:44px;list-style:none}
+.bpp summary::-webkit-details-marker{display:none}
+.bpp summary::after{content:"▾";margin-left:auto;color:var(--muted)}
+.bpp[open] summary::after{content:"▴"}
+.bpp-list{margin:0;padding:0;list-style:none;display:flex;flex-direction:column;gap:6px}
+.bpp-list li{line-height:1.4}
+.bpp-none{display:flex;align-items:center;gap:6px}
+.bpp-none .ic{width:18px;height:18px}
+.bpp-pin{background:#1d5fa6;color:#fff;border:2px solid #fff;border-radius:5px;box-shadow:0 1px 4px rgba(0,0,0,.35);display:grid;place-items:center}
+.bpp-pin span{font:800 13px/18px system-ui;display:block;text-align:center}
