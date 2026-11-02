@@ -811,3 +811,20 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 #view-plan .world-vor .vf-chip{box-shadow:0 0 0 1.5px #c5d6ea inset}
 #view-plan .world-vor .vf-chip.on{box-shadow:none}
 .plan-back:focus-visible,.plan-card .vf-chip:focus-visible{outline:3px solid var(--plan);outline-offset:2px}
+/* 0.46 einheitlich: Womit? hellgrün auf Heute, auf der Seite Wohin? hellblau, gewählt jeweils dunkel */
+.go-card{--go-bg:#e3f2ea;--go-ink:#0f5c3c;--go-ring:#c3e0cf;background:var(--go-bg);border:0;background-image:radial-gradient(circle at 100% 0,#cfe8da 0 90px,transparent 91px)}
+.go-card .go-h{color:var(--go-ink)}
+.go-card .go-ic{background:var(--go-ink)}
+.go-card .switch span{border:0;box-shadow:0 0 0 1.5px var(--go-ring) inset;background:var(--surface);color:var(--go-ink)}
+.go-card .switch input:checked+span{background:var(--go-ink);color:#fff;box-shadow:none}
+.go-card .acc-q .ic{color:var(--go-ink)}
+.go-card .acc-chip{border:0;box-shadow:0 0 0 1.5px var(--go-ring) inset;color:var(--go-ink)}
+.go-card .acc-chip[aria-pressed="true"]{background:var(--go-ink);color:#fff;box-shadow:none}
+#view-plan .plan-mode{background:var(--w-vor-bg);border:0;border-top:4px solid var(--plan)}
+#view-plan .switch legend{color:var(--w-vor-ink)}
+#view-plan .switch span{border:0;box-shadow:0 0 0 1.5px #c5d6ea inset;background:var(--surface);color:var(--w-vor-ink)}
+#view-plan .switch input:checked+span{background:var(--w-vor-ink);color:#fff;box-shadow:none}
+#view-plan .acc-q,#view-plan .acc-q .ic{color:var(--w-vor-ink)}
+#view-plan .acc-chip{border:0;box-shadow:0 0 0 1.5px #c5d6ea inset;color:var(--w-vor-ink)}
+#view-plan .acc-chip[aria-pressed="true"]{background:var(--w-vor-ink);color:#fff;box-shadow:none}
+#view-plan .switch input:focus-visible+span,#view-plan .acc-chip:focus-visible{outline:3px solid var(--plan);outline-offset:2px}
