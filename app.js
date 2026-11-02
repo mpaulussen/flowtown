@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.40.2';
+  const VERSION = '0.41.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1745,11 +1745,19 @@
   }
   // ---------- Gut zu wissen: Altstadt-FAQ von barrierefrAI, nach Profil ----------
   let faq = null, faqOpen = null;
+  // zuerst die Redaktions-Tabelle vom Server, sonst die mitgelieferte Altstadt-FAQ
+  let faqAt = 0;
   async function loadFaq() {
-    if (faq) return faq;
-    try { faq = await (await fetch('data/altstadt-faq.json')).json(); } catch (e) { faq = null; }
+    if (faq && Date.now() - faqAt < 30 * 60000) return faq;
+    if (apiBase()) {
+      try { const j = await api('/api/faq', { cache: 'no-cache' }); if (j.eintraege && j.eintraege.length) { faq = j; faqAt = Date.now(); return faq; } } catch (e) { /* weiter mit der mitgelieferten Fassung */ }
+    }
+    if (!faq) { try { faq = await (await fetch('data/altstadt-faq.json')).json(); } catch (e) { faq = null; } }
+    faqAt = Date.now();
     return faq;
   }
+  // Hinweise mit eigener Lage (Breite/Länge in der Tabelle)
+  const faqPunkte = () => (faq ? faq.eintraege.filter((e) => e.lat != null && e.lon != null) : []);
   const FAQ_GROUPS = {
     rollstuhl: ['Rollstuhl'], rollator: ['Rollator', 'Ältere Menschen', 'Vorübergehende Einschränkung'], sehen: ['Sehbehinderung'],
     hoeren: ['Hörbehinderung'], lernen: ['Leichte Sprache', 'Neurodivergenz'], ruhe: ['Psychische Erkrankung', 'Neurodivergenz', 'Chronische Erkrankung'],
@@ -1791,9 +1799,10 @@
   function faqNear(z, type) {
     if (!faq) return [];
     const places = Object.keys(FAQ_PLACES).filter((n) => { const p = faqPlace(n); return p && dist({ lat: p[0], lon: p[1] }, z) <= p[2]; });
-    if (!places.length) return [];
     const mine = FAQ_GROUPS[type] || [];
-    return faq.eintraege.filter((e) => e.orte.some((o) => places.includes(o)) && e.gruppen.some((g) => mine.includes(g)))
+    const punkte = faqPunkte().filter((e) => dist(e, z) <= 150 && (e.gruppen.includes('Alle') || e.gruppen.some((g) => mine.includes(g))));
+    if (!places.length) return punkte.slice(0, 2);
+    return punkte.concat(faq.eintraege.filter((e) => e.lat == null && e.orte.some((o) => places.includes(o)) && e.gruppen.some((g) => mine.includes(g))))
       .sort((a, b) => (b.orte.some((o) => o !== 'Altstadt' && places.includes(o)) - a.orte.some((o) => o !== 'Altstadt' && places.includes(o)))).slice(0, 2);
   }
   // ---------- Weg-Check zu Fuß: Belag, Stufen, Steigung, Bordsteine, Gleise, Ampeln (Fußnetz vom Server) ----------
@@ -1890,7 +1899,8 @@
     }
     // Hinweise aus der Altstadt-FAQ für Orte unterwegs
     const places = Object.keys(FAQ_PLACES).filter((n) => n !== 'Altstadt' && n !== 'Innenstadt').filter((n) => { const p = faqPlace(n); return p && s.some((x, i) => i % 3 === 0 && dist({ lat: p[0], lon: p[1] }, { lat: x.p[0], lon: x.p[1] }) <= p[2]); });
-    return { m, total, pts, stellen: Object.values(by).sort((a, b) => FUSS_BAD.indexOf(a.c) - FUSS_BAD.indexOf(b.c) || b.m - a.m), bord: nodeHits.b.length, gleis: nodeHits.g, ampeln: nodeHits.a, places };
+    const punkte = faqPunkte().filter((e) => s.some((x, i) => i % 2 === 0 && dist(e, { lat: x.p[0], lon: x.p[1] }) <= 40));
+    return { m, total, pts, punkte, stellen: Object.values(by).sort((a, b) => FUSS_BAD.indexOf(a.c) - FUSS_BAD.indexOf(b.c) || b.m - a.m), bord: nodeHits.b.length, gleis: nodeHits.g, ampeln: nodeHits.a, places };
   }
   const FUSS_WEIGHT = { rollstuhl: ['stufen', 'kopfstein', 'steil', 'unbefestigt', 'holprig'], rollator: ['stufen', 'kopfstein', 'unbefestigt', 'steil', 'holprig'], sehen: ['stufen'], hoeren: [], lernen: ['stufen'], ruhe: ['stufen', 'steil'] };
   function fussBlock(r, route) {
@@ -1917,7 +1927,7 @@
     const title = !known && !lines.length ? 'Weg-Check' : !lines.length ? 'Keine Hindernisse bekannt' : bad >= 15 || r.stellen.some((x) => x.c === 'stufen' && important.includes('stufen')) ? 'Mit Hindernissen' : 'Einzelne Hindernisse';
     const order = ['gut', 'holprig', 'unbefestigt', 'kopfstein', 'steil', 'stufen'];
     const bar = known ? `<div class="rad-bar" role="img" aria-label="${esc(order.filter((k) => pct(k)).map((k) => `${pct(k)} % ${FUSS_CLS[k].label}`).join(', '))}">${order.map((k) => (r.m[k] ? `<i style="width:${(r.m[k] / known * 100).toFixed(1)}%;background:${FUSS_CLS[k].col}"></i>` : '')).join('')}</div>` : '';
-    const tips = type && faq ? faq.eintraege.filter((e) => e.orte.some((o) => r.places.includes(o)) && e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))).slice(0, 2) : [];
+    const tips = type && faq ? (r.punkte || []).filter((e) => e.gruppen.includes('Alle') || e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))).concat(faq.eintraege.filter((e) => e.lat == null && e.orte.some((o) => r.places.includes(o)) && e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g)))).slice(0, 3) : [];
     let altHtml = '';
     if (r.alt) {
       const fewer = [];
@@ -2015,10 +2025,10 @@
   }
   const ago = (t) => { const d = Math.floor((Date.now() - t) / 864e5); return d < 1 ? 'heute' : d === 1 ? 'gestern' : `vor ${d} Tagen`; };
   function hinwPopup(h) {
-    return `<strong>${esc(HINW[h.art] || h.art)}</strong><br><span class="muted">gemeldet ${ago(h.t)}${h.ok ? `, ${h.ok}× bestätigt` : ''}${h.t2 && h.ok ? `, zuletzt ${ago(h.t2)}` : ''}</span>`
+    return `<strong>${esc(HINW[h.art] || h.art)}</strong>${h.geprueft ? '<br><b class="bf-ja">✓ von der Redaktion geprüft</b>' : ''}<br><span class="muted">gemeldet ${ago(h.t)}${h.ok ? `, ${h.ok}× bestätigt` : ''}${h.t2 && h.ok ? `, zuletzt ${ago(h.t2)}` : ''}</span>`
       + `<div class="hv-row"><button type="button" class="btn quiet" data-hv="${h.id}|1">Stimmt noch</button><button type="button" class="btn quiet" data-hv="${h.id}|0">Ist weg</button></div><p class="small muted">Von Nutzer*innen gemeldet</p>`;
   }
-  const hinwIcon = (art) => L.divIcon({ className: 'hinw-pin' + (art === 'gut' ? ' gut' : ''), html: `<span>${art === 'gut' ? '✓' : '!'}</span>`, iconSize: [26, 26] });
+  const hinwIcon = (art, ok) => L.divIcon({ className: 'hinw-pin' + (art === 'gut' ? ' gut' : '') + (ok ? ' geprueft' : ''), html: `<span>${art === 'gut' ? '✓' : '!'}</span>`, iconSize: [26, 26] });
   // Melden: erst die Stelle auf der Karte antippen, dann die Art wählen
   let meldenAt = null;
   function startMelden() {
@@ -2212,7 +2222,19 @@
       }
     }
     try { await loadHinweise(); } catch (e) { /* ohne Hinweise weiter */ }
-    for (const h of hinw || []) L.marker([h.lat, h.lon], { icon: hinwIcon(h.art), title: HINW[h.art] || h.art }).bindPopup(() => hinwPopup(h), { maxWidth: 260 }).addTo(g);
+    for (const h of hinw || []) L.marker([h.lat, h.lon], { icon: hinwIcon(h.art, h.geprueft), title: HINW[h.art] || h.art }).bindPopup(() => hinwPopup(h), { maxWidth: 260 }).addTo(g);
+    if (faq && mapLayers.acc) {
+      const type = settings.access.on ? settings.access.type : null;
+      const by = {};
+      for (const e of faqPunkte()) {
+        if (type && !e.gruppen.includes('Alle') && !e.gruppen.some((gr) => (FAQ_GROUPS[type] || []).includes(gr))) continue;
+        (by[e.lat + ',' + e.lon] = by[e.lat + ',' + e.lon] || []).push(e);
+      }
+      for (const list of Object.values(by)) {
+        L.marker([list[0].lat, list[0].lon], { icon: L.divIcon({ className: 'faq-pin punkt', html: '<span>i</span>', iconSize: [22, 22] }), title: 'Gut zu wissen: ' + list[0].frage })
+          .bindPopup(`${list.map((e) => `<details class="faq-mini"${list.length === 1 ? ' open' : ''}><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}<p class="small muted">Redaktion barrierefrAI</p>`, { maxWidth: 290, maxHeight: 300 }).addTo(g);
+      }
+    }
     for (const o of bfData.orte || []) {
       L.circleMarker([o.lat, o.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: bfColor(bfScore(o)), fillOpacity: 1 }).bindPopup(() => bfPopup(o), { maxWidth: 280, maxHeight: 260, autoPanPaddingTopLeft: [10, 60] }).addTo(g);
     }

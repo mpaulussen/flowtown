@@ -739,3 +739,6 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .alt-weg{background:var(--surface);border:2px solid var(--accent);border-radius:16px;padding:12px 14px;display:flex;flex-direction:column;gap:8px}
 .alt-weg p{margin:0;line-height:1.45}
 .alt-weg b{display:inline-flex;align-items:center;gap:6px;color:var(--accent)}
+.faq-pin.punkt{width:22px;height:22px;font-size:13px}
+.faq-pin.punkt span{line-height:18px}
+.hinw-pin.geprueft{outline:2px solid #17784f;outline-offset:1px}

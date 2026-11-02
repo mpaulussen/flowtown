@@ -104,6 +104,30 @@ Die Nutzung der Daten von Bethel bitte mit der Neuen Schmiede abstimmen (kultur@
 
 Seit 0.37 merkt sich der Fahrplan-Auszug auch, welche Haltestellen laut DELFI stufenlos sind. Damit das gleich wirkt, den Auszug einmal neu holen: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown`.
 
+### Redaktion: Hinweise in einer gemeinsamen Tabelle pflegen
+
+Die Hinweise unter „Gut zu wissen“ (Tipps, Karte, Weg-Check, Ziele) kommen aus einer Tabelle, die ihr im Team pflegt. Die App bringt die Altstadt-FAQ als Grundstock mit; sobald die Tabelle eingerichtet ist, gilt deren Inhalt.
+
+1. In Google Tabellen eine neue Tabelle anlegen und `server/redaktion-vorlage.csv` importieren (Datei > Importieren > Hochladen, Trennzeichen automatisch). Spalten: ID, Kategorie, Frage, Antwort, Ort, Zielgruppen, Breite, Länge, Aktiv, Gültig bis.
+2. Datei > Freigeben > Im Web veröffentlichen: das Tabellenblatt wählen, Format „Kommagetrennte Werte (.csv)“, Veröffentlichen. Den Link kopieren.
+3. In `/etc/flowtown.env` eintragen, in Anführungszeichen: `REDAKTION_CSV_URL="https://docs.google.com/spreadsheets/d/e/…/pub?output=csv"`, dann `sudo systemctl restart flowtown`.
+4. Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs faq'` zeigt die Zahl der Hinweise und jede fehlerhafte Zeile. `/api/health` zeigt unter `redaktion` Anzahl und Stand.
+
+Der Server holt die Tabelle stündlich; Änderungen sind also spätestens nach einer Stunde in der App (oder sofort mit dem Befehl aus Schritt 4 und einem Neustart). Fehlerhafte Zeilen überspringt er und nennt sie im Protokoll; ist die Tabelle nicht erreichbar, bleibt die letzte gute Fassung.
+
+Regeln für die Spalten:
+- **ID**: eindeutig, z. B. AS-48 oder RE-01. **Frage** und **Antwort** sind Pflicht; Zeilenumbrüche in der Antwort sind erlaubt.
+- **Ort**: einer oder mehrere, mit Komma: Alter Markt, Obernstraße, Haltestelle Rathaus, Jahnplatz, Hauptbahnhof, Bahnhofstraße, Kunsthalle, Altstadt, Innenstadt, Bielefeld (allgemein).
+- **Zielgruppen**: mit Komma, aus Rollstuhl, Rollator, Sehbehinderung, Hörbehinderung, Ältere Menschen, Vorübergehende Einschränkung, Psychische Erkrankung, Neurodivergenz, Chronische Erkrankung, Leichte Sprache, Alle.
+- **Breite/Länge** (freiwillig): für einen Hinweis zu genau einer Stelle, z. B. 52.02139 und 8.53389 (Punkt oder Komma). Dann zeigt die Karte dort ein eigenes kleines i, und der Weg-Check nennt ihn, wenn ein Weg vorbeiführt. Koordinaten: in Google Maps lange auf die Stelle drücken.
+- **Aktiv**: „nein“ blendet eine Zeile aus (Entwurf). **Gültig bis**: TT.MM.JJJJ, danach verschwindet der Hinweis von selbst.
+
+Statt eines Links geht auch eine Datei: `/var/lib/flowtown/faq.csv` (gleicher Aufbau, Komma oder Semikolon).
+
+### Gemeldete Hindernisse prüfen
+
+`node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
+
 ### Hinweise von Nutzer*innen
 
 Ab 0.40 können Nutzer*innen auf der Karte Hindernisse melden (Stufe, hoher Bordstein, schlechter Belag, Aufzug defekt, Gehweg blockiert, Toilette nicht nutzbar, Ampel, „gut zugänglich“), bestätigen oder als erledigt markieren. Nur feste Arten, kein freier Text, gespeichert ohne IP in `/var/lib/flowtown/hinweise.json`. Aufzüge verfallen nach 7 Tagen, blockierte Wege und Toiletten nach 14, Ampeln nach 180, bauliche Hindernisse nach 365 Tagen; zwei „Ist weg“ entfernen einen Hinweis. Höchstens 30 Meldungen je IP und Tag (nur im Arbeitsspeicher). Einen Hinweis von Hand löschen: Eintrag aus der Datei entfernen und den Dienst neu starten.

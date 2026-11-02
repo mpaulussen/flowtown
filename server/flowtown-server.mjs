@@ -1191,7 +1191,7 @@ function hinweisAllowed(ip) {
   return ++c.n <= 30;
 }
 function saveHinweise() {
-  hinweise = hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).slice(-3000);
+  hinweise = hinweise.filter((h) => h.bis > Date.now() && h.weg < (h.geprueft ? 3 : 2)).slice(-3000);
   fs.writeFileSync(HINWEIS_FILE + '.tmp', JSON.stringify(hinweise));
   fs.renameSync(HINWEIS_FILE + '.tmp', HINWEIS_FILE);
 }
@@ -1268,6 +1268,99 @@ function sendBf(req, res, origin) {
   res.end(gz ? bf.gz : bf.raw);
 }
 
+// ---------- Redaktion: Hinweise (FAQ) aus einer gemeinsamen Tabelle ----------
+// Quelle: als CSV veröffentlichte Tabelle (REDAKTION_CSV_URL, etwa Google Tabellen: Datei > Freigeben > Im Web veröffentlichen > CSV)
+// oder eine Datei /var/lib/flowtown/faq.csv. Der Server holt sie stündlich, prüft jede Zeile und gibt nur gültige, aktive weiter.
+const FAQ_URL = process.env.REDAKTION_CSV_URL || '';
+const FAQ_CSV = path.join(DATA_DIR, 'faq.csv'), FAQ_JSON = path.join(DATA_DIR, 'faq.json');
+const FAQ_GRUPPEN = ['Rollstuhl', 'Rollator', 'Sehbehinderung', 'Hörbehinderung', 'Ältere Menschen', 'Vorübergehende Einschränkung', 'Psychische Erkrankung', 'Neurodivergenz', 'Chronische Erkrankung', 'Leichte Sprache', 'Alle'];
+let faqData = null, faqRun = null;
+try { faqData = JSON.parse(fs.readFileSync(FAQ_JSON, 'utf8')); } catch (e) { faqData = null; }
+// CSV mit Anführungszeichen, Zeilenumbrüchen in Feldern und Komma oder Semikolon als Trenner
+function parseCsv(text) {
+  text = text.replace(/^﻿/, '');
+  const first = text.split('\n')[0] || '';
+  const sep = (first.match(/;/g) || []).length > (first.match(/,/g) || []).length ? ';' : ',';
+  const rows = []; let row = [], cell = '', q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) { if (ch === '"') { if (text[i + 1] === '"') { cell += '"'; i++; } else q = false; } else cell += ch; }
+    else if (ch === '"') q = true;
+    else if (ch === sep) { row.push(cell); cell = ''; }
+    else if (ch === '\n' || ch === '\r') { if (ch === '\r' && text[i + 1] === '\n') i++; row.push(cell); cell = ''; if (row.some((c) => c.trim())) rows.push(row); row = []; }
+    else cell += ch;
+  }
+  row.push(cell); if (row.some((c) => c.trim())) rows.push(row);
+  return rows;
+}
+function readFaqCsv(text) {
+  const rows = parseCsv(text);
+  if (!rows.length) throw new Error('Tabelle ist leer');
+  const head = rows[0].map((h) => h.trim().toLowerCase().replace(/ä/g, 'ae').replace(/ü/g, 'ue').replace(/ö/g, 'oe').replace(/[^a-z]/g, ''));
+  const col = (...names) => head.findIndex((h) => names.includes(h));
+  const c = { id: col('id'), kat: col('kategorie'), frage: col('frage'), antwort: col('antwort'), ort: col('ort'), gruppen: col('zielgruppen', 'zielgruppe'), lat: col('breite', 'lat', 'latitude'), lon: col('laenge', 'lon', 'lng', 'longitude'), aktiv: col('aktiv'), bis: col('gueltigbis', 'bis') };
+  for (const k of ['id', 'frage', 'antwort']) if (c[k] < 0) throw new Error(`Spalte „${k === 'id' ? 'ID' : k[0].toUpperCase() + k.slice(1)}“ fehlt`);
+  const out = [], fehler = [], ids = new Set();
+  rows.slice(1).forEach((r, i) => {
+    const v = (k) => (c[k] >= 0 ? String(r[c[k]] || '').trim() : '');
+    const zeile = i + 2;
+    if (/^(nein|n|0|false|aus)$/i.test(v('aktiv'))) return;
+    const id = v('id'), frage = v('frage'), antwort = v('antwort');
+    if (!id || !frage || !antwort) { fehler.push(`Zeile ${zeile}: ID, Frage oder Antwort fehlt`); return; }
+    if (ids.has(id)) { fehler.push(`Zeile ${zeile}: ID ${id} doppelt`); return; }
+    const bis = v('bis');
+    if (bis) {
+      const m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(bis) || /^(\d{4})-(\d{2})-(\d{2})$/.exec(bis);
+      const d = !m ? null : bis.includes('-') ? new Date(+m[1], m[2] - 1, +m[3], 23, 59) : new Date(+m[3], m[2] - 1, +m[1], 23, 59);
+      if (!d || isNaN(d)) { fehler.push(`Zeile ${zeile}: „Gültig bis“ nicht lesbar (${bis}), bitte TT.MM.JJJJ`); return; }
+      if (d < Date.now()) return;   // abgelaufen
+    }
+    const gruppen = v('gruppen').split(/[,;]/).map((g) => g.trim()).filter(Boolean);
+    const unbekannt = gruppen.filter((g) => !FAQ_GRUPPEN.includes(g));
+    if (unbekannt.length) fehler.push(`Zeile ${zeile}: unbekannte Zielgruppe ${unbekannt.join(', ')} (erlaubt: ${FAQ_GRUPPEN.join(', ')})`);
+    const e = { id, kat: v('kat') || 'Allgemein', frage: clip(frage, 200), antwort: antwort.slice(0, 2000), orte: v('ort').split(/[,;]/).map((o) => o.trim()).filter(Boolean), gruppen: gruppen.filter((g) => FAQ_GRUPPEN.includes(g)) };
+    if (!e.gruppen.length) e.gruppen = ['Alle'];
+    const lat = Number(v('lat').replace(',', '.')), lon = Number(v('lon').replace(',', '.'));
+    if (v('lat') || v('lon')) {
+      if (!inBox(lat, lon, 0.1)) { fehler.push(`Zeile ${zeile}: Breite/Länge nicht in Bielefeld (${v('lat')}, ${v('lon')})`); return; }
+      e.lat = r5(lat); e.lon = r5(lon);
+    }
+    ids.add(id); out.push(e);
+  });
+  return { eintraege: out, fehler };
+}
+async function refreshFaq() {
+  let text;
+  if (FAQ_URL) {
+    const res = await fetch(FAQ_URL, { headers: { 'User-Agent': 'Flowtown/1.0' }, redirect: 'follow' });
+    if (!res.ok) throw new Error('Tabelle nicht erreichbar: HTTP ' + res.status);
+    text = await res.text();
+    if (/^\s*<!doctype html|<html/i.test(text)) throw new Error('Der Link liefert eine Webseite statt CSV. In Google Tabellen: Datei > Freigeben > Im Web veröffentlichen > Format CSV');
+  } else if (fs.existsSync(FAQ_CSV)) text = fs.readFileSync(FAQ_CSV, 'utf8');
+  else return 'keine Quelle (REDAKTION_CSV_URL oder faq.csv)';
+  const r = readFaqCsv(text);
+  if (!r.eintraege.length) throw new Error('keine gültigen Einträge' + (r.fehler.length ? ': ' + r.fehler.slice(0, 3).join(' · ') : ''));
+  faqData = { t: Date.now(), quelle: 'Redaktion barrierefrAI', eintraege: r.eintraege, fehler: r.fehler };
+  fs.writeFileSync(FAQ_JSON + '.tmp', JSON.stringify(faqData));
+  fs.renameSync(FAQ_JSON + '.tmp', FAQ_JSON);
+  faqData.gz = null;
+  return `${r.eintraege.length} Hinweise${r.fehler.length ? ', ' + r.fehler.length + ' Hinweise zur Tabelle: ' + r.fehler.join(' · ') : ''}`;
+}
+function faqTick() {
+  if (faqRun || (!FAQ_URL && !fs.existsSync(FAQ_CSV))) return;
+  faqRun = refreshFaq().then((m) => console.log('Redaktion:', m)).catch((e) => console.error('Redaktion:', e.message)).finally(() => { faqRun = null; });
+}
+function sendFaq(req, res, origin) {
+  if (!faqData.gz) { const raw = JSON.stringify({ t: faqData.t, quelle: faqData.quelle, eintraege: faqData.eintraege }); faqData.raw = raw; faqData.gz = zlib.gzipSync(raw, { level: 9 }); faqData.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: faqData.etag, Vary: 'Origin, Accept-Encoding' };
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
+  if (req.headers['if-none-match'] === faqData.etag) { res.writeHead(304, h); return res.end(); }
+  const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  if (gz) h['Content-Encoding'] = 'gzip';
+  res.writeHead(200, h);
+  res.end(gz ? faqData.gz : faqData.raw);
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -1290,7 +1383,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1303,7 +1396,8 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
-    if (req.method === 'GET' && p === '/api/hinweise') return send(res, 200, { t: Date.now(), hinweise: hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).map(({ id, lat, lon, art, t, t2, ok, weg }) => ({ id, lat, lon, art, t, t2, ok, weg })) }, origin);
+    if (req.method === 'GET' && p === '/api/faq') return faqData && faqData.eintraege ? sendFaq(req, res, origin) : send(res, 404, { fehler: 'Keine Redaktions-Tabelle eingerichtet.' }, origin);
+    if (req.method === 'GET' && p === '/api/hinweise') return send(res, 200, { t: Date.now(), hinweise: hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).map(({ id, lat, lon, art, t, t2, ok, weg, geprueft }) => ({ id, lat, lon, art, t, t2, ok, weg, geprueft })) }, origin);
     if (req.method === 'POST' && p === '/api/hinweis') {
       if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
       return send(res, 200, { ok: true, hinweis: addHinweis(await readBody(req, 2048)) }, origin);
@@ -1371,7 +1465,24 @@ if (cli === 'neue-codes') {
   process.exit(0);
 }
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
-if (cli === 'faq-ort') {
+if (cli === 'faq') {
+  refreshFaq().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli === 'hinweise') {
+  // gemeldete Hindernisse anzeigen: Kennung, Art, Ort, Alter, Bestätigungen
+  const list = hinweise.filter((h) => h.bis > Date.now()).sort((a, b) => b.t - a.t);
+  for (const h of list) console.log(h.id, (HINWEIS_ART[h.art] ? h.art : '?').padEnd(10), `${h.lat}, ${h.lon}`.padEnd(20), new Date(h.t).toLocaleDateString('de-DE').padEnd(11), `${h.ok}× bestätigt, ${h.weg}× „ist weg“`, h.geprueft ? 'GEPRÜFT' : '', `https://www.openstreetmap.org/?mlat=${h.lat}&mlon=${h.lon}#map=19/${h.lat}/${h.lon}`);
+  console.log(list.length + ' Hinweise. Ändern: node flowtown-server.mjs hinweis <Kennung> geprueft|weg');
+  process.exit(0);
+} else if (cli === 'hinweis') {
+  const [id, act] = process.argv.slice(3);
+  const h = hinweise.find((x) => x.id === id);
+  if (!h || !['geprueft', 'weg'].includes(act)) { console.error('Aufruf: node flowtown-server.mjs hinweis <Kennung> geprueft|weg'); process.exit(1); }
+  if (act === 'weg') hinweise = hinweise.filter((x) => x !== h);
+  else { h.geprueft = true; h.bis = Date.now() + 5 * 365 * 864e5; }
+  fs.writeFileSync(HINWEIS_FILE, JSON.stringify(hinweise));
+  console.log(act === 'weg' ? 'Gelöscht.' : 'Als geprüft markiert.', 'Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
+  process.exit(0);
+} else if (cli === 'faq-ort') {
   // einen Ort von Hand festlegen oder die Festlegung aufheben: faq-ort "Alter Markt" 52.0214 8.5339  |  faq-ort "Alter Markt" weg
   const [n, a, b] = process.argv.slice(3);
   if (!bf || !n) { console.error('Aufruf: node flowtown-server.mjs faq-ort "Alter Markt" 52.0214 8.5339   (oder: … weg)'); process.exit(1); }
@@ -1396,11 +1507,12 @@ if (cli === 'faq-ort') {
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, faq-orte, faq-ort'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
   setTimeout(() => radTick().then(fussTick), 20000); setInterval(() => radTick().then(fussTick), 1800e3);
   setTimeout(bfTick, 10000); setInterval(bfTick, 900e3);
+  setTimeout(faqTick, 5000); setInterval(faqTick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }
