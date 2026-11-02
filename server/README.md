@@ -108,7 +108,7 @@ Seit 0.37 merkt sich der Fahrplan-Auszug auch, welche Haltestellen laut DELFI st
 
 Ab 0.40 können Nutzer*innen auf der Karte Hindernisse melden (Stufe, hoher Bordstein, schlechter Belag, Aufzug defekt, Gehweg blockiert, Toilette nicht nutzbar, Ampel, „gut zugänglich“), bestätigen oder als erledigt markieren. Nur feste Arten, kein freier Text, gespeichert ohne IP in `/var/lib/flowtown/hinweise.json`. Aufzüge verfallen nach 7 Tagen, blockierte Wege und Toiletten nach 14, Ampeln nach 180, bauliche Hindernisse nach 365 Tagen; zwei „Ist weg“ entfernen einen Hinweis. Höchstens 30 Meldungen je IP und Tag (nur im Arbeitsspeicher). Einen Hinweis von Hand löschen: Eintrag aus der Datei entfernen und den Dienst neu starten.
 
-Die Orte der Altstadt-FAQ (Alter Markt, Obernstraße, Haltestelle Rathaus, Jahnplatz, Hauptbahnhof, Bahnhofstraße, Kunsthalle) bestimmt der Server einmal aus OpenStreetMap und liefert sie mit `/api/barrierefrei` aus.
+Die Orte der Altstadt-FAQ (Alter Markt, Obernstraße, Haltestelle Rathaus, Jahnplatz, Hauptbahnhof, Bahnhofstraße, Kunsthalle) bestimmt der Server aus OpenStreetMap, Haltestellen notfalls aus dem Fahrplan (DELFI), und liefert sie mit `/api/barrierefrei` aus. Welche Orte er kennt, zeigt `/api/health` unter `faqOrte`. Zum Prüfen von Hand: `node flowtown-server.mjs faq-orte` (zeigt je Ort die Koordinaten).
 
 ### Pilot: Codes vergeben und Fahrten exportieren
 

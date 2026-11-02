@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.40.0';
+  const VERSION = '0.40.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1682,7 +1682,7 @@
   // ---------- Barrierefrei: Orte von „Bielefeld barrierefrei erleben“ (Bethel), Toiletten und Aufzüge ----------
   let bfData = store.get('bf', null), bfAt = bfData ? bfData.geladen || 0 : 0, bfLoading = null;
   async function loadBf() {
-    if (bfData && Date.now() - bfAt < 6 * 3600e3) return bfData;
+    if (bfData && Date.now() - bfAt < (bfData.faqOrte && Object.keys(bfData.faqOrte).length >= 4 ? 30 * 60000 : 2 * 60000)) return bfData;
     if (!apiBase()) return bfData;
     if (bfLoading) return bfLoading;
     bfLoading = api('/api/barrierefrei', { cache: 'no-cache' }).then((d) => {
@@ -1757,9 +1757,9 @@
   };
   // Orte der FAQ: Mittelpunkt und Umkreis in Metern (die Kunsthalle kommt, wenn vorhanden, aus den Daten von Bethel)
   const FAQ_PLACES = {
-    'Alter Markt': [52.02137, 8.53375, 150], 'Obernstraße': [52.0212, 8.5305, 250], 'Haltestelle Rathaus': [52.0196, 8.5352, 150],
-    'Jahnplatz': [52.0226, 8.5319, 150], 'Hauptbahnhof': [52.0292, 8.5326, 200], 'Bahnhofstraße': [52.0257, 8.5328, 200],
-    'Kunsthalle': [52.0153, 8.5300, 150], 'Altstadt': [52.0205, 8.5335, 600], 'Innenstadt': [52.0215, 8.5325, 900]
+    'Alter Markt': [52.02139, 8.53389, 150], 'Obernstraße': [52.0224, 8.5345, 250], 'Haltestelle Rathaus': [52.02053, 8.53457, 150],
+    'Jahnplatz': [52.02360, 8.53390, 150], 'Hauptbahnhof': [52.0290, 8.5333, 200], 'Bahnhofstraße': [52.0262, 8.5338, 200],
+    'Kunsthalle': [52.01815, 8.52519, 150], 'Altstadt': [52.0210, 8.5345, 600], 'Innenstadt': [52.0225, 8.5335, 900]
   };
   // genauer Mittelpunkt aus OpenStreetMap (vom Server), sonst die Näherung oben
   function faqPlace(name) {
@@ -2182,7 +2182,7 @@
   async function drawAcc() {
     const g = groups.acc;
     g.clearLayers();
-    if (!bfData || Date.now() - bfAt > 6 * 3600e3) {
+    if (!bfData || Date.now() - bfAt > 2 * 60000) {
       if (!bfData) mapStatus('Barrierefreie Orte werden geladen …');
       try { await loadBf(); } catch (e) { if (!bfData) { mapStatus(/404|geladen/.test(e.message) ? 'Der Server lädt die Angaben gerade, bitte in ein paar Minuten noch einmal.' : 'Die Angaben zur Barrierefreiheit sind gerade nicht erreichbar.'); return; } }
       if (!mapLayers.acc) return;

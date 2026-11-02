@@ -1071,7 +1071,7 @@ async function bfOsm() {
 }
 // Orte der Altstadt-FAQ genau aus OpenStreetMap: Mittelpunkt und Umriss (Plätze, Straßen) im Zentrum
 const FAQ_OSM = {
-  'Alter Markt': ['way["name"="Alter Markt"]["highway"]', 'way["name"="Alter Markt"]["place"]', 'relation["name"="Alter Markt"]["place"]'],
+  'Alter Markt': ['way["name"="Alter Markt"]["highway"]', 'way["name"="Alter Markt"]["place"]', 'node["name"="Alter Markt"]["place"]'],
   'Obernstraße': ['way["name"="Obernstraße"]["highway"]'],
   'Jahnplatz': ['way["name"="Jahnplatz"]["highway"]', 'way["name"="Jahnplatz"]["place"]'],
   'Haltestelle Rathaus': ['node["name"="Rathaus"]["railway"="tram_stop"]', 'node["name"="Rathaus"]["public_transport"="stop_position"]["tram"="yes"]'],
@@ -1082,7 +1082,7 @@ const FAQ_OSM = {
 async function faqOrte() {
   const bb = '52.008,8.515,52.036,8.548';   // Innenstadt
   const parts = [];
-  for (const [name, qs] of Object.entries(FAQ_OSM)) qs.forEach((q) => parts.push(`${q}(${bb});out tags geom center;`));
+  for (const qs of Object.values(FAQ_OSM)) qs.forEach((q) => parts.push(`${q}(${bb});${q.startsWith('node') ? 'out;' : 'out tags geom;'}`));
   const q = `[out:json][timeout:60];${parts.join('')}`;
   const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' } });
   if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
@@ -1103,6 +1103,17 @@ async function faqOrte() {
     if (e.type === 'node') o.pts.push([e.lat, e.lon]);
     else if (e.geometry && e.geometry.length) { o.g.push(thin(e.geometry.map((p) => [p.lat, p.lon]))); e.geometry.forEach((p) => o.pts.push([p.lat, p.lon])); }
     else if (e.center) o.pts.push([e.center.lat, e.center.lon]);
+  }
+  // Haltestellen ohne Treffer: Lage der Steige aus dem Fahrplan (DELFI)
+  const delfi = { 'Haltestelle Rathaus': /^Bielefeld, Rathaus$/, 'Jahnplatz': /^Bielefeld, Jahnplatz$/, 'Hauptbahnhof': /^Bielefeld Hbf$/, 'Kunsthalle': /^Bielefeld, Kunsthalle$/ };
+  if (fahrplan && fahrplan.raw) {
+    let stops = null;
+    try { stops = JSON.parse(fahrplan.raw).stops; } catch (e) { stops = null; }
+    for (const [n, re] of Object.entries(delfi)) {
+      if (out[n] && out[n].pts.length) continue;
+      const ps = (stops || []).filter((x) => re.test(x[1])).map((x) => [x[2], x[3]]);
+      if (ps.length) out[n] = { pts: ps, g: [] };
+    }
   }
   const res2 = {};
   for (const [n, o] of Object.entries(out)) {
@@ -1167,7 +1178,7 @@ async function refreshBf() {
     if (orte.length) out.orte = orte;
   } else out.orte = [];
   try { Object.assign(out, await bfOsm()); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
-  try { out.faqOrte = await faqOrte(); } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
+  try { out.faqOrte = await faqOrte(); out.faqOrteV = 2; } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
   bf = out;
   fs.writeFileSync(BF_FILE + '.tmp', JSON.stringify(out));
   fs.renameSync(BF_FILE + '.tmp', BF_FILE);
@@ -1176,8 +1187,8 @@ async function refreshBf() {
 }
 function bfTick() {
   if (bfRun) return;
-  if (bf && bf.t && !bf.faqOrte) {
-    bfRun = faqOrte().then((o) => { bf.faqOrte = o; bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('FAQ-Orte:', Object.keys(o).join(', ')); })
+  if (bf && bf.t && (!bf.faqOrte || Object.keys(bf.faqOrte).length < 4 || !bf.faqOrteV)) {
+    bfRun = faqOrte().then((o) => { if (Object.keys(o).length < 2) throw new Error('kaum Treffer: ' + Object.keys(o).join(', ')); bf.faqOrte = o; bf.faqOrteV = 2; bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('FAQ-Orte:', Object.keys(o).join(', ')); })
       .catch((e) => console.error('FAQ-Orte:', e.message)).finally(() => { bfRun = null; });
     return;
   }
@@ -1219,7 +1230,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1300,16 +1311,19 @@ if (cli === 'neue-codes') {
   process.exit(0);
 }
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
-if (cli === 'barrierefrei') {
+if (cli === 'faq-orte') {
+  loadFahrplan();
+  faqOrte().then((o) => { for (const [n, v] of Object.entries(o)) console.log(n.padEnd(20), v.c.join(', '), v.g.length ? `(${v.g.length} Linien)` : ''); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, faq-orte'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
   setTimeout(() => radTick().then(fussTick), 20000); setInterval(() => radTick().then(fussTick), 1800e3);
-  setTimeout(bfTick, 10000); setInterval(bfTick, 3600e3);
+  setTimeout(bfTick, 10000); setInterval(bfTick, 900e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }
