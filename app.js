@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.40.1';
+  const VERSION = '0.40.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2124,7 +2124,7 @@
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
     }
-    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
+    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
     if (mapLayers.tram) parts.push('<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>');
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
