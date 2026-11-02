@@ -191,14 +191,13 @@
     </dl>
     <p class="gps"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg><span id="drive-gps">GPS: –</span></p>
     <p class="msg warn" id="drive-warn" hidden></p>
-    <div class="transfer-row" id="transfer-row" hidden>
-      <button id="btn-transfer" class="btn big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg>Umsteigen</button>
-      <div id="transfer-next" class="transfer-next" hidden>
-        <p class="small muted">Womit geht es weiter?</p>
-        <button id="btn-next-bahn" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Weiter mit Stadtbahn</button>
-        <button id="btn-next-bus" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg>Weiter mit Bus</button>
-        <button id="btn-next-zug" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Weiter mit Zug</button>
-      </div>
+    <div class="leg-suggest" id="leg-suggest" role="alert" hidden>
+      <p id="leg-suggest-text"></p>
+      <div class="leg-suggest-btns"><button id="btn-leg-yes" class="btn primary big" type="button"></button><button id="btn-leg-no" class="btn big" type="button">Nein</button></div>
+    </div>
+    <div class="mode-row" id="mode-row">
+      <p class="mode-q" id="mode-q">Unterwegs mit</p>
+      <div class="leg-chips" role="group" aria-label="Verkehrsmittel wechseln"><button type="button" class="leg-chip" data-leg="fuss" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg><span>Zu Fuß</span></button><button type="button" class="leg-chip" data-leg="bahn" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg><span>Stadtbahn</span></button><button type="button" class="leg-chip" data-leg="bus" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg><span>Bus</span></button><button type="button" class="leg-chip" data-leg="zug" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg><span>Zug</span></button><button type="button" class="leg-chip" data-leg="auto" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg><span>Auto</span></button><button type="button" class="leg-chip" data-leg="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg><span>Rad</span></button></div>
     </div>
     <div class="end-row">
       <button id="btn-end" class="btn danger big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg><span id="btn-end-label">Fahrt beenden</span></button>

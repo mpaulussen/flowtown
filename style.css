@@ -742,3 +742,15 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .faq-pin.punkt{width:22px;height:22px;font-size:13px}
 .faq-pin.punkt span{line-height:18px}
 .hinw-pin.geprueft{outline:2px solid #17784f;outline-offset:1px}
+/* 0.42 Wegekette: Verkehrsmittel während der Aufzeichnung wechseln */
+.mode-row{display:flex;flex-direction:column;gap:8px}
+.mode-q{margin:0;font-size:14px;font-weight:700;color:var(--muted)}
+.leg-chips{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.leg-chip{font:inherit;font-size:14px;font-weight:700;min-height:52px;padding:6px;border-radius:14px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;cursor:pointer}
+.leg-chip .ic{width:22px;height:22px}
+.leg-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
+.leg-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.leg-suggest{background:var(--w-tip-bg);color:var(--w-tip-ink);border:2px solid var(--accent);border-radius:18px;padding:14px;display:flex;flex-direction:column;gap:10px}
+.leg-suggest[hidden]{display:none}
+.leg-suggest p{margin:0;font-size:18px;font-weight:700;line-height:1.35}
+.leg-suggest-btns{display:grid;grid-template-columns:2fr 1fr;gap:8px}

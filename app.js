@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.41.0';
+  const VERSION = '0.42.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -672,6 +672,7 @@
     } else {
       setDriveState(vs < cfg.stopV ? 'Langsam …' : 'Unterwegs', 'moving');
     }
+    if (rec.samples.length >= 3) detectLeg(p, vs, t);
     maybeFetchSignals(p, false);
     updateCounters();
   }
@@ -900,6 +901,7 @@
   });
 
   function startTrip() {
+    if (!fp && lageOn()) loadFahrplan().catch(() => {});
     const mode = selectedMode();
     settings.mode = mode; store.set('settings', settings);
     applyModeWords(mode);
@@ -973,9 +975,9 @@
     rec.curMode = mode; rec.cfg = MODES[mode];
     rec.slowSince = null; rec.fastSince = null;
   }
-  function startTransfer() {
+  function startTransfer(at) {
     if (!rec || rec.transfer || !isTransit(rec.curMode)) return;
-    const t = nowT();
+    const t = at || nowT();
     if (rec.stop) endStop(t);   // die Bahn stand an der Haltestelle: dieser Halt endet mit dem Aussteigen
     const p = rec.samples[rec.samples.length - 1] || rec.last || {};
     closeLeg(t);
@@ -997,11 +999,70 @@
     switchMode(mode);
     updateTransferUI();
   }
+  // ---------- Wechsel erkennen: aussteigen, parken, einsteigen ----------
+  // Vorschlag mit großem Knopf und Vibration; ohne Antwort gilt er nach 30 Sekunden. „Nein“ hält ihn 3 Minuten fern.
+  let legSuggest = null, legNo = null, legTimer = null;
+  const LEG_TEXT = { fuss: 'Jetzt zu Fuß', bahn: 'Weiter mit Stadtbahn', bus: 'Weiter mit Bus', zug: 'Weiter mit Zug', auto: 'Weiter mit Auto', rad: 'Weiter mit Rad' };
+  function hideLegSuggest() { legSuggest = null; clearTimeout(legTimer); $('#leg-suggest').hidden = true; }
+  function showLegSuggest(mode, t, frage) {
+    if (legSuggest && legSuggest.mode === mode) return;
+    if (legNo && legNo.mode === mode && Date.now() - legNo.t < 180000) return;
+    legSuggest = { mode, t };
+    $('#leg-suggest-text').textContent = frage;
+    $('#btn-leg-yes').textContent = LEG_TEXT[mode];
+    $('#leg-suggest').hidden = false;
+    try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) { /* ohne Vibration */ }
+    clearTimeout(legTimer);
+    legTimer = setTimeout(() => { if (legSuggest && legSuggest.mode === mode) changeMode(mode, t); }, 30000);
+  }
+  const WALK_MIN = 0.4, WALK_MAX = 2.3, FAST = 5;   // m/s: Gehen 1,5 bis 8 km/h, Fahrzeug ab 18 km/h
+  function detectLeg(p, vs, t) {
+    const d = rec.det || (rec.det = {});
+    const cur = rec.transfer ? 'fuss' : rec.curMode;
+    const walk = vs >= WALK_MIN && vs <= WALK_MAX, stand = vs < WALK_MIN, fast = vs > FAST;
+    // Gehen: seit wann und ab wo
+    if (walk) { if (!d.walk) d.walk = { t, lat: p.lat, lon: p.lon }; } else if (!stand) d.walk = null;
+    if (stand) { if (!d.stand) d.stand = { t }; } else if (!walk) d.stand = null;
+    if (fast) { if (!d.fast) d.fast = { t, lat: p.lat, lon: p.lon, from: d.lastSlow || { lat: p.lat, lon: p.lon } }; } else { d.fast = null; d.lastSlow = { lat: p.lat, lon: p.lon }; }
+    if (!walk && !stand) d.parkedAt = null;
+    if (stand && d.stand && t - d.stand.t >= (cur === 'rad' ? 60000 : 90000)) d.parkedAt = d.parkedAt || d.stand.t;
+    const walked = d.walk ? dist(d.walk, p) : 0;
+    // 1. Bus, Bahn, Zug: 40 s Gehtempo und 50 m weg → ausgestiegen
+    if (isTransit(cur) && d.walk && t - d.walk.t >= 40000 && walked >= 50) showLegSuggest('fuss', d.walk.t, 'Ausgestiegen? Flowtown zeichnet dann zu Fuß weiter auf.');
+    // 2. Auto, Rad: erst länger gestanden, dann 30 s Gehtempo und 40 m → geparkt
+    else if ((cur === 'auto' || cur === 'rad') && d.parkedAt && d.walk && t - d.walk.t >= 30000 && walked >= 40) showLegSuggest('fuss', d.walk.t, cur === 'auto' ? 'Geparkt? Flowtown zeichnet dann zu Fuß weiter auf.' : 'Rad abgestellt? Flowtown zeichnet dann zu Fuß weiter auf.');
+    // 3. zu Fuß: 25 s schnell → eingestiegen; an einer Haltestelle Stadtbahn, Bus oder Zug, sonst Rad oder Auto
+    else if (cur === 'fuss' && d.fast && t - d.fast.t >= 25000) {
+      const at = d.fast.from;
+      let mode = null;
+      if (fpStopsNear(at, 70, 0).length) mode = 'bahn';
+      else if (fpStopsNear(at, 120, 2).length) mode = 'zug';
+      else if (fpStopsNear(at, 50, 3).length || nearStop(at)) mode = 'bus';
+      else mode = vs > 9 ? 'auto' : 'rad';
+      showLegSuggest(mode, d.fast.t, isTransit(mode) ? 'Eingestiegen?' : mode === 'auto' ? 'Im Auto unterwegs?' : 'Auf dem Rad unterwegs?');
+    }
+  }
+  // Wegekette: jederzeit das Verkehrsmittel wechseln. Bus/Bahn/Zug → zu Fuß ist ein Umstieg, bis es mit Bus/Bahn/Zug weitergeht
+  // (endet die Fahrt zu Fuß, war es keiner); alle anderen Wechsel schließen einfach den Abschnitt.
+  function changeMode(mode, at) {
+    if (!rec || !MODES[mode]) return;
+    hideLegSuggest();
+    if (mode === rec.curMode && !rec.transfer) return;
+    if (rec.transfer) {
+      if (mode === 'fuss') return;
+      if (isTransit(mode)) { endTransfer(mode); return; }
+    } else if (isTransit(rec.curMode) && mode === 'fuss') { startTransfer(at); return; }
+    const t = at || nowT();
+    if (rec.stop) endStop(t);
+    if (rec.transfer) { rec.transfer = null; }
+    closeLeg(t);
+    switchMode(mode);
+    updateTransferUI();
+  }
   function updateTransferUI() {
-    const show = rec && (isTransit(rec.curMode) || rec.transfer);
-    $('#transfer-row').hidden = !show;
-    $('#btn-transfer').hidden = !!(rec && rec.transfer);
-    $('#transfer-next').hidden = !(rec && rec.transfer);
+    const cur = rec ? (rec.transfer ? 'fuss' : rec.curMode) : null;
+    $$('#mode-row .leg-chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.leg === cur)));
+    $('#mode-q').textContent = rec && rec.transfer ? 'Umstieg zu Fuß. Weiter mit …' : 'Unterwegs mit';
     const n = rec && rec.trip.legs ? rec.trip.legs.length + 1 : 1;
     $('#drive-leg').hidden = !rec || n < 2;
     if (rec) $('#drive-leg').textContent = rec.transfer ? `Abschnitt ${n} · Umstieg zu Fuß` : `Abschnitt ${n} · ${MODES[rec.curMode].label}`;
@@ -1009,6 +1070,7 @@
 
   function finishTrip() {
     if (!rec) return;
+    hideLegSuggest();
     if (rec.stop && rec.samples.length) endStop(rec.samples[rec.samples.length - 1].t);
     // Abschnitte abschließen; ein offener Umstieg war keiner (man ist ausgestiegen und zu Fuß weiter)
     if (rec.trip.legs) {
@@ -1230,13 +1292,18 @@
     lines.push(`<details class="more-info"><summary>${ic('info')}So wird geschätzt</summary><p class="small muted">${fmtEuro(c.price)} je ${c.unit === 'kWh' ? 'kWh' : 'Liter'} ${c.unit === 'kWh' ? `${fmtNum(IDLE_KWH_PER_H, 1)} kWh je Stunde im Stand und ${fmtNum(RESTART_KWH, 2)} kWh` : `${fmtNum(IDLE_L_PER_H, 1)} l je Stunde Leerlauf und ${fmtNum(RESTART_L, 2)} l`} je Wiederanfahren. Preise änderbar unter „Mehr“.</p></details>`);
     return lines.join('');
   }
+  // Wegekette als Zeile mit Symbolen (Umstiege zu Fuß zwischen Bus und Bahn zählen nicht als eigener Abschnitt)
+  function legChainHtml(t) {
+    const trs = t.transfers || [];
+    const legs = (t.legs || []).filter((l) => l.mode !== 'fuss' || !trs.some((r) => r.t === l.t0));
+    return legs.length >= 2 ? `<p class="legs">${legs.map((l) => `<span>${ic(MODE_ICON[l.mode])}${esc(MODES[l.mode].label)}</span>`).join('<span class="arrow">→</span>')}</p>` : '';
+  }
   // Bus und Bahn: wohin die Zeit ging, und die Abschnitte der Fahrt
   function transitFacts(t) {
     const sum = (f) => t.events.reduce((a, e) => a + (e.type === 'halt' && f(e) ? e.wait : 0), 0);
     const trs = t.transfers || [];
     const legs = (t.legs || []).filter((l) => l.mode !== 'fuss' || !trs.some((r) => r.t === l.t0));
-    const chain = legs.length >= 2 ? `<p class="legs">${legs.map((l) => `<span>${ic(MODE_ICON[l.mode])}${esc(MODES[l.mode].label)}</span>`).join('<span class="arrow">→</span>')}</p>` : '';
-    return `${chain}<ul class="facts">
+    return `<ul class="facts">
       <li>${ic('pin')}<span>An Haltestellen</span><b>${durText(sum((e) => e.atStop))}</b></li>
       <li>${ic('light')}<span>An Ampeln</span><b>${durText(sum((e) => e.signal))}</b></li>
       ${trs.length ? `<li>${ic('walk')}<span>Umsteigen (${trs.length}×)</span><b>${durText(trs.reduce((a, r) => a + r.wait, 0))}</b></li>` : ''}
@@ -1266,7 +1333,7 @@
     const slow = t.mode === 'fuss' ? 0 : Math.max(0, slowMs(t) - wait - stopT);
     const flow = Math.max(0, dur - slow - wait - stopT), all = Math.max(1, flow + slow + wait + stopT);
     const pc = (x) => (x / all * 100).toFixed(1) + '%';
-    $('#review-head').innerHTML = `<p class="st-sub">${sub}</p>
+    $('#review-head').innerHTML = `${legChainHtml(t)}<p class="st-sub">${sub}</p>
       <div class="rh-bar" role="img" aria-label="${esc(`${hmSay(dur / 1000)}, davon ${transit ? `${hmSay(stopT / 1000)} an Haltestellen, ` : ''}etwa ${hmSay(slow / 1000)} langsam oder im Stau und ${hmSay(wait / 1000)} an Ampeln`)}"><span style="width:${pc(flow)}"></span>${transit ? `<span class="stop" style="width:${pc(stopT)}"></span>` : ''}<span class="slow" style="width:${pc(slow)}"></span><span class="amp" style="width:${pc(wait)}"></span></div>
       <ul class="pl-legend row-legend">${transit ? `<li><span class="lg-dot stop"></span>${durText(stopT)} an Haltestellen</li>` : ''}${slow >= 60000 ? `<li><span class="lg-dot red"></span>etwa ${Math.round(slow / 60000)} min langsam oder Stau</li>` : ''}<li><span class="lg-dot"></span>${durText(wait)} an Ampeln</li></ul>
       ${fahrplanHtml(t)}`;
@@ -1294,7 +1361,7 @@
           : `<div class="kpi">${ic('wave')}<b>${st.steadyShare != null ? fmtPct(st.steadyShare) : '–'}</b><span>gleichmäßig gefahren</span></div>`}
       </div>
       ${t.plan ? planHtml(t) : ''}
-      ${isTransit(t.mode) || (t.transfers || []).length ? transitFacts(t) : ''}
+      ${isTransit(t.mode) || (t.transfers || []).length || (t.legs || []).some((l) => isTransit(l.mode)) ? transitFacts(t) : ''}
       ${walk ? '' : `<p class="note">${ic('alert')}<span>${st.brakes || 0} starke Bremsung${st.brakes === 1 ? '' : 'en'}${per100}, ${st.accels || 0}× stark beschleunigt.${st.steadyShare == null ? ' Die Gleichmäßigkeit wird ab einer Minute Fahrt über 30 km/h berechnet.' : ''}</span></p>`}
       ${gaps.length ? `<p class="note">${ic('gps')}<span>Ohne GPS-Empfang, etwa im Tunnel: ${fmtDur(gapMs)} min, rund ${fmtNum(gapKm, 1)} km Luftlinie überbrückt. Dort wird nichts gewertet.</span></p>` : ''}
       ${t.mode === 'auto' ? `      <label class="small" for="inp-consumption">Verbrauch laut Bordcomputer (freiwillig)</label>
@@ -3595,6 +3662,11 @@
     const pc = (x) => Math.min(100, x / dur * 100).toFixed(1) + '%';
     return `<span class="tbar" aria-hidden="true"><i class="drive" style="width:${pc(Math.max(0, dur - wait - stop - slow))}"></i><i class="stop" style="width:${pc(stop)}"></i><i class="slow" style="width:${pc(slow)}"></i><i class="amp" style="width:${pc(wait)}"></i></span>`;
   }
+  // „Auto → Zu Fuß → Stadtbahn“; ohne Abschnitte nur das Verkehrsmittel
+  function legChain(t) {
+    const ms = (t.legs && t.legs.length > 1 ? t.legs.map((l) => l.mode) : [t.mode]).filter((m, i, a) => i === 0 || m !== a[i - 1]);
+    return ms.map((m) => (MODES[m] ? MODES[m].label : m)).join(' → ');
+  }
   function tripRow(t) {
     const h = t.events.filter((e) => e.type === 'halt' && e.signal);
     const wait = h.reduce((x, e) => x + e.wait, 0);
@@ -3603,7 +3675,7 @@
     return `<li><button type="button" class="trow" data-review="${t.id}">
       <span class="t-time">${time}</span>
       <span class="chip sm">${ic(MODE_ICON[t.mode] || 'route')}</span>
-      <span class="t-main"><b>${MODES[t.mode] ? MODES[t.mode].label : t.mode}${t.demo ? ' <span class="badge">Demo</span>' : ''}</b><span class="t-sub">${t.plan ? `<span>→ ${esc(t.plan.name)}</span> · ` : ''}<span>${Math.max(1, Math.round(((t.end || t.start) - t.start) / 60000))} min</span> · <span>${fmtNum(t.distance / 1000, 1)} km</span>${trs ? ` · <span>${trs} Umstieg${trs === 1 ? '' : 'e'}</span>` : ''}</span>${tripBar(t, wait)}</span>
+      <span class="t-main"><b>${legChain(t)}${t.demo ? ' <span class="badge">Demo</span>' : ''}</b><span class="t-sub">${t.plan ? `<span>→ ${esc(t.plan.name)}</span> · ` : ''}<span>${Math.max(1, Math.round(((t.end || t.start) - t.start) / 60000))} min</span> · <span>${fmtNum(t.distance / 1000, 1)} km</span>${trs ? ` · <span>${trs} Umstieg${trs === 1 ? '' : 'e'}</span>` : ''}</span>${tripBar(t, wait)}</span>
       <span class="t-pills"><span class="pill${h.length ? ' amber' : ' green'}" title="Halte an Ampeln">${ic('light')}${h.length}</span>${h.length ? `<span class="pill ${wait > 60000 ? 'red' : 'amber'}" title="gewartet">${ic('hourglass')}${fmtDur(wait)}</span>` : ''}</span>
       ${ic('chevron', 't-go')}
     </button></li>`;
@@ -3829,10 +3901,9 @@
     } catch (e) { st.textContent = 'Keine Verbindung: ' + e.message; }
   });
   ['#view-stats', '#view-map'].forEach((id) => $(id).addEventListener('click', (ev) => { const b = ev.target.closest('button[data-goto]'); if (b) showView(b.dataset.goto); }));
-  $('#btn-transfer').addEventListener('click', startTransfer);
-  $('#btn-next-bahn').addEventListener('click', () => endTransfer('bahn'));
-  $('#btn-next-bus').addEventListener('click', () => endTransfer('bus'));
-  $('#btn-next-zug').addEventListener('click', () => endTransfer('zug'));
+  $('#mode-row').addEventListener('click', (ev) => { const b = ev.target.closest('.leg-chip'); if (b) changeMode(b.dataset.leg); });
+  $('#btn-leg-yes').addEventListener('click', () => { if (legSuggest) changeMode(legSuggest.mode, legSuggest.t); });
+  $('#btn-leg-no').addEventListener('click', () => { if (legSuggest) { legNo = { mode: legSuggest.mode, t: Date.now() }; } hideLegSuggest(); });
   $$('input[name="mgroup"], input[name="pt"]').forEach((i) => i.addEventListener('change', () => {
     $('#pt-row').hidden = $('input[name="mgroup"]:checked').value !== 'oepnv';
     settings.mode = selectedMode(); store.set('settings', settings);
