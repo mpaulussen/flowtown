@@ -92,6 +92,10 @@ Laufen ohne Einrichtung. Der Server lädt nach dem Start die Radwege für ganz B
 
 Einstellungen (optional): `OVERPASS_URL=` für einen anderen Overpass-Server, `RAD_PREFETCH=0` schaltet das Vorab-Laden ab (dann nur bei Bedarf).
 
+### Weg-Check zu Fuß
+
+„Wohin fahren?“ prüft ab 0.39 auch Fußwege (HERE, Fußgänger). Für den Weg-Check holt der Server Wege mit Belag, Stufen, Steigung, Bordsteine, Gleisquerungen und Ampeln aus OpenStreetMap, in denselben Kacheln wie die Radwege, unter `/var/lib/flowtown/fussnetz/` (`/api/fussnetz`). Vorab nur die Innenstadt (9 Kacheln), der Rest bei Bedarf. Keine Einrichtung nötig.
+
 ### Barrierefrei: Orte von Bethel, Toiletten und Aufzüge
 
 Laufen ohne Einrichtung. Der Server holt beim ersten Start und danach einmal pro Woche nachts die Angaben zu rund 100 Gebäuden von „Bielefeld barrierefrei erleben“ (v. Bodelschwinghsche Stiftungen Bethel, Neue Schmiede; Kriterien motorisch, visuell, auditiv, kognitiv) über deren öffentliche Schnittstelle, ein Gebäude nach dem anderen mit Pausen (etwa 2 bis 3 Minuten), dazu rollstuhlgerechte Toiletten und Aufzüge aus OpenStreetMap. Ergebnis: `/var/lib/flowtown/barrierefrei.json`, rund 90 KB; die App lädt sie gepackt mit etwa 10 KB über `/api/barrierefrei`. Von Hand neu holen: `node flowtown-server.mjs barrierefrei` (mit derselben Umgebung wie beim Fahrplan). Im Protokoll: „Barrierefrei: 102 Orte, … Toiletten, … Aufzüge“.

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.38.0';
+  const VERSION = '0.39.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1481,7 +1481,11 @@
     const worst = ag.approaches.filter((a) => a.halts).sort((a, b) => b.wait - a.wait)[0];
     ag.approaches.sort((a, b) => b.wait - a.wait);
     // schlichte Liste statt Tabelle: Ampel und Richtung links, Halte und Wartezeit rechts
-    const ampRows = ag.approaches.map((a) => { const n = a.halts + a.passes; return `<li><span class="amp-name">${placeFor(a.sample)}<span class="small muted">${a.h != null ? esc(dirName(a.h)) + ' · ' : ''}${n} Fahrt${n === 1 ? '' : 'en'}${a.up || a.down ? ` · ${a.up} gut, ${a.down} schlecht` : ''}</span></span><b>${a.halts ? `${a.halts}× · Ø ${fmtDur(a.wait / a.halts)}` : 'frei'}</b></li>`; });
+    // Befund für Fußgänger*innen mit Profil: Ampeln, die als „Grün zu kurz zum Queren“ markiert wurden
+    const kurz = {};
+    for (const a of ag.per) if (a.tags['Grün zu kurz zum Queren']) kurz[a.signal] = a.tags['Grün zu kurz zum Queren'];
+    const nKurz = Object.keys(kurz).length;
+    const ampRows = ag.approaches.map((a) => { const n = a.halts + a.passes; return `<li><span class="amp-name">${placeFor(a.sample)}<span class="small muted">${a.h != null ? esc(dirName(a.h)) + ' · ' : ''}${n} Fahrt${n === 1 ? '' : 'en'}${a.up || a.down ? ` · ${a.up} gut, ${a.down} schlecht` : ''}${kurz[a.signal] ? ` · <b class="kurz">zu kurz grün (${kurz[a.signal]}×)</b>` : ''}</span></span><b>${a.halts ? `${a.halts}× · Ø ${fmtDur(a.wait / a.halts)}` : 'frei'}</b></li>`; });
     const ampList = (rs) => `<ul class="amp-list">${rs.join('')}</ul>`;
     // lange Listen: die wichtigsten zuerst, der Rest zum Aufklappen
     const rest = (items, n, label, wrap) => items.length > n ? `<details class="more-box"><summary>${ic('list')}${label} (${items.length - n} weitere)</summary>${wrap(items.slice(n))}</details>` : '';
@@ -1503,7 +1507,7 @@
       routes.length && { k: 'wege', icon: 'route', head: 'Deine Wege', num: String(Math.min(3, routes.length)),
         sub: `${esc(labelFor(routes[0].first))} → ${esc(labelFor(routes[0].last))}, ${routes[0].trips.length}×`, html: () => routeRows(group) },
       ag.per.length && { k: 'ampeln', icon: 'light', head: 'Ampeln', num: worst ? `${fmtDur(worst.wait)} min` : String(ag.per.length),
-        sub: worst ? `Am längsten: ${plain(placeFor(worst.sample))}, ${worst.halts}× gehalten` : `${ag.per.length} Ampel${ag.per.length === 1 ? '' : 'n'}, ohne Halt`,
+        sub: nKurz ? `${nKurz} Ampel${nKurz === 1 ? '' : 'n'} von dir als zu kurz grün markiert` : worst ? `Am längsten: ${plain(placeFor(worst.sample))}, ${worst.halts}× gehalten` : `${ag.per.length} Ampel${ag.per.length === 1 ? '' : 'n'}, ohne Halt`,
         html: () => `<h4 class="day-title">Längste Wartezeit zuerst</h4>${ampList(ampRows.slice(0, 6))}${rest(ampRows, 6, 'Weitere Ampeln', ampList)}` },
       cs.length && { k: 'kosten', icon: 'euro', head: 'Kosten', num: fmtEuro(cs.reduce((x, c) => x + c.halts, 0)),
         sub: 'Was die Ampelhalte geschätzt kosten', html: () => costSummary(list).replace(/^<div class="card">/, '<div>') },
@@ -1720,8 +1724,8 @@
     for (const o of bfData.orte) { const d = dist({ lat: o.lat, lon: o.lon }, z); if (d < bd) { bd = d; best = o; } }
     return best;
   }
-  function bfZielBlock(z) {
-    const tips = settings.access.on ? faqNear(z, settings.access.type) : [];
+  function bfZielBlock(z, group) {
+    const tips = settings.access.on && group !== 'fuss' ? faqNear(z, settings.access.type) : [];   // zu Fuß stehen die Hinweise im Weg-Check
     const tipHtml = tips.length ? `<div class="bf-ziel"><h4 class="vf-h4">${ic('info')} Gut zu wissen</h4>${tips.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}</div>` : '';
     return bfOrtBlock(z) + tipHtml;
   }
@@ -1788,6 +1792,126 @@
     return faq.eintraege.filter((e) => e.orte.some((o) => places.includes(o)) && e.gruppen.some((g) => mine.includes(g)))
       .sort((a, b) => (b.orte.some((o) => o !== 'Altstadt' && places.includes(o)) - a.orte.some((o) => o !== 'Altstadt' && places.includes(o)))).slice(0, 2);
   }
+  // ---------- Weg-Check zu Fuß: Belag, Stufen, Steigung, Bordsteine, Gleise, Ampeln (Fußnetz vom Server) ----------
+  const fussTiles = {}, fussLoading = {};
+  async function fussTile(key) {
+    if (fussTiles[key]) return fussTiles[key];
+    if (fussLoading[key]) return fussLoading[key];
+    fussLoading[key] = (async () => {
+      const res = await fetchWithTimeout(apiBase() + '/api/fussnetz?k=' + key, {}, 120000);
+      if (!res.ok) throw new Error(res.status === 404 ? 'Der Server kennt den Weg-Check noch nicht' : 'HTTP ' + res.status);
+      const j = await res.json();
+      fussTiles[key] = { ways: j.ways || [], nodes: j.nodes || [] };
+      return fussTiles[key];
+    })();
+    try { return await fussLoading[key]; } finally { delete fussLoading[key]; }
+  }
+  const FUSS_CLS = {
+    gut: { col: '#17784f', label: 'gut begehbar' },
+    holprig: { col: '#e0a326', label: 'holpriges Pflaster' },
+    kopfstein: { col: '#d64933', label: 'Kopfsteinpflaster' },
+    unbefestigt: { col: '#b8650a', label: 'unbefestigter Weg' },
+    steil: { col: '#7a3fa0', label: 'steiler als 6 %' },
+    stufen: { col: '#15191e', label: 'Stufen' }
+  };
+  const FUSS_BAD = ['stufen', 'kopfstein', 'steil', 'unbefestigt', 'holprig'];
+  async function fussRate(pts) {
+    if (!pts || pts.length < 2 || !apiBase()) return null;
+    const s = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const d = dist({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] });
+      const n = Math.max(1, Math.round(d / 10));
+      for (let k = 0; k < n; k++) s.push({ p: [a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n], m: d / n, h: radBearing(a, b) });
+    }
+    const keys = [...new Set(s.map((x) => radKey(x.p[0], x.p[1])))].slice(0, 6);
+    const tiles = {};
+    for (const k of keys) tiles[k] = await fussTile(k);
+    const m = { gut: 0, holprig: 0, kopfstein: 0, unbefestigt: 0, steil: 0, stufen: 0, offen: 0 };
+    const runs = [];
+    let run = null;
+    const nodeHits = { b: [], g: [], a: [] };
+    const seenNode = new Set();
+    for (const x of s) {
+      const tile = tiles[radKey(x.p[0], x.p[1])];
+      let best = null;
+      if (tile) {
+        const idx = radIndex(tile);
+        const cla = Math.floor(x.p[0] / RAD_CELL), clo = Math.floor(x.p[1] / RAD_CELL);
+        const P = { lat: x.p[0], lon: x.p[1] };
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+          const list = idx.get((cla + a) + '_' + (clo + b));
+          if (!list) continue;
+          for (let j = 0; j < list.length; j += 2) {
+            const w = tile.ways[list[j]], i = list[j + 1];
+            const d = distToWay(P, [{ lat: w.g[i][0], lon: w.g[i][1] }, { lat: w.g[i + 1][0], lon: w.g[i + 1][1] }]);
+            if (d > 12) continue;
+            let ad = Math.abs(radBearing(w.g[i], w.g[i + 1]) - x.h) % 180;
+            ad = Math.min(ad, 180 - ad);
+            if (ad > 35 && d > 4) continue;
+            // zu Fuß zählt der nächste Weg, nicht der beste; Stufen direkt am Weg gehen immer vor
+            if (!best || (w.c === 'stufen' && d <= 5 && best.w.c !== 'stufen') || (d < best.d && !(best.w.c === 'stufen' && best.d <= 5))) best = { w, d };
+          }
+        }
+        for (const nd of tile.nodes) {
+          if (Math.abs(nd[0] - x.p[0]) > 0.0002 || Math.abs(nd[1] - x.p[1]) > 0.0003) continue;
+          const key = nd[0] + ',' + nd[1];
+          if (seenNode.has(key) || dist({ lat: nd[0], lon: nd[1] }, { lat: x.p[0], lon: x.p[1] }) > 10) continue;
+          seenNode.add(key);
+          nodeHits[nd[2]].push(nd);
+        }
+      }
+      const c = best ? best.w.c : 'offen';
+      m[c] += x.m;
+      if (FUSS_BAD.includes(c)) {
+        const name = best.w.n || '';
+        if (run && run.c === c && run.name === name) { run.m += x.m; run.pts.push(x.p); }
+        else { run = { c, name, m: x.m, pts: [x.p] }; runs.push(run); }
+      } else run = null;
+    }
+    const total = Object.values(m).reduce((a, b) => a + b, 0) || 1;
+    // Stellen zusammenfassen: je Art und Straße
+    const by = {};
+    for (const r of runs) {
+      if (r.c !== 'stufen' && r.m < 25) continue;
+      const k = r.c + '|' + r.name;
+      if (!by[k]) by[k] = { c: r.c, name: r.name, m: 0, n: 0, lines: [] };
+      by[k].m += r.m; by[k].n++; by[k].lines.push(r.pts);
+    }
+    // Hinweise aus der Altstadt-FAQ für Orte unterwegs
+    const places = Object.keys(FAQ_PLACES).filter((n) => n !== 'Altstadt' && n !== 'Innenstadt').filter((n) => { const p = faqPlace(n); return p && s.some((x, i) => i % 3 === 0 && dist({ lat: p[0], lon: p[1] }, { lat: x.p[0], lon: x.p[1] }) <= p[2]); });
+    return { m, total, stellen: Object.values(by).sort((a, b) => FUSS_BAD.indexOf(a.c) - FUSS_BAD.indexOf(b.c) || b.m - a.m), bord: nodeHits.b.length, gleis: nodeHits.g, ampeln: nodeHits.a, places };
+  }
+  const FUSS_WEIGHT = { rollstuhl: ['stufen', 'kopfstein', 'steil', 'unbefestigt', 'holprig'], rollator: ['stufen', 'kopfstein', 'unbefestigt', 'steil', 'holprig'], sehen: ['stufen'], hoeren: [], lernen: ['stufen'], ruhe: ['stufen', 'steil'] };
+  function fussBlock(r, route) {
+    if (!r) return '';
+    if (r.loading) return '<p class="small muted" role="status">Der Weg wird geprüft …</p>';
+    if (r.error) return `<p class="small muted">${esc(r.error)}</p>`;
+    const type = settings.access.on ? settings.access.type : null;
+    const known = r.total - r.m.offen;
+    const pct = (k) => (known ? Math.round(r.m[k] / known * 100) : 0);
+    const important = FUSS_WEIGHT[type] || FUSS_BAD;
+    const lines = [];
+    const peek = (name, art, ls) => `<button type="button" class="place" data-peek="l" data-name="${esc(name)}" data-art="${art}" data-lines="${ls.map((l) => l.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')).join('|')}" data-pts="${route}">${esc(name)}</button>`;
+    for (const st of r.stellen.filter((x) => important.includes(x.c)).slice(0, 5)) {
+      const what = st.c === 'stufen' ? `${st.n === 1 ? 'eine Stelle' : st.n + ' Stellen'} mit Stufen` : `${fmtLen(st.m)} ${FUSS_CLS[st.c].label}`;
+      lines.push(`<li>${bfMark(0)} ${peek(st.name || FUSS_CLS[st.c].label, 'rad', st.lines)}<span class="small muted"> · ${what}</span></li>`);
+    }
+    if (r.bord && (type === 'rollstuhl' || type === 'rollator')) lines.push(`<li>${bfMark(0)} ${r.bord === 1 ? 'ein hoher Bordstein' : r.bord + ' hohe Bordsteine'}</li>`);
+    if (r.gleis.length && (type === 'rollstuhl' || type === 'rollator' || type === 'sehen' || type === 'hoeren')) lines.push(`<li>${bfMark(0)} ${peek(r.gleis.length === 1 ? 'Gleise queren' : r.gleis.length + '× Gleise queren', 'rad', r.gleis.map((g) => [[g[0], g[1]]]))}<span class="small muted"> · ${type === 'hoeren' ? 'Stadtbahn kommt leise, auf Signale achten' : 'möglichst im rechten Winkel'}</span></li>`);
+    const ohneTon = r.ampeln.filter((a) => a[3] === 0).length, mitTon = r.ampeln.filter((a) => a[3] === 1).length;
+    if (r.ampeln.length && type === 'sehen') lines.push(`<li>${mitTon === r.ampeln.length ? bfMark(1) : bfMark(0)} ${r.ampeln.length} Ampel${r.ampeln.length === 1 ? '' : 'n'}${mitTon ? `, ${mitTon} mit Tonsignal` : ''}${ohneTon ? `, ${ohneTon} ohne` : ''}${r.ampeln.length - mitTon - ohneTon ? `, ${r.ampeln.length - mitTon - ohneTon} ohne Angabe` : ''}</li>`);
+    const bad = important.reduce((a, k) => a + pct(k), 0);
+    const title = !known ? 'Weg-Check' : !lines.length ? 'Keine Hindernisse bekannt' : bad >= 15 || r.stellen.some((x) => x.c === 'stufen' && important.includes('stufen')) ? 'Mit Hindernissen' : 'Einzelne Hindernisse';
+    const order = ['gut', 'holprig', 'unbefestigt', 'kopfstein', 'steil', 'stufen'];
+    const bar = known ? `<div class="rad-bar" role="img" aria-label="${esc(order.filter((k) => pct(k)).map((k) => `${pct(k)} % ${FUSS_CLS[k].label}`).join(', '))}">${order.map((k) => (r.m[k] ? `<i style="width:${(r.m[k] / known * 100).toFixed(1)}%;background:${FUSS_CLS[k].col}"></i>` : '')).join('')}</div>` : '';
+    const tips = type && faq ? faq.eintraege.filter((e) => e.orte.some((o) => r.places.includes(o)) && e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))).slice(0, 2) : [];
+    return `<div class="rad-rate"><h4 class="vf-h4">${title}${type ? ' · ' + esc(ACCESS_LABEL[type]) : ''}</h4>${bar}${lines.length ? `<ul class="rad-ohne bf-list">${lines.join('')}</ul>` : ''}`
+      + (tips.length ? `<div class="bf-ziel"><h4 class="vf-h4">${ic('info')} Unterwegs gut zu wissen</h4>${tips.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}</div>` : '')
+      + `<p class="small muted">${known < r.total * 0.5 ? 'Zu Teilen des Wegs gibt es keine Angaben. ' : ''}Laut OpenStreetMap, nicht überall vollständig.</p></div>`;
+  }
+  // Gehzeit für das Profil: HERE rechnet mit zügigem Gehen
+  const WALK_FACTOR = { rollator: 1.4, ruhe: 1.3, rollstuhl: 1.1, sehen: 1.2 };
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
   const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc'];
   let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: false }, settings.mapLayers || {});
@@ -2691,7 +2815,7 @@
   let vfOpen = false, zielOpen = null, zielEdit = false, ortList = null, ortQ = '', ortMsg = '';
   const zielRes = {};   // Ziel-ID|Verkehrsmittel → { t, data } | { loading } | { error }
   if (!Array.isArray(settings.ziele)) settings.ziele = [];
-  const zielFor = (group) => (group === 'auto' || group === 'rad' || group === 'oepnv');
+  const zielFor = (group) => (group === 'auto' || group === 'rad' || group === 'oepnv' || group === 'fuss');
   let zielAb = null, conOpen = 0;   // Bus und Bahn: Start an einer eigenen Haltestelle (sonst Standort), aufgeklappte Verbindung
   const zKey = (z, group) => z.id + '|' + group + (group === 'oepnv' ? '|' + (zielAb || '') : '');
   const hm = (s) => { const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h` : `${m} min`; };
@@ -2715,7 +2839,7 @@
     // offenes Ziel nach einem Wechsel des Verkehrsmittels gleich neu prüfen
     const openZ = can && zielOpen && zielOpen !== 'neu' && !zielEdit ? settings.ziele.find((z) => z.id === zielOpen) : null;
     if (openZ && !zielRes[zKey(openZ, group)]) { checkZiel(openZ); return null; }
-    const panel = !can ? (settings.ziele.length ? '<p class="small muted">Ziele prüft Flowtown mit dem Auto, dem Rad und mit Bus und Bahn.</p>' : '')
+    const panel = !can ? ''
       : zielOpen === 'neu' ? zielForm() : zielOpen ? (group === 'oepnv' ? zielPanelOepnv : zielPanel)(settings.ziele.find((z) => z.id === zielOpen), group) : '';
     return `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Wohin fahren?</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
   }
@@ -2725,7 +2849,7 @@
       : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '';
     return `<div class="vf-panel"><form class="vf-form" data-vf="suche"><label class="sr-only" for="inp-ziel">Ziel: Ort, Adresse oder Einrichtung</label><input id="inp-ziel" type="search" placeholder="Ort, Adresse oder z. B. Uni Bielefeld" autocomplete="off" enterkeyhint="search" value="${esc(ortQ)}"><button class="btn" type="submit">Suchen</button></form>
       ${ortMsg ? `<p class="small muted" role="status">${esc(ortMsg)}</p>` : ''}${list}
-      <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit.</p></div>`;
+      <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit.</p></div>`;
   }
   function zielPanel(z, group) {
     if (!z) return '';
@@ -2736,7 +2860,7 @@
     if (r.error) return `<div class="vf-panel">${head}<p class="small" role="status">${esc(r.error)}</p><button type="button" class="btn quiet" data-vf="again">Noch einmal prüfen</button></div>`;
     const d = r.data, route = d.pts.map((p) => p.join(',')).join(';');
     const verzug = d.dauer - d.basis;
-    const sum = `<div class="vf-sum"><b class="vf-dur">${hm(d.dauer)}</b><span class="small muted">${group === 'rad' ? 'mit dem Rad' : verzug >= 120 ? `heute +${Math.round(verzug / 60)} min Verkehr` : 'kaum Verkehr'} · ${fmtNum(d.km, 0)} km${r.fallback ? ' · Start: Bielefeld' : ''}</span></div>`;
+    const sum = `<div class="vf-sum"><b class="vf-dur">${hm(d.dauer)}</b><span class="small muted">${group === 'rad' ? 'mit dem Rad' : group === 'fuss' ? (settings.access.on && WALK_FACTOR[settings.access.type] ? `zu Fuß, in deinem Tempo etwa ${hm(d.dauer * WALK_FACTOR[settings.access.type])}` : 'zu Fuß') : verzug >= 120 ? `heute +${Math.round(verzug / 60)} min Verkehr` : 'kaum Verkehr'} · ${fmtNum(d.km, group === 'fuss' && d.km < 10 ? 1 : 0)} km${r.fallback ? ' · Start: Bielefeld' : ''}</span></div>`;
     // in Fahrtreihenfolge, damit man die Strecke von vorn nach hinten liest
     const items = d.items.slice().sort((a, b) => (a.km != null && b.km != null ? a.km - b.km : 0) || LAGE_RANK[a.art] - LAGE_RANK[b.art]);
     const extra = (it) => (it.art !== 'zaeh' && it.text && it.text.length > 14 && it.text.toLowerCase() !== LAGE_LABEL[it.art].toLowerCase() ? it.text : '');
@@ -2756,9 +2880,9 @@
         + (best.t && gain >= 300 ? `<p class="tip">${ic('clock')}<span>Um ${clock(best.t)} bist du etwa ${Math.round(gain / 60)} min kürzer unterwegs als jetzt.</span></p>` : '');
     }
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
-    const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>`;
+    const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}${group === 'fuss' ? 'Losgehen mit Ziel' : 'Fahrt starten mit Ziel'}</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
-    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : ''}${alt}${rows}${bars}${bfZielBlock(z)}${zielHistory(z)}${go}${all}${foot}</div>`;
+    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
   // Bus und Bahn: die nächsten Verbindungen, ab Standort oder einer eigenen Haltestelle
   const ART_LABEL = { zug: 'rail', bahn: 'tram', bus: '' };
@@ -2785,7 +2909,7 @@
     const list = rows ? `<ul class="con-list">${rows}</ul>` : '<p class="small">Gerade keine Verbindung gefunden.</p>';
     const go = cons.length ? `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>` : '';
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · © HERE${d.quellen && d.quellen.length ? ', ' + esc(d.quellen.join(', ')) : ''}${r.fallback ? ' · Start: Bielefeld' : ''} · <button type="button" class="btn-link" data-vf="again">neu suchen</button></p>`;
-    return `<div class="vf-panel">${head}${abs}${list}${bfZielBlock(z)}${zielHistory(z)}${go}${foot}</div>`;
+    return `<div class="vf-panel">${head}${abs}${list}${bfZielBlock(z, group)}${zielHistory(z)}${go}${foot}</div>`;
   }
   // Aus deinen Fahrten: frühere Fahrten zu diesem Ziel, nur angekommene
   // Rad: wie gut ist die Strecke für das Rad, und wo fehlt ein Radweg
@@ -2839,10 +2963,17 @@
     // Bus und Bahn ab einer eigenen Haltestelle: deren Lage ist öffentlich und darf genau mit
     const halt = group === 'oepnv' && zielAb && fp && fp.byName[zielAb] ? fp.stops[fp.byName[zielAb][0]] : null;
     const pos = halt ? [halt[2], halt[3]] : await myStart();
-    const from = halt ? pos : (pos || [52.02, 8.53]).map((x) => Math.round(x * 100) / 100);   // sonst auf etwa 1 km gerundet, ohne Standort: Bielefeld
+    const from = halt ? pos : (pos || [52.02, 8.53]).map((x) => (group === 'fuss' ? Math.round(x * 1000) / 1000 : Math.round(x * 100) / 100));   // sonst auf etwa 1 km gerundet (zu Fuß auf etwa 100 m), ohne Standort: Bielefeld
     try {
       const data = await api(`/api/ziel?from=${from.join(',')}&to=${z.lat},${z.lon}&mode=${group}${halt ? '&ab=halt' : ''}`);
       zielRes[key] = { t: Date.now(), data, fallback: !pos };
+      if (group === 'fuss' && data.pts && data.pts.length > 1) {
+        const res = zielRes[key];
+        res.fuss = { loading: true };
+        Promise.all([fussRate(data.pts), settings.access.on ? loadFaq() : null]).then(([r]) => { res.fuss = r || { error: 'Zu diesem Weg gibt es keine Angaben.' }; })
+          .catch((e) => { res.fuss = { error: /kennt/.test(e.message) ? 'Für den Weg-Check braucht der Flowtown-Server ein Update.' : 'Der Weg konnte gerade nicht geprüft werden.' }; })
+          .then(() => { if (zielOpen === z.id) renderVorfahrt(); });
+      }
       if (group === 'rad' && data.pts && data.pts.length > 1) {
         const res = zielRes[key];
         res.rad = { loading: true };

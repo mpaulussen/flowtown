@@ -507,8 +507,9 @@ function boxesAlong(route) {
 const txt = (v) => (v == null ? '' : typeof v === 'string' ? v : v.value || '');
 // Strecke von HERE: Geometrie, Straßennummern und -namen je Abschnitt, Störungen, die auf genau dieser Strecke liegen
 async function hereRoute(from, to, mode, opts) {
-  const q = new URLSearchParams({ transportMode: mode === 'rad' ? 'bicycle' : 'car', origin: from.join(','), destination: to.join(','), apiKey: HERE_KEY });
-  if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents'); q.set('spans', 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
+  const q = new URLSearchParams({ transportMode: mode === 'rad' ? 'bicycle' : mode === 'fuss' ? 'pedestrian' : 'car', origin: from.join(','), destination: to.join(','), apiKey: HERE_KEY });
+  if (opts.full && mode === 'fuss') { q.set('return', 'summary,polyline'); q.set('spans', 'names'); q.set('lang', 'de-DE'); }
+  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents'); q.set('spans', 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
   else q.set('return', 'summary');
   if (opts.at) q.set('departureTime', opts.at);
   const j = await getJson(`${ROUTER_URL}?${q}`, 12000);
@@ -586,7 +587,7 @@ async function checkZiel(from, to, mode) {
   const cum = [0];
   for (let k = 1; k < P.length; k++) cum.push(cum[k - 1] + segDist(P[k], P[k - 1], P[k - 1]));
   const roadAt = (i) => { let s = null; for (const x of main.spans) { if (x.i <= i) s = x; else break; } return s || {}; };
-  const keep = (art) => mode !== 'rad' || ['sperrung', 'baustelle', 'unfall'].includes(art);
+  const keep = (art) => (mode === 'fuss' ? ['sperrung', 'baustelle'].includes(art) : mode !== 'rad' || ['sperrung', 'baustelle', 'unfall'].includes(art));
   const items = [];
   // 1. Störungen, die HERE selbst der Strecke zuordnet
   if (main.incs) {
@@ -598,7 +599,7 @@ async function checkZiel(from, to, mode) {
   }
   // 2. ohne Zuordnung von HERE: Störungen im Umkreis, eng auf die Strecke gelegt
   const jobs = main.incs ? [] : boxesAlong(P.filter((p, k) => k % 3 === 0)).map((b) => hereIncidents(b));
-  const autobahns = main.roads.filter((r) => /^A\d{1,3}$/.test(r)).slice(0, 8);
+  const autobahns = mode === 'fuss' ? [] : main.roads.filter((r) => /^A\d{1,3}$/.test(r)).slice(0, 8);
   const nJobs = jobs.length;
   jobs.push(...autobahns.map(abRoad));
   const seen = new Set(items.map((x) => x.id));
@@ -626,7 +627,7 @@ async function checkZiel(from, to, mode) {
   for (const it of items) { if (!it.titel) it.titel = clip(roadAt(it.at).num || roadAt(it.at).name || it.text || 'Meldung', 60); it.km = Math.round(cum[it.at] / 1000); delete it.at; }
   // Abfahrtsleiste (nur Auto): jetzt plus vier Zeiten, mit HEREs Vorhersage
   let abfahrt = null;
-  if (mode !== 'rad') {
+  if (mode === 'auto') {
     const ts = slots(Date.now());
     const later = await Promise.allSettled(ts.map((t) => hereRoute(from, to, mode, { at: t.toISOString() })));
     abfahrt = [{ t: null, dauer: main.dauer }].concat(later.map((r, k) => (r.status === 'fulfilled' && r.value[0] ? { t: ts[k].toISOString(), dauer: r.value[0].dauer } : null)).filter(Boolean));
@@ -923,6 +924,98 @@ async function radTick() {
   if (n) console.log(`Radwege: ${n} Kacheln geladen`);
 }
 
+// ---------- Fußnetz: Belag, Stufen, Steigung, Bordsteine, Gleise und Ampeln je Kachel (für den Weg-Check zu Fuß) ----------
+// gleiche Kacheln wie bei den Radwegen; vorab nur die Innenstadt, der Rest bei Bedarf
+const FUSS_DIR = path.join(DATA_DIR, 'fussnetz');
+const fussMem = new Map(), fussPending = new Map();
+function fussClass(t) {
+  if (t.highway === 'steps') return 'stufen';
+  const inc = /^-?\d+(\.\d+)?\s*%$/.test(t.incline || '') ? Math.abs(parseFloat(t.incline)) : null;
+  if (inc != null && inc > 6) return 'steil';
+  const surf = t['sidewalk:surface'] || t['footway:surface'] || t.surface || '', sm = t.smoothness || '';
+  if (/cobblestone/.test(surf)) return 'kopfstein';
+  if (/gravel|pebblestone|compacted|dirt|ground|earth|grass|sand|mud|unpaved|woodchips/.test(surf)) return 'unbefestigt';
+  if (surf === 'sett' || /^(bad|very_bad|horrible|very_horrible|impassable)$/.test(sm)) return 'holprig';
+  if (surf) return 'gut';
+  return /^(footway|pedestrian|living_street|cycleway)$/.test(t.highway) ? 'gut' : 'offen';
+}
+function fussCached(k) {
+  if (fussMem.has(k)) return fussMem.get(k);
+  try {
+    const f = path.join(FUSS_DIR, k + '.json.gz');
+    const gz = fs.readFileSync(f);
+    const c = { t: fs.statSync(f).mtimeMs, gz, etag: '"' + crypto.createHash('sha1').update(gz).digest('hex').slice(0, 16) + '"' };
+    fussMem.set(k, c);
+    if (fussMem.size > 100) fussMem.delete(fussMem.keys().next().value);
+    return c;
+  } catch (e) { return null; }
+}
+function fussFetch(k) {
+  if (fussPending.has(k)) return fussPending.get(k);
+  const job = radQueue.then(async () => {
+    const [a, b] = k.split('_').map(Number);
+    const bb = `${(a * RAD_TILE).toFixed(3)},${(b * RAD_TILE).toFixed(3)},${((a + 1) * RAD_TILE).toFixed(3)},${((b + 1) * RAD_TILE).toFixed(3)}`;
+    const q = `[out:json][timeout:90];(way[highway~"^(footway|pedestrian|steps|path|living_street|residential|service|unclassified|tertiary|secondary|primary|cycleway|track)$"](${bb});node[barrier=kerb](${bb});node[railway~"^(tram_crossing|tram_level_crossing|level_crossing|crossing)$"](${bb});node[highway=crossing][crossing=traffic_signals](${bb});node[highway=traffic_signals](${bb}););out tags geom;`;
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, attempt * 10000));
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 120000);
+      try {
+        const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, signal: ctrl.signal });
+        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
+        const json = await res.json();
+        if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
+        const ways = [], nodes = [];
+        for (const e of json.elements || []) {
+          const t = e.tags || {};
+          if (e.type === 'way' && e.geometry && e.geometry.length > 1) {
+            if (t.access === 'private' || t.foot === 'no') continue;
+            ways.push({ c: fussClass(t), n: (t.name || '').slice(0, 60), g: e.geometry.map((p) => [r5(p.lat), r5(p.lon)]) });
+          } else if (e.type === 'node') {
+            if (t.barrier === 'kerb') { if (/^(raised|regular|yes)$/.test(t.kerb || '')) nodes.push([r5(e.lat), r5(e.lon), 'b']); }
+            else if (t.railway) nodes.push([r5(e.lat), r5(e.lon), 'g']);
+            else nodes.push([r5(e.lat), r5(e.lon), 'a', t['traffic_signals:sound'] === 'yes' ? 1 : t['traffic_signals:sound'] === 'no' ? 0 : null]);
+          }
+        }
+        const gz = zlib.gzipSync(JSON.stringify({ t: Date.now(), ways, nodes }), { level: 9 });
+        fs.mkdirSync(FUSS_DIR, { recursive: true });
+        fs.writeFileSync(path.join(FUSS_DIR, k + '.json.gz.tmp'), gz);
+        fs.renameSync(path.join(FUSS_DIR, k + '.json.gz.tmp'), path.join(FUSS_DIR, k + '.json.gz'));
+        fussMem.delete(k);
+        return fussCached(k);
+      } catch (e) { lastErr = e.name === 'AbortError' ? new Error('Overpass antwortet nicht') : e; }
+      finally { clearTimeout(timer); }
+    }
+    throw lastErr;
+  });
+  radQueue = job.then(() => new Promise((r) => setTimeout(r, 1500)), () => new Promise((r) => setTimeout(r, 5000)));
+  fussPending.set(k, job);
+  job.finally(() => fussPending.delete(k)).catch(() => {});
+  return job;
+}
+async function sendFuss(req, res, origin, k) {
+  let c = fussCached(k);
+  if (!c) c = await fussFetch(k);
+  else if (Date.now() - c.t > RAD_AGE) fussFetch(k).catch(() => {});
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=86400', ETag: c.etag, Vary: 'Origin, Accept-Encoding' };
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
+  if (req.headers['if-none-match'] === c.etag) { res.writeHead(304, h); return res.end(); }
+  if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) { h['Content-Encoding'] = 'gzip'; res.writeHead(200, h); return res.end(c.gz); }
+  res.writeHead(200, h);
+  res.end(zlib.gunzipSync(c.gz));
+}
+// Innenstadt vorab (3 × 3 Kacheln um den Jahnplatz), nach den Radwegen
+async function fussTick() {
+  if (!RAD_PREFETCH) return;
+  const a0 = Math.floor(52.022 / RAD_TILE), b0 = Math.floor(8.532 / RAD_TILE);
+  for (let a = a0 - 1; a <= a0 + 1; a++) for (let b = b0 - 1; b <= b0 + 1; b++) {
+    const k = a + '_' + b, c = fussCached(k);
+    if (c && Date.now() - c.t < RAD_AGE) continue;
+    try { await fussFetch(k); } catch (e) { console.error('Fußnetz', k + ':', e.message); }
+  }
+}
+
 // ---------- Barrierefrei: Orte aus „Bielefeld barrierefrei erleben“ (Bethel) und Toiletten/Aufzüge aus OpenStreetMap ----------
 // Der Server holt einmal pro Woche die Angaben zu rund 100 Gebäuden (nacheinander, mit Pausen) und die rollstuhlgerechten
 // Toiletten und Aufzüge in Bielefeld; die App lädt alles als eine kleine Datei. Abschalten: BETHEL_DATA=0.
@@ -1040,7 +1133,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, barrierefrei: !!(bf && bf.t), fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, barrierefrei: !!(bf && bf.t), fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1057,6 +1150,11 @@ const server = http.createServer(async (req, res) => {
       if (!bf || !bf.t) { bfTick(); return send(res, 404, { fehler: 'Die Angaben zur Barrierefreiheit werden gerade geladen.' }, origin); }
       return sendBf(req, res, origin);
     }
+    if (req.method === 'GET' && p === '/api/fussnetz') {
+      const k = url.searchParams.get('k') || '';
+      if (!radKeyOk(k)) return send(res, 400, { fehler: 'Unbekannte Kachel.' }, origin);
+      try { return await sendFuss(req, res, origin, k); } catch (e) { return send(res, 502, { fehler: 'Fußwege gerade nicht abrufbar: ' + e.message }, origin); }
+    }
     if (req.method === 'GET' && p === '/api/radnetz') {
       const k = url.searchParams.get('k') || '';
       if (!radKeyOk(k)) return send(res, 400, { fehler: 'Unbekannte Kachel.' }, origin);
@@ -1072,8 +1170,9 @@ const server = http.createServer(async (req, res) => {
         return send(res, 200, { orte: await findOrt(q) }, origin);
       }
       // Start auf etwa 1 km gerundet; bei Bus und Bahn darf er eine gewählte Haltestelle sein (öffentlicher Ort, genau)
-      const m = url.searchParams.get('mode'), mode = m === 'rad' ? 'rad' : m === 'oepnv' ? 'oepnv' : 'auto';
-      const from = coord(url.searchParams.get('from'), mode === 'oepnv' && url.searchParams.get('ab') === 'halt' ? 4 : 2), to = coord(url.searchParams.get('to'), 4);
+      // zu Fuß auf etwa 100 m gerundet: Fußwege sind kurz, ein Start 1 km daneben ergäbe einen anderen Weg
+      const m = url.searchParams.get('mode'), mode = m === 'rad' ? 'rad' : m === 'oepnv' ? 'oepnv' : m === 'fuss' ? 'fuss' : 'auto';
+      const from = coord(url.searchParams.get('from'), mode === 'oepnv' && url.searchParams.get('ab') === 'halt' ? 4 : mode === 'fuss' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode), origin);
     }
@@ -1114,7 +1213,7 @@ if (cli === 'barrierefrei') {
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
-  setTimeout(radTick, 20000); setInterval(radTick, 1800e3);
+  setTimeout(() => radTick().then(fussTick), 20000); setInterval(() => radTick().then(fussTick), 1800e3);
   setTimeout(bfTick, 10000); setInterval(bfTick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }
