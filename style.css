@@ -797,3 +797,17 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .go-card .btn.big{min-height:56px}
 .btn.plan-go{min-height:52px;font-size:18px}
 .plan-card .vf-chip{min-height:40px}
+/* 0.45 Wohin? in Blau (Planen), Womit? bleibt grün (Losfahren) – auf Heute und auf der Seite „Wohin?“ */
+.plan-card,#view-plan{--w-vor-bg:#e6eef8;--w-vor-ink:#173f66;--w-vor-acc:#2563a8;--plan:#1f5c99}
+.plan-card{background:var(--w-vor-bg);border:0;background-image:radial-gradient(circle at 100% 0,#d3e2f3 0 90px,transparent 91px)}
+.plan-card .go-ic{background:var(--plan);color:#fff}
+.plan-card .go-h{color:var(--w-vor-ink)}
+.plan-card .vf-chip{color:var(--w-vor-ink);box-shadow:0 0 0 1.5px #c5d6ea inset}
+.btn.plan-go{background:var(--plan);border-color:var(--plan);color:#fff}
+#view-plan .page-head .display{color:var(--w-vor-ink)}
+#view-plan .page-sub b{color:var(--w-vor-ink)}
+.plan-back{color:var(--plan)}
+#view-plan .vf.world-vor{border-top:4px solid var(--plan)}
+#view-plan .world-vor .vf-chip{box-shadow:0 0 0 1.5px #c5d6ea inset}
+#view-plan .world-vor .vf-chip.on{box-shadow:none}
+.plan-back:focus-visible,.plan-card .vf-chip:focus-visible{outline:3px solid var(--plan);outline-offset:2px}
