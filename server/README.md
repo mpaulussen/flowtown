@@ -90,7 +90,7 @@ Von Hand neu holen: `sudo bash -c 'set -a; . /etc/flowtown.env; node /opt/flowto
 
 Laufen ohne Einrichtung. Der Server lädt nach dem Start die Radwege für ganz Bielefeld bei der Overpass-API (FOSSGIS e.V.) in Kacheln von etwa 3 × 2 km, stuft sie ein (eigener Radweg, ruhige Straße, Radstreifen oder Tempo 30, ohne Radweg) und legt sie gepackt unter `/var/lib/flowtown/radnetz/` ab: rund 90 Kacheln, zusammen etwa 10 bis 25 MB. Er fragt immer nur eine Kachel zur Zeit mit Pause dazwischen, das erste Füllen dauert deshalb 10 bis 30 Minuten; danach erneuert er alte Kacheln alle 14 Tage nachts (2 bis 5 Uhr). Die App holt fertige Kacheln von `/api/radnetz?k=…` in Sekundenbruchteilen. Kacheln außerhalb Bielefelds holt der Server bei Bedarf und behält sie ebenfalls. Im Protokoll: „Radwege: 88 Kacheln geladen“.
 
-Einstellungen (optional): `OVERPASS_URL=` für einen anderen Overpass-Server, `RAD_PREFETCH=0` schaltet das Vorab-Laden ab (dann nur bei Bedarf).
+Ist ein Overpass-Server überlastet (Fehler 429, 502 oder 504), versucht der Server es beim nächsten (Standard: overpass-api.de, dann overpass.kumi.systems) und wiederholt bis zu zweimal mit Pause. An diese Server geht nur das Kartenrechteck, nichts über Nutzer*innen. Einstellungen (optional): `OVERPASS_URL=` mit einer eigenen, durch Kommas getrennten Liste, `RAD_PREFETCH=0` schaltet das Vorab-Laden ab (dann nur bei Bedarf).
 
 ### Weg-Check zu Fuß
 
@@ -108,7 +108,7 @@ Seit 0.37 merkt sich der Fahrplan-Auszug auch, welche Haltestellen laut DELFI st
 
 Ab 0.40 können Nutzer*innen auf der Karte Hindernisse melden (Stufe, hoher Bordstein, schlechter Belag, Aufzug defekt, Gehweg blockiert, Toilette nicht nutzbar, Ampel, „gut zugänglich“), bestätigen oder als erledigt markieren. Nur feste Arten, kein freier Text, gespeichert ohne IP in `/var/lib/flowtown/hinweise.json`. Aufzüge verfallen nach 7 Tagen, blockierte Wege und Toiletten nach 14, Ampeln nach 180, bauliche Hindernisse nach 365 Tagen; zwei „Ist weg“ entfernen einen Hinweis. Höchstens 30 Meldungen je IP und Tag (nur im Arbeitsspeicher). Einen Hinweis von Hand löschen: Eintrag aus der Datei entfernen und den Dienst neu starten.
 
-Die Orte der Altstadt-FAQ (Alter Markt, Obernstraße, Haltestelle Rathaus, Jahnplatz, Hauptbahnhof, Bahnhofstraße, Kunsthalle) bestimmt der Server aus OpenStreetMap, Haltestellen notfalls aus dem Fahrplan (DELFI), und liefert sie mit `/api/barrierefrei` aus. Welche Orte er kennt, zeigt `/api/health` unter `faqOrte`. Zum Prüfen von Hand: `node flowtown-server.mjs faq-orte` (zeigt je Ort die Koordinaten).
+Die Orte der Altstadt-FAQ (Alter Markt, Obernstraße, Haltestelle Rathaus, Jahnplatz, Hauptbahnhof, Bahnhofstraße, Kunsthalle) bestimmt der Server aus OpenStreetMap, Haltestellen notfalls aus dem Fahrplan (DELFI), und liefert sie mit `/api/barrierefrei` aus. Welche Orte er kennt, zeigt `/api/health` unter `faqOrte`. Zum Prüfen und Nachholen von Hand: `node flowtown-server.mjs faq-orte` zeigt je Ort die Koordinaten und speichert sie; danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
 
 ### Pilot: Codes vergeben und Fahrten exportieren
 

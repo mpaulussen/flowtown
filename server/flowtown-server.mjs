@@ -808,7 +808,36 @@ function exportPilot() {
 // ---------- Radwege aus OpenStreetMap: je Kachel eingestuft, gepackt und auf dem Server zwischengespeichert ----------
 // Die App holt fertige Kacheln von hier statt selbst bei Overpass zu fragen: schneller, und das Handy spricht nicht mit Dritten.
 // Kacheln für ganz Bielefeld lädt der Server vorab, nacheinander und mit Pausen, und erneuert sie alle 14 Tage nachts.
-const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+// öffentliche Overpass-Server: der erste zuerst, bei Überlast (429, 502, 504) oder Ausfall der nächste; eigene Liste mit Kommas
+const OVERPASS_URLS = (process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter,https://overpass.kumi.systems/api/interpreter').split(',').map((x) => x.trim()).filter(Boolean);
+const OVERPASS_URL = OVERPASS_URLS[0];
+// ein Durchgang über alle Server
+async function overpassOnce(q, signal) {
+  let lastErr;
+  for (const url of OVERPASS_URLS) {
+    try {
+      const res = await fetch(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, signal });
+      if (!res.ok) throw new Error('Overpass HTTP ' + res.status + ' (' + new URL(url).host + ')');
+      const json = await res.json();
+      if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
+      return json;
+    } catch (e) { if (signal && signal.aborted) throw e; lastErr = e; }
+  }
+  throw lastErr;
+}
+// mit Wiederholung: bis zu drei Durchgänge, dazwischen 20 und 60 Sekunden Pause
+async function overpass(q, ms) {
+  let lastErr;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    if (attempt) await new Promise((r) => setTimeout(r, attempt === 1 ? 20000 : 60000));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), ms || 90000);
+    try { return await overpassOnce(q, ctrl.signal); }
+    catch (e) { lastErr = e.name === 'AbortError' ? new Error('Overpass antwortet nicht') : e; }
+    finally { clearTimeout(timer); }
+  }
+  throw lastErr;
+}
 const RAD_TILE = 0.03;   // wie in der App
 const RAD_DIR = path.join(DATA_DIR, 'radnetz');
 const RAD_AGE = 14 * 864e5;
@@ -869,10 +898,7 @@ function radFetch(k) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 90000);
       try {
-        const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, signal: ctrl.signal });
-        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-        const json = await res.json();
-        if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
+        const json = await overpassOnce(q, ctrl.signal);
         const ways = [];
         for (const w of json.elements || []) {
           if (w.type !== 'way' || !w.geometry || w.geometry.length < 2) continue;
@@ -962,10 +988,7 @@ function fussFetch(k) {
       const ctrl = new AbortController();
       const timer = setTimeout(() => ctrl.abort(), 120000);
       try {
-        const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, signal: ctrl.signal });
-        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-        const json = await res.json();
-        if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
+        const json = await overpassOnce(q, ctrl.signal);
         const ways = [], nodes = [];
         for (const e of json.elements || []) {
           const t = e.tags || {};
@@ -1056,9 +1079,7 @@ async function bfBuilding(slug) {
 async function bfOsm() {
   const bb = `${LAGE_BBOX[1]},${LAGE_BBOX[0]},${LAGE_BBOX[3]},${LAGE_BBOX[2]}`;
   const q = `[out:json][timeout:60];(node[amenity=toilets](${bb});way[amenity=toilets](${bb});node[highway=elevator](${bb}););out center tags;`;
-  const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' } });
-  if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-  const j = await res.json();
+  const j = await overpass(q);
   const wc = [], lift = [];
   for (const e of j.elements || []) {
     const lat = e.lat != null ? e.lat : e.center && e.center.lat, lon = e.lon != null ? e.lon : e.center && e.center.lon;
@@ -1084,9 +1105,7 @@ async function faqOrte() {
   const parts = [];
   for (const qs of Object.values(FAQ_OSM)) qs.forEach((q) => parts.push(`${q}(${bb});${q.startsWith('node') ? 'out;' : 'out tags geom;'}`));
   const q = `[out:json][timeout:60];${parts.join('')}`;
-  const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' } });
-  if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
-  const j = await res.json();
+  const j = await overpass(q);
   // Elemente den Orten über ihren Namen zuordnen
   const out = {};
   const nameOf = (t) => {
@@ -1177,7 +1196,7 @@ async function refreshBf() {
     }
     if (orte.length) out.orte = orte;
   } else out.orte = [];
-  try { Object.assign(out, await bfOsm()); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
+  try { const o = await bfOsm(); if (o.wc.length || o.lift.length) Object.assign(out, o); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
   try { out.faqOrte = await faqOrte(); out.faqOrteV = 2; } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
   bf = out;
   fs.writeFileSync(BF_FILE + '.tmp', JSON.stringify(out));
@@ -1187,6 +1206,12 @@ async function refreshBf() {
 }
 function bfTick() {
   if (bfRun) return;
+  if (bf && bf.t && !(bf.wc && bf.wc.length) && !bf.osmTry || (bf && bf.osmTry && Date.now() - bf.osmTry > 3600e3 && !(bf.wc && bf.wc.length))) {
+    bf.osmTry = Date.now();
+    bfRun = bfOsm().then((o) => { if (!o.wc.length && !o.lift.length) throw new Error('keine Treffer'); Object.assign(bf, o); bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log(`Barrierefrei OSM: ${o.wc.length} Toiletten, ${o.lift.length} Aufzüge`); })
+      .catch((e) => console.error('Barrierefrei OSM:', e.message)).finally(() => { bfRun = null; });
+    return;
+  }
   if (bf && bf.t && (!bf.faqOrte || Object.keys(bf.faqOrte).length < 4 || !bf.faqOrteV)) {
     bfRun = faqOrte().then((o) => { if (Object.keys(o).length < 2) throw new Error('kaum Treffer: ' + Object.keys(o).join(', ')); bf.faqOrte = o; bf.faqOrteV = 2; bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('FAQ-Orte:', Object.keys(o).join(', ')); })
       .catch((e) => console.error('FAQ-Orte:', e.message)).finally(() => { bfRun = null; });
@@ -1313,7 +1338,11 @@ if (cli === 'neue-codes') {
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
 if (cli === 'faq-orte') {
   loadFahrplan();
-  faqOrte().then((o) => { for (const [n, v] of Object.entries(o)) console.log(n.padEnd(20), v.c.join(', '), v.g.length ? `(${v.g.length} Linien)` : ''); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
+  faqOrte().then((o) => {
+    for (const [n, v] of Object.entries(o)) console.log(n.padEnd(20), v.c.join(', '), v.g.length ? `(${v.g.length} Linien)` : '');
+    if (bf && Object.keys(o).length >= 4) { bf.faqOrte = o; bf.faqOrteV = 2; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('Gespeichert. Jetzt neu starten: sudo systemctl restart flowtown'); }
+    process.exit(0);
+  }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
