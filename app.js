@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.33.0';
+  const VERSION = '0.34.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -310,8 +310,8 @@
     return best;
   }
   // ---------- Radwege aus OpenStreetMap ----------
-  // Kacheln von 0,04° (etwa 4,4 × 2,7 km): nur diese Rechtecke gehen an die Overpass-API, nie eine Route oder ein Standort
-  const RAD_TILE = 0.04;
+  // Kacheln von 0,03° (etwa 3,3 × 2 km): nur diese Rechtecke gehen an die Overpass-API, nie eine Route oder ein Standort
+  const RAD_TILE = 0.03;
   const RAD_CLS = {
     gut: { col: '#17784f', label: 'eigener Radweg oder Fahrradstraße', kurz: 'Radweg' },
     ruhig: { col: '#7cc49a', label: 'ruhige Straße oder Weg', kurz: 'ruhig' },
@@ -321,7 +321,7 @@
   const RAD_RANK = { gut: 0, ruhig: 1, mittel: 2, schlecht: 3 };
   const radTiles = {};       // Schlüssel -> { t, ways: [{ c, n, v, g: [[lat, lon], …] }] }
   const radLoading = {};
-  (() => { try { Object.assign(radTiles, JSON.parse(localStorage.getItem('ww.radnetz') || '{}')); } catch (e) { /* ohne Speicher */ } })();
+  (() => { try { localStorage.removeItem('ww.radnetz'); Object.assign(radTiles, JSON.parse(localStorage.getItem('ww.radnetz3') || '{}')); } catch (e) { /* ohne Speicher */ } })();
   function radSave() {
     // höchstens vier Kacheln auf dem Handy behalten, die jüngsten zuerst,
     const keys = Object.keys(radTiles).sort((a, b) => radTiles[b].t - radTiles[a].t);
@@ -331,7 +331,7 @@
       keys.slice(0, n).forEach((k) => { keep[k] = radTiles[k]; });
       const str = JSON.stringify(keep);
       if (str.length > 1.5e6 && n > 0) continue;
-      try { localStorage.setItem('ww.radnetz', str); return; } catch (e) { /* zu groß: eine Kachel weniger */ }
+      try { localStorage.setItem('ww.radnetz3', str); return; } catch (e) { /* zu groß: eine Kachel weniger */ }
     }
   }
   const speedOf = (v) => {
@@ -368,10 +368,12 @@
     const q = `[out:json][timeout:25];(way[highway~"^(cycleway|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|trunk|trunk_link)$"](${bb});way[highway~"^(path|footway|track|pedestrian|service|bridleway)$"][bicycle~"^(designated|yes)$"](${bb});way[bicycle_road=yes](${bb}););out tags geom;`;
     radLoading[key] = (async () => {
       let lastErr;
-      for (const url of OVERPASS) {
+      // ausgelastet (429, 504) oder abgebrochen: kurz warten und bis zu zweimal neu versuchen
+      for (let attempt = 0; attempt < 3; attempt++) for (const url of OVERPASS) {
+        if (attempt) await new Promise((r) => setTimeout(r, attempt * 4000));
         try {
-          const res = await fetchWithTimeout(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 40000);
-          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const res = await fetchWithTimeout(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 45000);
+          if (!res.ok) throw new Error(res.status === 429 ? 'Dienst ausgelastet' : res.status === 504 ? 'Dienst überlastet' : 'HTTP ' + res.status);
           const json = await res.json();
           if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
           const ways = [];
@@ -384,7 +386,7 @@
           radTiles[key] = { t: Date.now(), ways };
           radSave();
           return radTiles[key];
-        } catch (e) { lastErr = e; }
+        } catch (e) { lastErr = e.name === 'AbortError' ? new Error('Zeitüberschreitung') : /Failed to fetch|NetworkError|Load failed/.test(e.message) ? new Error('keine Verbindung') : e; }
       }
       throw lastErr || new Error('Radwege nicht erreichbar');
     })();
@@ -422,7 +424,7 @@
       for (let k = 0; k < n; k++) s.push({ p: [a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n], m: d / n, h: radBearing(a, b) });
     }
     const keys = [...new Set(s.map((x) => radKey(x.p[0], x.p[1])))];
-    if (keys.length > 8) keys.length = 8;   // lange Strecken: nur die ersten Kacheln, der Rest bleibt „unbekannt“
+    if (keys.length > 12) keys.length = 12;   // lange Strecken: nur die ersten Kacheln, der Rest bleibt „unbekannt“
     const tiles = {};
     for (const k of keys) tiles[k] = await radTile(k);
     const m = { gut: 0, ruhig: 0, mittel: 0, schlecht: 0, unbekannt: 0 };
@@ -1528,7 +1530,7 @@
 
   // ---------- Karte ----------
   let map = null, layer = null;
-  let mapMode = 'signals', mapWindow = 'all', mapFitted = false;
+  let mapWindow = 'all', mapFitted = false;
 
   // Flow-Wert je Feld (0–100): Mittel aus Tempo-Anteil, Anteil ohne Stillstand, Ampel-Wartezeit und Bewertungen
   function aggregateGrid(list, win) {
@@ -1601,12 +1603,11 @@
         .addTo(layer);
       pts.push(cellCenter(a.k));
     }
-    $('#map-empty').hidden = cells.length > 0;
-    $('#map-empty').textContent = 'Für dieses Zeitfenster gibt es noch keine Daten.';
+    if (!cells.length) mapStatus('Im Flow-Raster gibt es für dieses Zeitfenster noch keine Daten.');
     renderInsights();
     // Namen für Felder ohne Ampel nachladen
     const wanted = cells.slice(0, 60).map((a) => a.sig || Object.assign({ signal: 'g' + a.k }, cellCenter(a.k)));
-    requestNames(wanted, () => { if (mapMode === 'grid' && !$('#view-map').hidden) renderInsights(); });   // Karte nicht neu zeichnen, damit offene Infofenster bleiben
+    requestNames(wanted, () => { if (mapLayers.grid && !$('#view-map').hidden) renderInsights(); });   // Karte nicht neu zeichnen, damit offene Infofenster bleiben
     return pts.map((p) => [p.lat, p.lon]);
   }
   function waitColor(s) {
@@ -1660,94 +1661,161 @@
     const b = ev.target.closest('button.place, button[data-peek]');
     if (b) { ev.preventDefault(); ev.stopPropagation(); openPeek(b); }
   }, true);
+  // ---------- Karte: Ebenen zum An- und Ausschalten ----------
+  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage'];
+  let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false }, settings.mapLayers || {});
+  const groups = {};
+  const mapStatus = (t) => { $('#map-status').textContent = t || ''; $('#map-status').hidden = !t; };
   function renderMap() {
-    const ag = aggregate(trips);
-    const empty = !ag.per.length;
-    $('#map-empty').hidden = !empty;
-    $('#map-empty').textContent = 'Noch keine Halte aufgezeichnet.';
-    if (typeof L === 'undefined') { $('#map-empty').hidden = false; $('#map-empty').textContent = 'Die Karte braucht eine Internetverbindung.'; return; }
+    if (typeof L === 'undefined') { mapStatus('Die Karte braucht eine Internetverbindung.'); return; }
     if (!map) {
       map = L.map('map', { zoomControl: true });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap-Mitwirkende' }).addTo(map);
       map.setView([52.0211, 8.5325], 13);
+      MAP_LAYERS.forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
       let radT = null;
-      map.on('moveend', () => { if (mapMode === 'rad') { clearTimeout(radT); radT = setTimeout(drawRad, 300); } });
+      map.on('moveend', () => { if (mapLayers.rad) { clearTimeout(radT); radT = setTimeout(drawRad, 300); } });
     }
     setTimeout(() => map.invalidateSize(), 50);
-    if (layer) layer.remove();
-    layer = L.layerGroup().addTo(map);
-    $('#map-legend').textContent = mapMode === 'grid'
-      ? 'Jedes Feld ist etwa 150 × 150 m groß. Grün: es fließt, rot: es hakt. Je kräftiger die Farbe, desto mehr Fahrten stehen dahinter. Tippe auf ein Feld für die Werte.'
-      : 'Je größer der Kreis, desto länger wartest du dort im Schnitt. Farbe: grün kurz, rot lang. Tippe auf einen Kreis für die Werte je Richtung.';
-    $('#map-window').hidden = mapMode !== 'grid';
-    $('#map-insights').hidden = mapMode !== 'grid';
-    if (mapMode === 'rad') {
-      $('#map-empty').hidden = true;
-      const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
-      $('#map-legend').innerHTML = `<span class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</span><span class="rad-src">Laut OpenStreetMap, nicht überall vollständig.</span>`;
-      mapHasData = false;
-      if (map.getZoom() < 14) map.setView(meMarker ? meMarker.getLatLng() : map.getCenter(), 15);
-      drawRad();
-      startMyLocation();
-      return;
+    $$('#map-layers button').forEach((b) => b.setAttribute('aria-pressed', String(!!mapLayers[b.dataset.layer])));
+    mapStatus('');
+    const fit = [];
+    // Meine Ampeln
+    groups.signals.clearLayers();
+    if (mapLayers.signals) {
+      layer = groups.signals;
+      for (const a of aggregate(trips).per) {
+        const n = a.halts + a.passes;
+        const avgAll = a.wait / n / 1000;            // Ø Wartezeit über alle Fahrten, auch ohne Halt
+        const col = waitColor(avgAll);
+        const dirLines = a.dirs.map((d) => {
+          const dn = d.halts + d.passes;
+          return `${esc(dirName(d.h) || 'Richtung unbekannt')}: ${dn}× vorbei, ${fmtPct(d.halts / dn)} mit Halt, Ø ${Math.round(d.wait / dn / 1000)} s`;
+        }).join('<br>');
+        L.circleMarker([a.lat, a.lon], { radius: 8 + Math.sqrt(avgAll) * 5, color: col, weight: 2, fillColor: col, fillOpacity: 0.45 })
+          .bindPopup(`<strong>${esc(labelFor(a.sample))}</strong><br>${n} Fahrten, ${fmtPct(a.halts / n)} mit Halt<br>Ø Wartezeit ${Math.round(avgAll)} s, längste ${fmtS(a.maxWait)}${a.up || a.down ? `<br>Bewertung: ${a.up} gut, ${a.down} schlecht` : ''}${settings.access.on ? `<br>${esc(accText(a.signal))}` : ''}<br><br>${dirLines}`)
+          .addTo(layer);
+        fit.push([a.lat, a.lon]);
+      }
     }
-    if (mapMode === 'grid') {
-      const gp = drawGrid();
-      mapHasData = gp.length > 0;
-      if (gp.length && !mapFitted) { map.fitBounds(gp, { padding: [30, 30], maxZoom: 16 }); mapFitted = true; }
-      startMyLocation();
-      return;
-    }
-    mapFitted = false;
-    const pts = [];
-    for (const a of ag.per) {
-      const n = a.halts + a.passes;
-      const avgAll = a.wait / n / 1000;            // Ø Wartezeit über alle Fahrten, auch ohne Halt
-      const r = 8 + Math.sqrt(avgAll) * 5;
-      const col = waitColor(avgAll);
-      const dirLines = a.dirs.map((d) => {
-        const dn = d.halts + d.passes;
-        return `${esc(dirName(d.h) || 'Richtung unbekannt')}: ${dn}× vorbei, ${fmtPct(d.halts / dn)} mit Halt, Ø ${Math.round(d.wait / dn / 1000)} s`;
-      }).join('<br>');
-      L.circleMarker([a.lat, a.lon], { radius: r, color: col, weight: 2, fillColor: col, fillOpacity: 0.45 })
-        .bindPopup(`<strong>${esc(labelFor(a.sample))}</strong><br>${n} Fahrten, ${fmtPct(a.halts / n)} mit Halt<br>Ø Wartezeit ${Math.round(avgAll)} s, längste ${fmtS(a.maxWait)}${a.up || a.down ? `<br>Bewertung: ${a.up} gut, ${a.down} schlecht` : ''}${settings.access.on ? `<br>${esc(accText(a.signal))}` : ''}<br><br>${dirLines}`)
-        .addTo(layer);
-      pts.push([a.lat, a.lon]);
-    }
-    mapHasData = pts.length > 0;
-    if (pts.length) map.fitBounds(pts, { padding: [40, 40], maxZoom: 16 });
+    // Flow-Raster
+    groups.grid.clearLayers();
+    $('#map-window').hidden = !mapLayers.grid;
+    $('#map-insights').hidden = !mapLayers.grid;
+    if (mapLayers.grid) { layer = groups.grid; fit.push(...drawGrid()); }
+    $('#map-empty').hidden = true;
+    // Radwege, Stadtbahn, Verkehrslage
+    if (mapLayers.rad) drawRad(); else { groups.rad.clearLayers(); radDrawn = ''; }
+    if (mapLayers.tram) drawTram(); else groups.tram.clearLayers();
+    if (mapLayers.lage) drawLage(); else groups.lage.clearLayers();
+    renderMapLegend();
+    mapHasData = fit.length > 0;
+    if (!mapFitted && fit.length && !mapLayers.rad) { map.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }); mapFitted = true; }
     startMyLocation();
   }
-
-  // Karte: Radwege der sichtbaren Kacheln, farbig nach Einstufung
-  let radRenderer = null, radDrawn = '';
+  function renderMapLegend() {
+    const parts = [];
+    if (mapLayers.signals) parts.push('<p><b>Meine Ampeln:</b> je größer der Kreis, desto länger wartest du dort. Grün kurz, rot lang.</p>');
+    if (mapLayers.grid) parts.push('<p><b>Flow-Raster:</b> Felder von etwa 150 × 150 m. Grün: es fließt, rot: es hakt.</p>');
+    if (mapLayers.rad) {
+      const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
+      parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
+    }
+    if (mapLayers.tram) parts.push('<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>');
+    if (mapLayers.lage) parts.push('<p><b>Baustellen und Stau:</b> rot Stau, Sperrung oder Unfall, gelb Baustelle oder zäh.</p>');
+    $('#map-legend').innerHTML = parts.join('') || '<p class="muted">Schalte oben eine Ebene ein.</p>';
+  }
+  // Radwege der sichtbaren Kacheln, eine nach der anderen (der Dienst erlaubt nur zwei Anfragen gleichzeitig)
+  let radRenderer = null, radDrawn = '', radRun = 0;
   async function drawRad() {
-    if (!map || mapMode !== 'rad') return;
-    const z = map.getZoom(), b = map.getBounds();
-    const msg = $('#map-loc-msg');
-    if (z < 14) { layer.clearLayers(); radDrawn = ''; msg.textContent = 'Zum Anzeigen der Radwege näher heranzoomen.'; return; }
+    if (!map || !mapLayers.rad) return;
+    const g = groups.rad, b = map.getBounds();
+    if (map.getZoom() < 14) { g.clearLayers(); radDrawn = ''; mapStatus('Für die Radwege näher heranzoomen.'); return; }
     const keys = [];
     for (let a = Math.floor(b.getSouth() / RAD_TILE); a <= Math.floor(b.getNorth() / RAD_TILE); a++)
       for (let o = Math.floor(b.getWest() / RAD_TILE); o <= Math.floor(b.getEast() / RAD_TILE); o++) keys.push(a + '_' + o);
-    if (keys.length > 4) { msg.textContent = 'Zum Anzeigen der Radwege näher heranzoomen.'; return; }
+    if (keys.length > 6) { mapStatus('Für die Radwege näher heranzoomen.'); return; }
     const sig = keys.join('|');
     if (sig === radDrawn) return;
-    msg.textContent = keys.some((k) => !radTiles[k]) ? 'Radwege werden geladen …' : '';
-    let tiles;
-    try { tiles = await Promise.all(keys.map(radTile)); }
-    catch (e) { msg.textContent = 'Die Radwege konnten gerade nicht geladen werden. Bitte später noch einmal versuchen.'; return; }
-    if (mapMode !== 'rad') return;
-    msg.textContent = '';
-    layer.clearLayers();
-    radRenderer = radRenderer || L.canvas({ padding: 0.3 });
-    const order = ['ruhig', 'mittel', 'schlecht', 'gut'];   // Radwege obenauf
-    for (const c of order) for (const t of tiles) for (const w of t.ways) {
-      if (w.c !== c) continue;
-      L.polyline(w.g, { renderer: radRenderer, color: RAD_CLS[c].col, weight: c === 'ruhig' ? 3 : 5, opacity: 0.9 })
-        .bindPopup(`<strong>${esc(w.n || 'Weg ohne Namen')}</strong><br>${esc(RAD_CLS[c].label)}${w.v ? `<br>Tempo ${w.v}` : ''}`).addTo(layer);
-    }
     radDrawn = sig;
+    const run = ++radRun;
+    g.clearLayers();
+    radRenderer = radRenderer || L.canvas({ padding: 0.3 });
+    let failed = 0, why = '';
+    for (let i = 0; i < keys.length; i++) {
+      const fresh = radTiles[keys[i]] && Date.now() - radTiles[keys[i]].t < 30 * 864e5;
+      if (!fresh) mapStatus(keys.length > 1 ? `Radwege werden geladen … (${i + 1} von ${keys.length})` : 'Radwege werden geladen …');
+      try {
+        const t = await radTile(keys[i]);
+        if (run !== radRun || !mapLayers.rad) return;
+        for (const c of ['ruhig', 'mittel', 'schlecht', 'gut']) for (const w of t.ways) {   // Radwege obenauf
+          if (w.c !== c) continue;
+          L.polyline(w.g, { renderer: radRenderer, color: RAD_CLS[c].col, weight: c === 'ruhig' ? 3 : 5, opacity: 0.9 })
+            .bindPopup(`<strong>${esc(w.n || 'Weg ohne Namen')}</strong><br>${esc(RAD_CLS[c].label)}${w.v ? `<br>Tempo ${w.v}` : ''}`).addTo(g);
+        }
+      } catch (e) { failed++; why = e.message; }
+    }
+    if (run !== radRun) return;
+    if (failed) { radDrawn = ''; mapStatus(`Radwege ${failed === keys.length ? 'nicht' : 'nur teilweise'} geladen (${why}). Verschieb die Karte oder versuch es gleich noch einmal.`); }
+    else mapStatus('');
   }
+  // Stadtbahn aus dem Fahrplan: je Linie die längste Haltefolge, Haltestellen mit den nächsten Abfahrten
+  const TRAM_COL = ['#1d5fa6', '#17784f', '#d64933', '#7a3fa0', '#b8650a', '#0b7a8a'];
+  async function drawTram() {
+    const g = groups.tram;
+    g.clearLayers();
+    if (!fp) {
+      mapStatus('Stadtbahn wird geladen …');
+      fpAt = 0;
+      await loadFahrplan();
+      if (!mapLayers.tram) return;
+      if (!fp) { mapStatus(fpErr || 'Der Fahrplan ist gerade nicht erreichbar.'); return; }
+      mapStatus('');
+    }
+    const best = {};
+    for (const t of fp.trips) {
+      const route = fp.routes[t[0]];
+      if (route[1] !== 0) continue;
+      const name = route[0];
+      if (best[name] == null || fp.patterns[t[1]].length > fp.patterns[best[name]].length) best[name] = t[1];
+    }
+    const names = Object.keys(best).sort((a, b) => a.localeCompare(b, 'de', { numeric: true }));
+    const stopsShown = {};
+    names.forEach((name, i) => {
+      const pts = fp.patterns[best[name]].map((si) => [fp.stops[si][2], fp.stops[si][3]]);
+      L.polyline(pts, { color: TRAM_COL[i % TRAM_COL.length], weight: 5, opacity: 0.85 }).bindTooltip(`Linie ${esc(name)}`, { sticky: true }).addTo(g);
+      for (const si of fp.patterns[best[name]]) {
+        const n = fp.stops[si][1].replace(/^Bielefeld,\s*/, '');
+        if (!stopsShown[n]) stopsShown[n] = [fp.stops[si][2], fp.stops[si][3]];
+      }
+    });
+    for (const n of Object.keys(stopsShown)) {
+      L.circleMarker(stopsShown[n], { radius: 5, color: '#15191e', weight: 2, fillColor: '#ffffff', fillOpacity: 1 })
+        .bindPopup(() => {
+          const deps = departures(n, new Date(), 30).slice(0, 4);
+          return `<strong>${esc(n)}</strong>${deps.length ? '<br>' + deps.map((d) => `${hhmm(d.t % 1440)} · ${esc(d.line)} → ${esc(d.head)}`).join('<br>') : '<br>In der nächsten halben Stunde keine Abfahrt.'}`;
+        }).addTo(g);
+    }
+  }
+  // Baustellen, Sperrungen und Stau in Bielefeld
+  async function drawLage() {
+    const g = groups.lage;
+    g.clearLayers();
+    if (!lageCache || Date.now() - lageAt > 300000) {
+      mapStatus('Verkehrslage wird geladen …');
+      const ok = await loadLage();
+      if (!mapLayers.lage) return;
+      if (!ok && !lageCache) { mapStatus('Die Verkehrslage ist gerade nicht erreichbar.'); return; }
+      mapStatus('');
+    }
+    for (const it of (lageCache && lageCache.items) || []) {
+      if (!it || !Array.isArray(it.pts) || !it.pts.length) continue;
+      const col = LAGE_CLS[it.art] === 'red' ? '#d64933' : '#e0a326';
+      const pop = `<strong>${esc(it.titel || LAGE_LABEL[it.art] || 'Meldung')}</strong><br>${esc(LAGE_LABEL[it.art] || '')}${it.text ? '<br>' + esc(it.text) : ''}`;
+      (it.pts.length > 1 ? L.polyline(it.pts, { color: col, weight: 6, opacity: 0.9 }) : L.circleMarker(it.pts[0], { radius: 8, color: '#ffffff', weight: 2, fillColor: col, fillOpacity: 1 })).bindPopup(pop).addTo(g);
+    }
+  }
+
   // Eigener Standort auf der Karte, nur solange die Karte offen ist
   let meMarker = null, meCircle = null, meWatch = null, meCenterNext = false, mapHasData = false;
   function startMyLocation() {
@@ -1773,12 +1841,13 @@
   function stopMyLocation() {
     if (meWatch != null) { navigator.geolocation.clearWatch(meWatch); meWatch = null; }
   }
-  $('#map-mode').addEventListener('click', (ev) => {
-    const b = ev.target.closest('button[data-mode]');
+  $('#map-layers').addEventListener('click', (ev) => {
+    const b = ev.target.closest('button[data-layer]');
     if (!b) return;
-    mapMode = b.dataset.mode; mapFitted = false; radDrawn = '';
-    $('#map-loc-msg').textContent = '';
-    $$('#map-mode button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+    const k = b.dataset.layer;
+    mapLayers[k] = !mapLayers[k];
+    settings.mapLayers = mapLayers; store.set('settings', settings);
+    if (k === 'rad') { radDrawn = ''; if (mapLayers.rad && map && map.getZoom() < 14) { map.setZoom(15); } }
     renderMap();
   });
   $('#map-window').innerHTML = WINDOWS.map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join('');
@@ -1874,14 +1943,14 @@
     if (name !== 'map') stopMyLocation();
     $$('.view').forEach((v) => { v.hidden = v.id !== 'view-' + name; });
     document.body.dataset.view = name;   // Farbe und Ruhe je Ansicht (Aufzeichnung ohne Menü)
-    const tabFor = { drive: 'start', review: 'stats', map: 'stats' };
+    const tabFor = { drive: 'start', review: 'stats' };
     $$('.tabs button').forEach((b) => {
       const active = b.dataset.view === (tabFor[name] || name);
       if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
     });
     if (name === 'stats') renderStats();
     if (name === 'tips') renderTips();
-    if (name === 'map') renderMap();
+    if (name === 'map') { mapFitted = false; renderMap(); }
     if (name === 'start') { renderToday(); renderLastTrip(); }
     if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
     if (name === 'start') renderA2hs();
