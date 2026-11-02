@@ -92,6 +92,14 @@ Laufen ohne Einrichtung. Der Server lädt nach dem Start die Radwege für ganz B
 
 Einstellungen (optional): `OVERPASS_URL=` für einen anderen Overpass-Server, `RAD_PREFETCH=0` schaltet das Vorab-Laden ab (dann nur bei Bedarf).
 
+### Barrierefrei: Orte von Bethel, Toiletten und Aufzüge
+
+Laufen ohne Einrichtung. Der Server holt beim ersten Start und danach einmal pro Woche nachts die Angaben zu rund 100 Gebäuden von „Bielefeld barrierefrei erleben“ (v. Bodelschwinghsche Stiftungen Bethel, Neue Schmiede; Kriterien motorisch, visuell, auditiv, kognitiv) über deren öffentliche Schnittstelle, ein Gebäude nach dem anderen mit Pausen (etwa 2 bis 3 Minuten), dazu rollstuhlgerechte Toiletten und Aufzüge aus OpenStreetMap. Ergebnis: `/var/lib/flowtown/barrierefrei.json`, rund 90 KB; die App lädt sie gepackt mit etwa 10 KB über `/api/barrierefrei`. Von Hand neu holen: `node flowtown-server.mjs barrierefrei` (mit derselben Umgebung wie beim Fahrplan). Im Protokoll: „Barrierefrei: 102 Orte, … Toiletten, … Aufzüge“.
+
+Die Nutzung der Daten von Bethel bitte mit der Neuen Schmiede abstimmen (kultur@neue-schmiede.de); die App nennt die Quelle und verlinkt jeden Ort auf bielefeld-barrierefrei.de. Abschalten: `BETHEL_DATA=0` (dann nur OpenStreetMap).
+
+Seit 0.37 merkt sich der Fahrplan-Auszug auch, welche Haltestellen laut DELFI stufenlos sind. Damit das gleich wirkt, den Auszug einmal neu holen: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown`.
+
 ### Pilot: Codes vergeben und Fahrten exportieren
 
 Testpersonen bekommen einen Pilot-Code (Form `FT-XXXX-XXXX`). Mit Code und Einwilligung überträgt die App ihre Fahrten pseudonym an den Server (ohne Zielnamen). Der Server speichert nur einen Hash des Codes, nie einen Namen.

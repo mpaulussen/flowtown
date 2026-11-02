@@ -153,8 +153,10 @@
       <label class="check"><input type="checkbox" id="inp-access"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg> Profil barrierefrei</label>
       <select id="inp-access-type" aria-label="Art der Einschränkung" hidden>
         <option value="rollstuhl">Rollstuhl</option>
-        <option value="rollator">Rollator oder langsames Gehen</option>
-        <option value="sehen">Sehbehinderung</option>
+        <option value="rollator">Rollator, Gehhilfe oder langsamer zu Fuß</option>
+        <option value="sehen">Ich sehe schlecht oder bin blind</option>
+        <option value="hoeren">Ich höre schlecht oder bin gehörlos</option>
+        <option value="lernen">Einfache Sprache und klare Wege</option>
         <option value="andere">andere Einschränkung</option>
       </select>
     </div>
@@ -236,7 +238,7 @@
   <section id="view-map" class="view view-map" hidden aria-labelledby="h-map">
     <header class="page-head"><h2 id="h-map" class="display">Karte</h2></header>
     <div class="map-layers" id="map-layers" role="group" aria-label="Ebenen der Karte">
-      <button type="button" class="layer-chip" data-layer="signals" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg>Meine Ampeln</button><button type="button" class="layer-chip" data-layer="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Radwege</button><button type="button" class="layer-chip" data-layer="tram" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</button><button type="button" class="layer-chip" data-layer="lage" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Baustellen</button><button type="button" class="layer-chip" data-layer="stau" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Stau jetzt</button><button type="button" class="layer-chip" data-layer="grid" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg>Flow-Raster</button>
+      <button type="button" class="layer-chip" data-layer="signals" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg>Meine Ampeln</button><button type="button" class="layer-chip" data-layer="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Radwege</button><button type="button" class="layer-chip" data-layer="tram" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</button><button type="button" class="layer-chip" data-layer="lage" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Baustellen</button><button type="button" class="layer-chip" data-layer="stau" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Stau jetzt</button><button type="button" class="layer-chip" data-layer="acc" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei</button><button type="button" class="layer-chip" data-layer="grid" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg>Flow-Raster</button>
     </div>
     <div class="map-wrap">
       <div id="map" role="region" aria-label="Karte von Bielefeld mit den eingeschalteten Ebenen"></div>
@@ -281,6 +283,24 @@
     </details>
     </section>
     <section class="tip-list" aria-labelledby="h-more-fahrt"><h3 class="eyebrow" id="h-more-fahrt">Für deine Fahrten</h3>
+    <details class="tipcard setbox" id="box-access">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg></span><span class="tip-main"><b>Barrierefrei unterwegs</b><span id="access-sub">Kein Profil</span></span></summary>
+      <div class="tip-detail">
+        <label class="field" for="set-access">Ich bin unterwegs mit …
+          <select id="set-access">
+            <option value="aus">kein Profil</option>
+            <option value="rollstuhl">Rollstuhl</option>
+        <option value="rollator">Rollator, Gehhilfe oder langsamer zu Fuß</option>
+        <option value="sehen">Ich sehe schlecht oder bin blind</option>
+        <option value="hoeren">Ich höre schlecht oder bin gehörlos</option>
+        <option value="lernen">Einfache Sprache und klare Wege</option>
+        <option value="andere">andere Einschränkung</option>
+          </select>
+        </label>
+        <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
+        <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
+      </div>
+    </details>
     <details class="tipcard setbox" id="box-price">
       <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-euro"/></svg></span><span class="tip-main"><b>Preise</b><span id="price-sub">Für die Kostenschätzung</span></span></summary>
       <div class="tip-detail">
@@ -343,6 +363,36 @@
           <button id="btn-wipe-yes" class="btn danger" type="button">Ja, alles löschen</button>
           <button id="btn-wipe-no" class="btn" type="button">Abbrechen</button>
         </div>
+      </div>
+    </details>
+    </section>
+    <section class="tip-list" aria-labelledby="h-more-hilfe"><h3 class="eyebrow" id="h-more-hilfe">Hilfe</h3>
+    <details class="tipcard setbox" id="box-krise">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg></span><span class="tip-main"><b>Hilfe in der Krise</b><span>Notruf, Telefonseelsorge, Krisendienst Bielefeld</span></span></summary>
+      <div class="tip-detail">
+        <ul class="hilfe-list">
+          <li><a class="tel" href="tel:112">112</a><span>Notruf: Feuerwehr und Rettungsdienst</span></li>
+          <li><a class="tel" href="tel:110">110</a><span>Polizei</span></li>
+          <li><a class="tel" href="tel:116117">116 117</a><span>Ärztlicher Bereitschaftsdienst</span></li>
+          <li><a class="tel" href="tel:08001110111">0800 111 0 111</a><span>Telefonseelsorge, rund um die Uhr, kostenlos. Auch 0800 111 0 222</span></li>
+          <li><a class="tel" href="tel:05213299285">0521 3 29 92 85</a><span>Krisendienst Bielefeld, täglich 18 bis 7:30 Uhr, am Wochenende und an Feiertagen rund um die Uhr</span></li>
+          <li><a class="tel" href="tel:0521512581">0521 51 25 81</a><span>Sozialpsychiatrischer Dienst der Stadt, Montag bis Freitag 8 bis 15 Uhr</span></li>
+        </ul>
+        <p class="small muted">Stand November 2026. Quellen: Stadt Bielefeld, Universität Bielefeld.</p>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-bahn-hilfe">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg></span><span class="tip-main"><b>Bahnreisen mit Behinderung</b><span>Hilfe beim Umsteigen, Rechte mit Ausweis</span></span></summary>
+      <div class="tip-detail">
+        <p><b>Hilfe beim Ein-, Um- und Aussteigen</b> meldet die Mobilitätsservice-Zentrale der Bahn für dich an: <a class="tel" href="tel:03065212888">030 65 21 28 88</a> (Montag bis Freitag 6 bis 22 Uhr, am Wochenende und an Feiertagen 8 bis 20 Uhr), per E-Mail an msz@deutschebahn.com oder online auf <a href="https://msz-bahn.de" target="_blank" rel="noopener">msz-bahn.de</a>.</p>
+        <p><b>Mit Schwerbehinderten-Ausweis:</b></p>
+        <ul class="hilfe-rechte">
+          <li>Mit Wertmarke fährst du im Nahverkehr kostenlos, also in RE, RB und S-Bahn. Für IC und ICE brauchst du eine Fahrkarte.</li>
+          <li>Merkzeichen B: Deine Begleitperson fährt kostenlos mit. Du kannst bis zu zwei Sitzplätze kostenlos reservieren.</li>
+          <li>Merkzeichen G oder aG: Die Bahn reserviert dir einen Rollstuhl-Platz im Fernverkehr.</li>
+          <li>Merkzeichen 1. Klasse: Mit einer Fahrkarte für die 2. Klasse darfst du in die 1. Klasse.</li>
+        </ul>
+        <p class="small muted">Ob die Aufzüge an einem Bahnhof gehen, zeigt die App „DB Bahnhof live“. Mehr in Leichter Sprache: <a href="https://www.bahn.de/leichte-sprache" target="_blank" rel="noopener">bahn.de/leichte-sprache</a>. Hörbehinderte Fahrgäste: <a href="https://www.bahn.de/hoerbehindert" target="_blank" rel="noopener">bahn.de/hoerbehindert</a>.</p>
       </div>
     </details>
     </section>

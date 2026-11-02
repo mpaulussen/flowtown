@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.36.0';
+  const VERSION = '0.37.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -31,7 +31,7 @@
   const AREA_RADIUS = 5000;       // Umkreis für das Laden der Ampeln
   const TAGS = ['zu lange gewartet', 'Grün zu kurz', 'unübersichtlich', 'Anschluss verpasst', 'alles gut'];
   const ACC_TAGS = ['Grün zu kurz zum Queren', 'kein Tonsignal', 'Taster schlecht erreichbar', 'Bordstein zu hoch'];   // Profil barrierefrei
-  const ACCESS_LABEL = { rollstuhl: 'Rollstuhl', rollator: 'Rollator oder langsames Gehen', sehen: 'Sehbehinderung', andere: 'andere Einschränkung' };
+  const ACCESS_LABEL = { rollstuhl: 'Rollstuhl', rollator: 'Rollator, Gehhilfe oder langsamer zu Fuß', sehen: 'Sehbehinderung', hoeren: 'Hörbehinderung', lernen: 'Einfache Sprache und klare Wege', andere: 'andere Einschränkung' };
   // Zu Fuß ist man einen Weg gegangen, nicht gefahren
   const DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   const WORDS = {
@@ -1675,9 +1675,67 @@
     const b = ev.target.closest('button.place, button[data-peek]');
     if (b) { ev.preventDefault(); ev.stopPropagation(); openPeek(b); }
   }, true);
+  // ---------- Barrierefrei: Orte von „Bielefeld barrierefrei erleben“ (Bethel), Toiletten und Aufzüge ----------
+  let bfData = store.get('bf', null), bfAt = bfData ? bfData.geladen || 0 : 0, bfLoading = null;
+  async function loadBf() {
+    if (bfData && Date.now() - bfAt < 6 * 3600e3) return bfData;
+    if (!apiBase()) return bfData;
+    if (bfLoading) return bfLoading;
+    bfLoading = api('/api/barrierefrei', { cache: 'no-cache' }).then((d) => {
+      bfData = Object.assign(d, { geladen: Date.now() }); bfAt = Date.now();
+      store.set('bf', bfData);
+      return bfData;
+    }).catch((e) => { if (!bfData) throw e; return bfData; }).finally(() => { bfLoading = null; });
+    return bfLoading;
+  }
+  // je Profil die Merkmale, auf die es ankommt; „a|b“: eines von beiden reicht
+  const BF_CHECK = {
+    rollstuhl: [['stufenlos', 'stufenloser Zugang'], ['tuer', 'Türen mindestens 90 cm breit'], ['aufzug|ebene', 'Aufzug oder alles auf einer Ebene'], ['wc', 'Behinderten-WC'], ['rollplatz', 'Plätze für Rollstuhl und Begleitung']],
+    rollator: [['stufenlos', 'stufenloser Zugang'], ['aufzug|ebene', 'Aufzug oder alles auf einer Ebene'], ['handlauf', 'Handläufe an Treppen'], ['abstell', 'Platz für Rollator und Gehhilfe'], ['wc', 'Behinderten-WC']],
+    sehen: [['stufenkante', 'Stufenkanten kontrastreich'], ['leit|taktil', 'Leitsystem oder Tastplan'], ['licht', 'helle Beleuchtung'], ['hund', 'Assistenzhund willkommen'], ['fuehrung|audio', 'Führung oder Audioguide']],
+    hoeren: [['hoeranlage|fm', 'Höranlage'], ['dolmetsch', 'Gebärden- oder Schriftdolmetschen anfragbar'], ['gebaerde', 'Infos in Gebärdensprache']],
+    lernen: [['leicht', 'Infos in Leichter Sprache'], ['pikto', 'Bilder und Piktogramme'], ['bildleit', 'Leitsystem mit Farben oder Bildern'], ['hilfe', 'Hilfe vor Ort']],
+    andere: [['stufenlos', 'stufenloser Zugang'], ['wc', 'Behinderten-WC'], ['hilfe', 'Hilfe vor Ort'], ['ruhe', 'Ruheraum']]
+  };
+  const bfProfile = () => (settings.access.on && BF_CHECK[settings.access.type] ? settings.access.type : 'andere');
+  const bfGet = (o, key) => { const v = key.split('|').map((k) => o.f[k]); return v.includes(1) ? 1 : v.includes(0) ? 0 : null; };
+  function bfScore(o) {
+    const list = BF_CHECK[bfProfile()].map(([k]) => bfGet(o, k)).filter((v) => v != null);
+    return list.length ? list.reduce((a, b) => a + b, 0) / list.length : null;
+  }
+  const bfColor = (sc) => (sc == null ? '#9aa1a7' : sc >= 0.75 ? '#17784f' : sc >= 0.4 ? '#e0a326' : '#d64933');
+  const bfMark = (v) => (v === 1 ? '<b class="bf-ja">✓</b>' : v === 0 ? '<b class="bf-nein">✗</b>' : '<b class="bf-offen">?</b>');
+  function bfPopup(o) {
+    const rows = BF_CHECK[bfProfile()].map(([k, label]) => `<li>${bfMark(bfGet(o, k))} ${esc(label)}</li>`).join('');
+    const notes = [o.hinweis && o.hinweis.eingang ? 'Eingang: ' + o.hinweis.eingang : '', o.hinweis && o.hinweis.service ? (o.hinweis.service.length > 110 ? o.hinweis.service.slice(0, 108) + ' …' : o.hinweis.service) : ''].filter(Boolean).map((t) => `<p class="bf-note">${esc(t)}</p>`).join('');
+    return `<strong>${esc(o.n)}</strong>${o.adr ? `<br><span class="muted">${esc(o.adr)}</span>` : ''}<ul class="bf-list">${rows}</ul>${notes}`
+      + `${o.tel ? `<p><a href="tel:${esc(o.tel.replace(/[^\d+]/g, ''))}">${esc(o.tel)}</a></p>` : ''}<p><a href="${esc(o.u)}" target="_blank" rel="noopener">Alle Angaben bei „Bielefeld barrierefrei erleben“</a></p>`;
+  }
+  // Ort von Bethel in der Nähe eines Ziels (bis 80 m) oder per Kennung
+  function bfNear(z) {
+    if (!bfData || !bfData.orte) return null;
+    if (z.bf) { const o = bfData.orte.find((x) => x.id === z.bf); if (o) return o; }
+    let best = null, bd = 80;
+    for (const o of bfData.orte) { const d = dist({ lat: o.lat, lon: o.lon }, z); if (d < bd) { bd = d; best = o; } }
+    return best;
+  }
+  function bfZielBlock(z) {
+    const o = bfNear(z);
+    if (!o) return '';
+    const items = BF_CHECK[bfProfile()].map(([k, label]) => `<span>${bfMark(bfGet(o, k))} ${esc(label)}</span>`).join('');
+    return `<div class="bf-ziel"><h4 class="vf-h4">${ic('access')} Barrierefrei vor Ort${settings.access.on ? '' : ' (allgemein)'}</h4><p class="bf-items small">${items}</p><p class="small muted"><a href="${esc(o.u)}" target="_blank" rel="noopener">Alle Angaben</a> · Bielefeld barrierefrei erleben</p></div>`;
+  }
+  // Orte von Bethel bei der Zielsuche zuerst
+  function bfSearch(q) {
+    if (!bfData || !bfData.orte || q.length < 3) return [];
+    const n = (x) => x.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/ß/g, 'ss');
+    const words = n(q).split(/\s+/).filter(Boolean);
+    return bfData.orte.filter((o) => words.every((w) => n(o.n + ' ' + o.adr).includes(w))).slice(0, 4)
+      .map((o) => ({ name: o.n, sub: (o.adr ? o.adr + ' · ' : '') + 'barrierefrei geprüft', lat: o.lat, lon: o.lon, bf: o.id }));
+  }
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
-  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau'];
-  let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false }, settings.mapLayers || {});
+  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc'];
+  let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: false }, settings.mapLayers || {});
   const groups = {};
   const mapStatus = (t) => { $('#map-status').textContent = t || ''; $('#map-status').hidden = !t; };
   function renderMap() {
@@ -1723,6 +1781,7 @@
     if (mapLayers.rad) drawRad(); else { groups.rad.clearLayers(); radDrawn = ''; }
     if (mapLayers.tram) drawTram(); else groups.tram.clearLayers();
     if (mapLayers.lage || mapLayers.stau) drawLage(); else { groups.lage.clearLayers(); groups.stau.clearLayers(); }
+    if (mapLayers.acc) drawAcc(); else groups.acc.clearLayers();
     renderMapLegend();
     mapHasData = fit.length > 0;
     if (!mapFitted && fit.length && !mapLayers.rad) { map.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }); mapFitted = true; }
@@ -1736,6 +1795,7 @@
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>`);
     }
+    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
     if (mapLayers.tram) parts.push('<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>');
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
@@ -1789,6 +1849,29 @@
     if (failed) { radDrawn = ''; mapStatus(`Radwege ${failed === keys.length ? 'nicht' : 'nur teilweise'} geladen (${why}). Verschieb die Karte oder versuch es gleich noch einmal.`); }
     else mapStatus('');
   }
+  // Barrierefrei: Orte von Bethel nach Profil gefärbt, dazu rollstuhlgerechte Toiletten und Aufzüge aus OpenStreetMap
+  async function drawAcc() {
+    const g = groups.acc;
+    g.clearLayers();
+    if (!bfData || Date.now() - bfAt > 6 * 3600e3) {
+      if (!bfData) mapStatus('Barrierefreie Orte werden geladen …');
+      try { await loadBf(); } catch (e) { if (!bfData) { mapStatus(/404|geladen/.test(e.message) ? 'Der Server lädt die Angaben gerade, bitte in ein paar Minuten noch einmal.' : 'Die Angaben zur Barrierefreiheit sind gerade nicht erreichbar.'); return; } }
+      if (!mapLayers.acc) return;
+      mapStatus('');
+      g.clearLayers();
+    }
+    for (const w of bfData.wc || []) {
+      if (w[2] !== 1) continue;
+      L.circleMarker([w[0], w[1]], { radius: 6, color: '#ffffff', weight: 2, fillColor: '#1d5fa6', fillOpacity: 1 })
+        .bindPopup(`<strong>Rollstuhlgerechte Toilette</strong>${w[3] ? '<br>' + esc(w[3]) : ''}${w[4] ? '<br>mit Euroschlüssel' : ''}<br><span class="muted">Laut OpenStreetMap</span>`).addTo(g);
+    }
+    for (const a of bfData.lift || []) {
+      L.circleMarker([a[0], a[1]], { radius: 4, color: '#1d5fa6', weight: 2, fillColor: '#ffffff', fillOpacity: 1 }).bindPopup('<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
+    }
+    for (const o of bfData.orte || []) {
+      L.circleMarker([o.lat, o.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: bfColor(bfScore(o)), fillOpacity: 1 }).bindPopup(() => bfPopup(o), { maxWidth: 280, maxHeight: 260, autoPanPaddingTopLeft: [10, 60] }).addTo(g);
+    }
+  }
   // Stadtbahn aus dem Fahrplan: je Linie die längste Haltefolge, Haltestellen mit den nächsten Abfahrten
   const TRAM_COL = ['#1d5fa6', '#17784f', '#d64933', '#7a3fa0', '#b8650a', '#0b7a8a'];
   async function drawTram() {
@@ -1816,14 +1899,16 @@
       L.polyline(pts, { color: TRAM_COL[i % TRAM_COL.length], weight: 5, opacity: 0.85 }).bindTooltip(`Linie ${esc(name)}`, { sticky: true }).addTo(g);
       for (const si of fp.patterns[best[name]]) {
         const n = fp.stops[si][1].replace(/^Bielefeld,\s*/, '');
-        if (!stopsShown[n]) stopsShown[n] = [fp.stops[si][2], fp.stops[si][3]];
+        if (!stopsShown[n]) stopsShown[n] = [fp.stops[si][2], fp.stops[si][3], fp.stops[si][4]];
+        else if (fp.stops[si][4] && !stopsShown[n][2]) stopsShown[n][2] = fp.stops[si][4];
       }
     });
     for (const n of Object.keys(stopsShown)) {
-      L.circleMarker(stopsShown[n], { radius: 5, color: '#15191e', weight: 2, fillColor: '#ffffff', fillOpacity: 1 })
+      L.circleMarker(stopsShown[n].slice(0, 2), { radius: 5, color: '#15191e', weight: 2, fillColor: '#ffffff', fillOpacity: 1 })
         .bindPopup(() => {
           const deps = departures(n, new Date(), 30).slice(0, 4);
-          return `<strong>${esc(n)}</strong>${deps.length ? '<br>' + deps.map((d) => `${hhmm(d.t % 1440)} · ${esc(d.line)} → ${esc(d.head)}`).join('<br>') : '<br>In der nächsten halben Stunde keine Abfahrt.'}`;
+          const w = stopsShown[n][2];
+          return `<strong>${esc(n)}</strong>${w === 1 ? '<br>' + bfMark(1) + ' stufenlos zugänglich' : w === 2 ? '<br>' + bfMark(0) + ' nicht stufenlos' : ''}${deps.length ? '<br>' + deps.map((d) => `${hhmm(d.t % 1440)} · ${esc(d.line)} → ${esc(d.head)}`).join('<br>') : '<br>In der nächsten halben Stunde keine Abfahrt.'}`;
         }).addTo(g);
     }
   }
@@ -2606,7 +2691,7 @@
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
     const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
-    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : ''}${alt}${rows}${bars}${zielHistory(z)}${go}${all}${foot}</div>`;
+    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : ''}${alt}${rows}${bars}${bfZielBlock(z)}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
   // Bus und Bahn: die nächsten Verbindungen, ab Standort oder einer eigenen Haltestelle
   const ART_LABEL = { zug: 'rail', bahn: 'tram', bus: '' };
@@ -2633,7 +2718,7 @@
     const list = rows ? `<ul class="con-list">${rows}</ul>` : '<p class="small">Gerade keine Verbindung gefunden.</p>';
     const go = cons.length ? `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>` : '';
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · © HERE${d.quellen && d.quellen.length ? ', ' + esc(d.quellen.join(', ')) : ''}${r.fallback ? ' · Start: Bielefeld' : ''} · <button type="button" class="btn-link" data-vf="again">neu suchen</button></p>`;
-    return `<div class="vf-panel">${head}${abs}${list}${zielHistory(z)}${go}${foot}</div>`;
+    return `<div class="vf-panel">${head}${abs}${list}${bfZielBlock(z)}${zielHistory(z)}${go}${foot}</div>`;
   }
   // Aus deinen Fahrten: frühere Fahrten zu diesem Ziel, nur angekommene
   // Rad: wie gut ist die Strecke für das Rad, und wo fehlt ein Radweg
@@ -2682,6 +2767,7 @@
     if (!force && old && old.data && Date.now() - old.t < 300000) return;
     zielRes[key] = { loading: true };
     renderVorfahrt();
+    if (!bfData) loadBf().then(() => { if (zielOpen === z.id && bfNear(z)) renderVorfahrt(); }).catch(() => {});
     // Bus und Bahn ab einer eigenen Haltestelle: deren Lage ist öffentlich und darf genau mit
     const halt = group === 'oepnv' && zielAb && fp && fp.byName[zielAb] ? fp.stops[fp.byName[zielAb][0]] : null;
     const pos = halt ? [halt[2], halt[3]] : await myStart();
@@ -2703,12 +2789,15 @@
   }
   async function searchOrt(q) {
     ortQ = q; ortMsg = 'Suche …'; ortList = null; renderVorfahrt();
-    try { ortList = (await api('/api/ort?q=' + encodeURIComponent(q))).orte || []; ortMsg = ''; }
-    catch (e) { ortMsg = e.message; }
+    await loadBf().catch(() => null);
+    const local = bfSearch(q);
+    try { ortList = local.concat(((await api('/api/ort?q=' + encodeURIComponent(q))).orte || []).filter((o) => !local.some((l) => dist(l, o) < 80))); ortMsg = ''; }
+    catch (e) { ortList = local.length ? local : null; ortMsg = local.length ? '' : e.message; }
     renderVorfahrt();
   }
   function addZiel(o) {
     const z = { id: 'z' + Date.now().toString(36), name: o.name.split(',')[0].slice(0, 30), sub: o.sub || '', lat: o.lat, lon: o.lon };
+    if (o.bf) z.bf = o.bf;
     settings.ziele.push(z); store.set('settings', settings);
     ortList = null; ortQ = ''; ortMsg = '';
     zielOpen = z.id; zielEdit = false;
@@ -3355,12 +3444,30 @@
     applyModeWords(settings.mode);
     renderToday();
   }));
+  // Profil barrierefrei: auf „Heute“ und in den Einstellungen, beide zeigen immer dasselbe
+  function applyAccessUI() {
+    const a = settings.access;
+    $('#inp-access').checked = !!a.on;
+    $('#inp-access-type').value = a.type;
+    $('#inp-access-type').hidden = !a.on;
+    $('#set-access').value = a.on ? a.type : 'aus';
+    $('#set-big').checked = !!settings.big;
+    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '');
+    document.documentElement.classList.toggle('gross', !!settings.big);
+  }
   const saveAccess = () => {
     settings.access = { on: $('#inp-access').checked, type: $('#inp-access-type').value };
     store.set('settings', settings);
-    $('#inp-access-type').hidden = !settings.access.on;
+    applyAccessUI();
     renderToday();
   };
+  $('#set-access').addEventListener('change', (ev) => {
+    const v = ev.target.value;
+    settings.access = { on: v !== 'aus', type: v === 'aus' ? settings.access.type : v };
+    store.set('settings', settings);
+    applyAccessUI();
+  });
+  $('#set-big').addEventListener('change', (ev) => { settings.big = ev.target.checked; store.set('settings', settings); applyAccessUI(); });
   $('#inp-access').addEventListener('change', saveAccess);
   $('#inp-access-type').addEventListener('change', saveAccess);
   $('#btn-end').addEventListener('click', () => { $('#btn-end').hidden = true; $('#btn-end-confirm').hidden = false; $('#btn-end-cancel').hidden = false; $('#btn-end-confirm').focus(); });
@@ -3411,9 +3518,8 @@
   // ---------- Start ----------
   setModeUI(settings.mode);
   applyModeWords(settings.mode);
-  $('#inp-access').checked = !!settings.access.on;
-  $('#inp-access-type').value = settings.access.type;
-  $('#inp-access-type').hidden = !settings.access.on;
+  if (!ACCESS_LABEL[settings.access.type]) settings.access.type = 'rollator';
+  applyAccessUI();
   $('#inp-server').value = settings.server.url || '';
   $('#inp-wir').checked = !!settings.server.wir;
   $('#inp-ki').checked = !!settings.server.ki;

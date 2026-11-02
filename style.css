@@ -678,3 +678,22 @@ details.setbox>summary::after{color:var(--muted);flex:none;margin-right:6px}
 #view-map .page-head .display{color:var(--w-map-ink)}
 #view-map .page-head .display{font-size:34px}
 .map-legend .rad-key i.dash{background:repeating-linear-gradient(90deg,#b3261e 0 8px,transparent 8px 13px)}
+/* 0.37 Barrierefrei: Orte, Hilfe, große Schrift */
+.bf-list{list-style:none;margin:6px 0;padding:0;display:flex;flex-direction:column;gap:3px}
+.bf-ja{color:#17784f}.bf-nein{color:#b3261e}.bf-offen{color:#5b636b}
+.bf-note{margin:4px 0;font-size:13px;color:#3d454c}
+.bf-ziel{display:flex;flex-direction:column;gap:6px;margin:6px 0}
+.bf-ziel .vf-h4{display:flex;align-items:center;gap:8px;margin:0}
+.bf-ziel .vf-h4 .ic{width:20px;height:20px}
+.bf-items{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0}
+.hilfe-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.hilfe-list li{display:flex;flex-direction:column;gap:2px}
+a.tel{font-family:var(--display);font-size:22px;font-weight:800;color:var(--accent);text-decoration:none;letter-spacing:-.01em}
+a.tel:focus-visible{outline:3px solid var(--accent);outline-offset:2px;border-radius:6px}
+.hilfe-list span{font-size:15px;color:var(--muted)}
+.hilfe-rechte{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:6px;font-size:15px}
+#box-bahn-hilfe p{margin:0}
+/* große Schrift: alles außer der Karte etwas größer, die Karte bleibt bedienbar */
+html.gross .view:not(.view-map),html.gross .view-map .page-head,html.gross .map-layers,html.gross .map-legend{zoom:1.18}
+html.gross .tabs button{font-size:14px}
+html.gross .tabs .ic{width:28px;height:28px}

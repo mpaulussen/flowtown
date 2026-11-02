@@ -923,6 +923,101 @@ async function radTick() {
   if (n) console.log(`Radwege: ${n} Kacheln geladen`);
 }
 
+// ---------- Barrierefrei: Orte aus „Bielefeld barrierefrei erleben“ (Bethel) und Toiletten/Aufzüge aus OpenStreetMap ----------
+// Der Server holt einmal pro Woche die Angaben zu rund 100 Gebäuden (nacheinander, mit Pausen) und die rollstuhlgerechten
+// Toiletten und Aufzüge in Bielefeld; die App lädt alles als eine kleine Datei. Abschalten: BETHEL_DATA=0.
+const BF_URL = process.env.BETHEL_URL || 'https://bielefeld-barrierefrei.de';
+const BF_ON = process.env.BETHEL_DATA !== '0';
+const BF_FILE = path.join(DATA_DIR, 'barrierefrei.json');
+// Felder des Erhebungsbogens -> kurze Schlüssel (Ja = 1, Nein = 0, sonst null)
+const BF_FIELDS = {
+  oepnv: 11, eingang: 13, hilfe: 17, anmelden: 19, ruhe: 20, ebene: 22, schilder: 55, service: 25,
+  stufenlos: 27, tuer: 29, abstell: 35, rollplatz: 37, aufzug: 39, aufzuggross: 41, tische: 51, boden: 53,
+  wc: 57, wcanfahr: 63, wcgriffe: 65, handlauf: 75,
+  stufenkante: 77, hindernis: 80, hund: 82, licht: 83, leit: 89, braille: 91, taktil: 93, fuehrung: 95, audio: 97,
+  hoeranlage: 103, fm: 104, gebaerde: 107, dolmetsch: 109,
+  leicht: 114, pikto: 116, bildleit: 118
+};
+let bf = null, bfRun = null;
+try { bf = JSON.parse(fs.readFileSync(BF_FILE, 'utf8')); } catch (e) { bf = null; }
+const bfVal = (v) => (/^ja$/i.test(String(v || '').trim()) ? 1 : /^nein$/i.test(String(v || '').trim()) ? 0 : null);
+const bfText = (v) => clip(String(v || '').replace(/<br\s*\/?>/gi, ', ').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&'), 160);
+async function bfBuilding(slug) {
+  const j = await getJson(`${BF_URL}/wp-json/be/composed-data?type=gebaeude&name=${encodeURIComponent(slug)}&src=flowtown`, 20000);
+  const g = (j.gebaeude || [])[0];
+  if (!g || !g.location || !isFinite(Number(g.location.lat))) return null;
+  const all = {};
+  for (const group of Object.values(g.data || {})) for (const f of Object.values(group || {})) all[f.id] = f;
+  const f = {};
+  for (const [k, n] of Object.entries(BF_FIELDS)) { const x = all['gebaeude_field' + n]; if (x) f[k] = bfVal(x.value); }
+  const ann = (n) => { const x = all['gebaeude_field' + n]; return x && x.annotation && x.annotation.value ? bfText(x.annotation.value) : ''; };
+  const val = (k) => (all[k] ? bfText(all[k].value) : '');
+  const park = parseInt(val('gebaeude_field15'), 10);
+  return {
+    id: g.id, n: clip(g.title, 80), u: g.url, lat: r5(Number(g.location.lat)), lon: r5(Number(g.location.lng)),
+    adr: clip([g.location.street_name, g.location.street_number && g.location.street_number !== '0' ? g.location.street_number : ''].filter(Boolean).join(' '), 60),
+    tel: val('gebaeude_field10').replace(/^Tel\.?\s*/i, ''), park: isFinite(park) ? park : null,
+    f, hinweis: { eingang: ann(13), oepnv: ann(11), service: ann(25) }, stand: g.last_modified && g.last_modified.formatted || ''
+  };
+}
+async function bfOsm() {
+  const bb = `${LAGE_BBOX[1]},${LAGE_BBOX[0]},${LAGE_BBOX[3]},${LAGE_BBOX[2]}`;
+  const q = `[out:json][timeout:60];(node[amenity=toilets](${bb});way[amenity=toilets](${bb});node[highway=elevator](${bb}););out center tags;`;
+  const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' } });
+  if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
+  const j = await res.json();
+  const wc = [], lift = [];
+  for (const e of j.elements || []) {
+    const lat = e.lat != null ? e.lat : e.center && e.center.lat, lon = e.lon != null ? e.lon : e.center && e.center.lon;
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const t = e.tags || {};
+    if (t.amenity === 'toilets') wc.push([r5(lat), r5(lon), t.wheelchair === 'yes' ? 1 : t.wheelchair === 'limited' ? 2 : t.wheelchair === 'no' ? 0 : null, clip(t.name || t.operator || '', 40), /centralkey|eurokey/i.test(t.centralkey || t['toilets:centralkey'] || '') || t.centralkey === 'eurokey' ? 1 : 0]);
+    else lift.push([r5(lat), r5(lon), t.wheelchair === 'no' ? 0 : 1]);
+  }
+  return { wc, lift };
+}
+async function refreshBf() {
+  const out = { t: Date.now(), quelle: 'Bielefeld barrierefrei erleben (v. Bodelschwinghsche Stiftungen Bethel)', link: BF_URL, orte: bf ? bf.orte : [], wc: bf ? bf.wc : [], lift: bf ? bf.lift : [] };
+  if (BF_ON) {
+    const slugs = [];
+    for (let page = 1; page <= 5; page++) {
+      const list = await getJson(`${BF_URL}/wp-json/wp/v2/gebaeude?per_page=100&page=${page}&_fields=slug`, 20000).catch(() => []);
+      if (!Array.isArray(list) || !list.length) break;
+      slugs.push(...list.map((x) => x.slug));
+      if (list.length < 100) break;
+    }
+    const orte = [];
+    for (const s of slugs) {
+      try { const o = await bfBuilding(s); if (o) orte.push(o); } catch (e) { /* einzelnes Gebäude überspringen */ }
+      await new Promise((r) => setTimeout(r, 1200));
+    }
+    if (orte.length) out.orte = orte;
+  } else out.orte = [];
+  try { Object.assign(out, await bfOsm()); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
+  bf = out;
+  fs.writeFileSync(BF_FILE + '.tmp', JSON.stringify(out));
+  fs.renameSync(BF_FILE + '.tmp', BF_FILE);
+  bf.gz = null;
+  return `${out.orte.length} Orte, ${out.wc.length} Toiletten, ${out.lift.length} Aufzüge`;
+}
+function bfTick() {
+  if (bfRun) return;
+  const age = bf ? Date.now() - bf.t : Infinity, h = new Date().getHours();
+  if (age === Infinity || (age > 7 * 864e5 && h >= 2 && h < 5)) {
+    bfRun = refreshBf().then((m) => console.log('Barrierefrei:', m)).catch((e) => console.error('Barrierefrei:', e.message)).finally(() => { bfRun = null; });
+  }
+}
+function sendBf(req, res, origin) {
+  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: bf.wc, lift: bf.lift }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: bf.etag, Vary: 'Origin, Accept-Encoding' };
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
+  if (req.headers['if-none-match'] === bf.etag) { res.writeHead(304, h); return res.end(); }
+  const gz = /\bgzip\b/.test(req.headers['accept-encoding'] || '');
+  if (gz) h['Content-Encoding'] = 'gzip';
+  res.writeHead(200, h);
+  res.end(gz ? bf.gz : bf.raw);
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -945,7 +1040,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, barrierefrei: !!(bf && bf.t), fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -958,6 +1053,10 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
+    if (req.method === 'GET' && p === '/api/barrierefrei') {
+      if (!bf || !bf.t) { bfTick(); return send(res, 404, { fehler: 'Die Angaben zur Barrierefreiheit werden gerade geladen.' }, origin); }
+      return sendBf(req, res, origin);
+    }
     if (req.method === 'GET' && p === '/api/radnetz') {
       const k = url.searchParams.get('k') || '';
       if (!radKeyOk(k)) return send(res, 400, { fehler: 'Unbekannte Kachel.' }, origin);
@@ -1006,13 +1105,16 @@ if (cli === 'neue-codes') {
   process.exit(0);
 }
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
-if (cli === 'fahrplan') {
+if (cli === 'barrierefrei') {
+  refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
   setTimeout(radTick, 20000); setInterval(radTick, 1800e3);
+  setTimeout(bfTick, 10000); setInterval(bfTick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

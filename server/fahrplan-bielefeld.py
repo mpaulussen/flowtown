@@ -55,6 +55,9 @@ def main():
             continue
         if inside(REGION, lat, lon):
             region[s['stop_id']] = [s['stop_id'], s['stop_name'], round(lat, 5), round(lon, 5)]
+            # Barrierefreiheit laut DELFI: 1 stufenlos zugänglich, 2 nicht stufenlos (0 oder leer: unbekannt)
+            if s.get('wheelchair_boarding') in ('1', '2'):
+                region[s['stop_id']].append(int(s['wheelchair_boarding']))
             if inside(CITY, lat, lon):
                 in_city.add(s['stop_id'])
 
