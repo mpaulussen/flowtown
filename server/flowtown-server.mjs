@@ -275,11 +275,14 @@ async function autobahn() {
   return [].concat(...done.filter((r) => r.status === 'fulfilled').map((r) => r.value)).filter((it) => it.pts.some((q) => inBox(q[0], q[1], 0.05)));
 }
 
-const lage = { here: { items: [], t: 0 }, autobahn: { items: [], t: 0 } };
+const lage = { here: { items: [], t: 0 }, autobahn: { items: [], t: 0 }, stadt: { items: [], t: 0 } };
+let stadtBauAt = 0;
 let lageAt = 0, lageRun = null;
 async function refreshLage() {
   const jobs = { autobahn: autobahn() };
   if (HERE_KEY) jobs.here = Promise.all([hereFlow(), hereIncidents()]).then(([a, b]) => a.concat(b));
+  // Baustellen der Stadt ändern sich selten: höchstens alle 30 Minuten
+  if (STADT_ON && Date.now() - stadtBauAt > 30 * 60000) { stadtBauAt = Date.now(); jobs.stadt = stadtBaustellen(); }
   for (const [name, job] of Object.entries(jobs)) {
     try { lage[name] = { items: await job, t: Date.now() }; }
     catch (e) { console.error(new Date().toISOString(), 'Lage', name, e.message); }   // ältere Werte bleiben bis 30 Minuten stehen
@@ -291,10 +294,10 @@ async function readLage() {
     lageRun = lageRun || refreshLage().finally(() => { lageRun = null; });
     await lageRun;
   }
-  const fresh = Object.entries(lage).filter(([, v]) => v.t && Date.now() - v.t < 30 * 60000);
+  const fresh = Object.entries(lage).filter(([k, v]) => v.t && Date.now() - v.t < (k === 'stadt' ? 6 * 3600e3 : 30 * 60000));
   return {
-    t: Math.min(...fresh.map(([, v]) => v.t).concat(lageAt || Date.now())),
-    quellen: fresh.map(([k, v]) => ({ name: k === 'here' ? 'HERE' : 'Autobahn GmbH', t: v.t })),
+    t: Math.min(...fresh.filter(([k]) => k !== 'stadt').map(([, v]) => v.t).concat(lageAt || Date.now())),
+    quellen: fresh.map(([k, v]) => ({ name: k === 'here' ? 'HERE' : k === 'stadt' ? 'Stadt Bielefeld' : 'Autobahn GmbH', t: v.t })),
     items: [].concat(...fresh.map(([, v]) => v.items))
   };
 }
@@ -616,6 +619,14 @@ async function checkZiel(from, to, mode) {
       items.push(Object.assign({}, it, { at, titel: fromAb ? abTitle(it.titel) : null }));
     }
   });
+  // 3. Baustellen der Stadt: Punkte bis 40 m neben der Strecke; zu Fuß mit dem Hinweis für den Fußverkehr
+  for (const it of lage.stadt.items || []) {
+    if (seen.has(it.id) || !keep(it.art)) continue;
+    const at = onRoute(it, P, 40);
+    if (at == null) continue;
+    seen.add(it.id);
+    items.push(Object.assign({}, it, { at, text: mode === 'fuss' && it.fuss ? it.fuss : it.text }));
+  }
   // Straße und Ort benennen: „A2 bei Kamen“, sortiert nach Schwere und Lage
   const RANK = { sperrung: 0, stau: 1, unfall: 2, zaeh: 3, baustelle: 4, warnung: 5 };
   items.sort((a, b) => RANK[a.art] - RANK[b.art] || a.at - b.at);
@@ -1609,6 +1620,74 @@ function bppTick() {
   bppRun = refreshBpp().then((m) => console.log('Behindertenparkplätze:', m)).catch((e) => console.error('Behindertenparkplätze:', e.message)).finally(() => { bppRun = null; });
 }
 
+// ---------- Geodienst der Stadt Bielefeld (Open Data, CC BY 4.0): Ampelanlagen und aktuelle Baustellen ----------
+// CSV-Ausgabe des WFS, Geometrie als WKT in UTM 32. Zeilen als Objekte mit pos [Breite, Länge].
+const STADT_WFS = process.env.STADT_WFS || 'https://www.bielefeld01.de/md/WFS';
+const STADT_ON = process.env.STADT_DATEN !== '0';
+async function stadtCsv(dienst, typ) {
+  const url = `${STADT_WFS}/${dienst}/01?SERVICE=WFS&VERSION=1.1.0&REQUEST=GetFeature&TYPENAME=${typ}&SRSNAME=EPSG:25832&OUTPUTFORMAT=text/csv`;
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 60000);
+  try {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, signal: ctrl.signal });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = (await res.text()).replace(/��/g, 'ß').replace(/�/g, '');   // ß kommt beim Dienst manchmal kaputt an
+    const rows = parseCsv(text);
+    if (rows.length < 2) return [];
+    const head = rows[0].map((h) => h.trim().toLowerCase());
+    const w = head.indexOf('wkt');
+    return rows.slice(1).map((r) => {
+      const o = Object.fromEntries(head.map((h, i) => [h, String(r[i] == null ? '' : r[i]).trim()]));
+      const m = /(-?[\d.]+)\s+(-?[\d.]+)/.exec(r[w] || '');
+      o.pos = m ? anyToWgs(Number(m[1]), Number(m[2])) : null;
+      return o;
+    }).filter((o) => o.pos && inBox(o.pos[0], o.pos[1], 0.1));
+  } finally { clearTimeout(timer); }
+}
+// Ampelanlagen: [Breite, Länge, Nummer, Art, Betreiber, Kennung] – Art kp Kreuzung, fu Fußgängerampel, sw Stadtwerke (Stadtbahn), so Sonstige; Betreiber s Stadt, l Straßen.NRW
+const LSA_FILE = path.join(DATA_DIR, 'ampelanlagen.json');
+let lsa = null, lsaRun = null, lsaTry = 0;
+try { lsa = JSON.parse(fs.readFileSync(LSA_FILE, 'utf8')); } catch (e) { lsa = null; }
+async function refreshLsa() {
+  const rows = await stadtCsv('ampelanlagen', 'lichtsignalanlagen_p');
+  if (rows.length < 50) throw new Error(`nur ${rows.length} Anlagen geliefert`);
+  const list = rows.map((o) => {
+    const l = o.layer || '';
+    const art = /^FU/i.test(l) ? 'fu' : /^KP/i.test(l) ? 'kp' : /Stadtwerke/i.test(l) ? 'sw' : /Eurobahn/i.test(l) ? 'eb' : 'so';
+    return [r5(o.pos[0]), r5(o.pos[1]), clip(o.bez, 12), art, /LBS|ABA/i.test(l) ? 'l' : 's', Number(o.gid) || 0];
+  });
+  lsa = { t: Date.now(), quelle: 'Stadt Bielefeld, Amt für Verkehr (Open Data, CC BY 4.0)', anlagen: list };
+  fs.writeFileSync(LSA_FILE + '.tmp', JSON.stringify(lsa));
+  fs.renameSync(LSA_FILE + '.tmp', LSA_FILE);
+  const n = (a) => list.filter((x) => x[3] === a).length;
+  return `${list.length} Ampelanlagen: ${n('kp')} an Kreuzungen, ${n('fu')} Fußgängerampeln, ${n('sw')} Stadtwerke, ${list.length - n('kp') - n('fu') - n('sw')} sonstige`;
+}
+function lsaTick() {
+  if (!STADT_ON || lsaRun || (lsa && Date.now() - lsa.t < 7 * 864e5) || Date.now() - lsaTry < 3600e3) return;
+  lsaTry = Date.now();
+  lsaRun = refreshLsa().then((m) => console.log('Ampelanlagen:', m)).catch((e) => console.error('Ampelanlagen:', e.message)).finally(() => { lsaRun = null; });
+}
+// aktuelle Baustellen der Stadt als Meldungen wie bei HERE und der Autobahn GmbH (Punkte, keine Linien)
+const stadtDate = (s, end) => { const m = /^(\d{4})\/(\d{2})\/(\d{2})/.exec(s || ''); return m ? new Date(+m[1], m[2] - 1, +m[3], end ? 23 : 0, end ? 59 : 0).getTime() : null; };
+async function stadtBaustellen() {
+  const rows = await stadtCsv('verkehrsmeldungen', 'aktuelle_baustellen_p');
+  const now = Date.now(), out = [];
+  for (const o of rows) {
+    const von = stadtDate(o.beginn), bis = stadtDate(o.ende, true);
+    if ((bis && bis < now) || (von && von > now + 864e5)) continue;   // vorbei oder erst ab übermorgen
+    const was = o.art_arb || o.sparte || 'Bauarbeiten', fuss = o.art_vb && !/^(VRAO|siehe)\b/i.test(o.art_vb) ? o.art_vb : '';
+    const voll = /vollsperrung|voll gesperrt|gesperrt/i.test(was + ' ' + fuss) && !/gehweg|fuß|rad/i.test(was);
+    const nr = [o.hnr_1, o.sbod_hnr_2].filter(Boolean).join('–');
+    out.push({
+      id: 'sb' + o.gid, quelle: 'Stadt Bielefeld', art: voll ? 'sperrung' : 'baustelle',
+      titel: clip(`${o.strasse}${nr ? ' ' + nr : ''}`, 60) || 'Baustelle',
+      richtungText: clip(o.qstr_1 && o.qstr_2 ? `zwischen ${o.qstr_1} und ${o.qstr_2}` : o.qstr_1 ? `Höhe ${o.qstr_1}` : o.ortsteil || '', 60),
+      text: clip(was, 160), fuss: clip(fuss, 260), bis: bis ? o.ende.slice(0, 10).replace(/\//g, '-') + 'T23:59:00' : null, von: von ? o.beginn.slice(0, 10).replace(/\//g, '-') + 'T00:00:00' : null,   // Ortszeit, ohne Zeitzone
+      pts: [[r5(o.pos[0]), r5(o.pos[1])]], stadt: true
+    });
+  }
+  return out;
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -1631,7 +1710,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1645,6 +1724,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
     if (req.method === 'GET' && p === '/api/faq') return faqData && faqData.eintraege ? sendFaq(req, res, origin) : send(res, 404, { fehler: 'Keine Redaktions-Tabelle eingerichtet.' }, origin);
+    if (req.method === 'GET' && p === '/api/ampelanlagen') { if (!lsa) lsaTick(); return send(res, 200, lsa || { t: 0, anlagen: [] }, origin); }
     if (req.method === 'GET' && p === '/api/behindertenparkplaetze') { if (!bpp) bppTick(); return send(res, 200, bpp ? { t: bpp.t, quellen: bpp.quellen, plaetze: bpp.plaetze } : { t: 0, quellen: [], plaetze: [] }, origin); }
     if (req.method === 'GET' && p === '/api/haltestellen') return send(res, 200, hst ? { t: hst.t, liste: hst.liste.map(({ name, k, hbs, hinweis, quelle, lat, lon }) => ({ name, k, hbs, hinweis, quelle, lat, lon })) } : { t: 0, liste: [] }, origin);
     if (req.method === 'GET' && p === '/api/hinweise') return send(res, 200, { t: Date.now(), hinweise: hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).map(({ id, lat, lon, art, t, t2, ok, weg, geprueft }) => ({ id, lat, lon, art, t, t2, ok, weg, geprueft })) }, origin);
@@ -1784,12 +1864,24 @@ if (cli === 'faq') {
     console.log('Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
     process.exit(0);
   }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli === 'stadtdaten') {
+  // Ampelanlagen und Baustellen der Stadt holen und zeigen
+  (async () => {
+    try { console.log(await refreshLsa()); } catch (e) { console.error('Ampelanlagen:', e.message); }
+    try {
+      const b = await stadtBaustellen();
+      console.log(`${b.length} aktuelle Baustellen der Stadt, davon ${b.filter((x) => x.art === 'sperrung').length} Sperrungen, ${b.filter((x) => x.fuss).length} mit Hinweis für den Fuß- und Radverkehr`);
+      for (const x of b.slice(0, 5)) console.log('  ', x.titel.padEnd(30), x.richtungText.padEnd(40), x.bis ? 'bis ' + x.bis.slice(0, 10) : '');
+    } catch (e) { console.error('Baustellen:', e.message); }
+    console.log('Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
+    process.exit(0);
+  })();
 } else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, parkplaetze, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, parkplaetze, stadtdaten, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
@@ -1798,5 +1890,6 @@ if (cli === 'faq') {
   setTimeout(faqTick, 5000); setInterval(faqTick, 3600e3);
   setTimeout(hstTick, 3000); setInterval(hstTick, 3600e3);
   setTimeout(bppTick, 40000); setInterval(bppTick, 3600e3);
+  setTimeout(lsaTick, 15000); setInterval(lsaTick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

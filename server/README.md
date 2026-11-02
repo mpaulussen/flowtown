@@ -153,6 +153,14 @@ Der Server erkennt Koordinaten in Breite/Länge oder UTM 32 (Rechtswert/Hochwert
 
 Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs parkplaetze'` zeigt die Zahl je Quelle, welche Spalten erkannt wurden, und die ersten Einträge. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
 
+### Daten der Stadt Bielefeld: Ampelanlagen und Baustellen
+
+Der Server holt von selbst aus dem Geodienst der Stadt (Open Data Bielefeld, CC BY 4.0, www.bielefeld01.de):
+- **Ampelanlagen** (wöchentlich): 322 Anlagen mit Nummer und Art (Kreuzung, Fußgängerampel, Stadtwerke, Straßen.NRW). Die App ergänzt damit OpenStreetMap: Wo im geladenen Gebiet bis 80 m keine Ampel aus OpenStreetMap steht, nimmt sie die Anlage der Stadt dazu. Jede Kreuzung bekommt die Nummer der nächsten Anlage (bis 50 m); „Meine Ampeln“ auf der Karte zeigt sie, z. B. „Anlage Nr. 723 · Fußgängerampel“. Bestehende Kreuzungen behalten ihre Kennung, ältere Fahrten passen weiter.
+- **Aktuelle Baustellen** (alle 30 Minuten, zusammen mit der Verkehrslage): Straße, Abschnitt, Art der Arbeiten, Zeitraum und, wo vorhanden, der Hinweis für den Fuß- und Radverkehr. Sie erscheinen auf der Karte unter „Baustellen“, in „Dein Weg heute“ und bei „Wohin?“ entlang der Strecke; zu Fuß mit dem Hinweis für den Fußverkehr.
+
+Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs stadtdaten'`. Abschalten mit `STADT_DATEN=0` in `/etc/flowtown.env`. `/api/health` zeigt `ampelanlagen` und `baustellenStadt`.
+
 ### Gemeldete Hindernisse prüfen
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.

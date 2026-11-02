@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.48.0';
+  const VERSION = '0.49.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -150,6 +150,33 @@
     const vals = part.map((p) => (signalCache.acc[p.id] || {})[k]).filter(Boolean);
     return vals.some((v) => v !== 'no') ? 'yes' : vals.length ? 'no' : null;
   }
+  // Ampelanlagen der Stadt Bielefeld (Open Data): ergänzen OpenStreetMap nur, wo dort im geladenen Gebiet keine Ampel steht;
+  // sonst bekommt die Kreuzung die Nummer der Anlage. Kennungen 9e12 + gid, damit bestehende Kreuzungen ihre Kennung behalten.
+  let lsaData = store.get('lsa', null);
+  const LSA_ART = { kp: 'Ampel an einer Kreuzung', fu: 'Fußgängerampel', sw: 'Ampel der Stadtwerke (Stadtbahn)', eb: 'Ampel am Bahnübergang', so: 'Ampelanlage' };
+  function signalNodes() {
+    const nodes = signalCache.nodes;
+    if (!lsaData || !Array.isArray(lsaData.anlagen) || !signalCache.areas.length) return nodes;
+    const out = Object.assign({}, nodes), pts = Object.values(nodes);
+    for (const a of lsaData.anlagen) {
+      if (!a[5]) continue;
+      const p = { lat: a[0], lon: a[1] };
+      if (!areaCovers(p) || pts.some((q) => Math.abs(q[0] - a[0]) < 0.001 && dist(p, { lat: q[0], lon: q[1] }) <= 80)) continue;
+      out[String(9e12 + a[5])] = [a[0], a[1]];
+    }
+    return out;
+  }
+  async function loadLsa() {
+    if (!apiBase() || (lsaData && Date.now() - lsaData.geladen < 7 * 864e5)) return false;
+    try {
+      const d = await api('/api/ampelanlagen');
+      if (!d.anlagen || d.anlagen.length < 50) return false;
+      lsaData = { geladen: Date.now(), anlagen: d.anlagen };
+      store.set('lsa', lsaData);
+      return true;
+    } catch (e) { return false; }
+  }
+  const lsaLabel = (c) => (c && c.lsa ? `Anlage Nr. ${c.lsa[2]} · ${LSA_ART[c.lsa[3]] || 'Ampelanlage'}${c.lsa[4] === 'l' ? ' (Straßen.NRW)' : ''}` : '');
   function buildClusters(nodes) {
     const pts = Object.keys(nodes).sort((a, b) => Number(a) - Number(b)).map((id) => ({ id, lat: nodes[id][0], lon: nodes[id][1] }));
     // Verketten: Standorte bis CLUSTER_M zueinander gehören zusammen, auch über mehrere Ecken einer großen Kreuzung
@@ -178,6 +205,12 @@
         list.push(c); clusterById[c.id] = c;
         for (const p of part) alias['c' + p.id] = c.id;
       }
+    }
+    // Nummer der Anlage der Stadt: die nächste bis 50 m
+    if (lsaData && lsaData.anlagen) for (const c of list) {
+      let best = null, bd = 50;
+      for (const a of lsaData.anlagen) { if (Math.abs(a[0] - c.lat) > 0.0006) continue; const d = dist(c, { lat: a[0], lon: a[1] }); if (d < bd) { bd = d; best = a; } }
+      if (best) c.lsa = best;
     }
     return list;
   }
@@ -234,7 +267,7 @@
         // ohne eine einzige Ampel (auf dem Land möglich, oder ein Aussetzer): nur einen Tag als geladen merken
         signalCache.areas.push({ lat: round5(p.lat), lon: round5(p.lon), r: AREA_RADIUS, fetched: Date.now() - (n ? 0 : 29 * 864e5) });
         store.set('signals', signalCache);
-        clusters = buildClusters(signalCache.nodes);
+        clusters = buildClusters(signalNodes());
         updateSignalsInfo();
         // Halte aus Fahrten, bei denen die Ampeldaten fehlten, jetzt zuordnen
         if (!rec && trips.map((t) => tidyTrip(t)).some(Boolean)) saveTrips();
@@ -246,7 +279,7 @@
   function updateSignalsInfo() {
     const n = clusters.length;
     $('#signals-info').textContent = n
-      ? `${n} Ampel-Kreuzungen gespeichert (${Object.keys(signalCache.nodes).length} Signalstandorte, ${Object.keys(signalCache.stops).length} Haltestellenpunkte, ${signalCache.areas.length} Gebiet${signalCache.areas.length === 1 ? '' : 'e'}).`
+      ? `${n} Ampel-Kreuzungen gespeichert (${Object.keys(signalCache.nodes).length} Signalstandorte, ${Object.keys(signalCache.stops).length} Haltestellenpunkte, ${signalCache.areas.length} Gebiet${signalCache.areas.length === 1 ? '' : 'e'})${lsaData ? `. ${clusters.filter((c) => c.lsa).length} mit Nummer der Anlage, ${clusters.filter((c) => c.id.startsWith('c9')).length} nur aus der Ampelliste der Stadt` : ''}.`
       : 'Noch keine Ampeln geladen. Das passiert automatisch beim ersten Fahrtstart.';
   }
 
@@ -2170,7 +2203,7 @@
           return `${esc(dirName(d.h) || 'Richtung unbekannt')}: ${dn}× vorbei, ${fmtPct(d.halts / dn)} mit Halt, Ø ${Math.round(d.wait / dn / 1000)} s`;
         }).join('<br>');
         L.circleMarker([a.lat, a.lon], { radius: 8 + Math.sqrt(avgAll) * 5, color: col, weight: 2, fillColor: col, fillOpacity: 0.45 })
-          .bindPopup(`<strong>${esc(labelFor(a.sample))}</strong><br>${n} Fahrten, ${fmtPct(a.halts / n)} mit Halt<br>Ø Wartezeit ${Math.round(avgAll)} s, längste ${fmtS(a.maxWait)}${a.up || a.down ? `<br>Bewertung: ${a.up} gut, ${a.down} schlecht` : ''}${settings.access.on ? `<br>${esc(accText(a.signal))}` : ''}<br><br>${dirLines}`)
+          .bindPopup(`<strong>${esc(labelFor(a.sample))}</strong>${lsaLabel(clusterById[a.signal]) ? `<br><span class="muted">${esc(lsaLabel(clusterById[a.signal]))}</span>` : ''}<br>${n} Fahrten, ${fmtPct(a.halts / n)} mit Halt<br>Ø Wartezeit ${Math.round(avgAll)} s, längste ${fmtS(a.maxWait)}${a.up || a.down ? `<br>Bewertung: ${a.up} gut, ${a.down} schlecht` : ''}${settings.access.on ? `<br>${esc(accText(a.signal))}` : ''}<br><br>${dirLines}`)
           .addTo(layer);
         fit.push([a.lat, a.lon]);
       }
@@ -2383,7 +2416,7 @@
       const style = bau
         ? (it.art === 'sperrung' ? { color: '#b3261e', weight: 6, opacity: 0.95, dashArray: '10 7' } : { color: '#e0a326', weight: 7, opacity: 0.95 })
         : { color: red ? '#d64933' : '#e0a326', weight: red ? 5 : 4, opacity: 0.75 };
-      const pop = `<strong>${esc(it.titel || LAGE_LABEL[it.art] || 'Meldung')}</strong><br>${esc(it.fluss && it.art !== 'sperrung' ? (it.art === 'stau' ? 'Stau' : 'stockender Verkehr') : LAGE_LABEL[it.art] || '')}${it.bis ? esc(fmtBis(it.bis)) : ''}${it.text ? '<br>' + esc(it.text) : ''}<br><span style="color:#5b636b">${esc(it.quelle || '')}</span>`;
+      const pop = `<strong>${esc(it.titel || LAGE_LABEL[it.art] || 'Meldung')}</strong><br>${esc(it.fluss && it.art !== 'sperrung' ? (it.art === 'stau' ? 'Stau' : 'stockender Verkehr') : LAGE_LABEL[it.art] || '')}${it.bis ? esc(fmtBis(it.bis)) : ''}${it.richtungText ? '<br>' + esc(it.richtungText) : ''}${it.text ? '<br>' + esc(it.text) : ''}${it.fuss ? '<br><b>Zu Fuß und mit dem Rad:</b> ' + esc(it.fuss) : ''}<br><span style="color:#5b636b">${esc(it.quelle || '')}</span>`;
       const lines = (it.segs || [it.pts]).filter((l) => l.length);
       for (const l of lines) {
         (l.length > 1 ? L.polyline(l, style) : L.circleMarker(l[0], { radius: 8, color: '#ffffff', weight: 2, fillColor: style.color, fillOpacity: 1 })).bindPopup(pop).addTo(g);
@@ -4170,7 +4203,14 @@
   $('#inp-power').value = fmtNum(settings.powerPrice, 2);
   $('#app-version').textContent = VERSION;
   $('.proto').textContent = 'Prototyp ' + VERSION;   // zeigt zugleich: das Programm läuft
-  clusters = buildClusters(signalCache.nodes);
+  clusters = buildClusters(signalNodes());
+  // Ampelanlagen der Stadt einmal pro Woche holen; nicht während einer Aufzeichnung neu einteilen
+  loadLsa().then((ok) => {
+    if (!ok || rec) return;
+    clusters = buildClusters(signalNodes());
+    updateSignalsInfo();
+    if (trips.map((t) => tidyTrip(t)).some(Boolean)) saveTrips();
+  });
   // Ältere Fahrten nachbearbeiten: Rückstau-Halte (ab 0.6.0), Kreuzungen und Warten vor der Abfahrt (ab 0.9.0)
   if (trips.map((t) => tidyTrip(t)).some(Boolean)) saveTrips();
   updateSignalsInfo();
