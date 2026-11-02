@@ -642,3 +642,16 @@ details.setbox>summary::after{color:var(--muted);flex:none;margin-right:6px}
 #view-more .world-link{margin-top:6px}
 #btn-intro-back{align-self:center}
 .claim-sub{max-width:none;text-wrap:pretty}
+/* 0.33 Radwege: Legende der Karte */
+#map-legend .rad-keys{display:grid;grid-template-columns:1fr 1fr;gap:4px 12px}
+#map-legend .rad-key{display:inline-flex;align-items:center;gap:6px}
+#map-legend .rad-key i{width:22px;height:5px;border-radius:3px;display:inline-block}
+#map-legend .rad-src{display:block;margin-top:4px}
+.rad-rate{display:flex;flex-direction:column;gap:8px;margin:4px 0 8px}
+.rad-rate .vf-h4{margin:0}
+.rad-bar{display:flex;height:12px;border-radius:999px;overflow:hidden;background:var(--line)}
+.rad-bar i{display:block;height:100%}
+.rad-legend{display:flex;flex-wrap:wrap;gap:4px 14px;margin:0}
+.rad-legend span{display:inline-flex;align-items:center;gap:6px}
+.rad-legend i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.rad-ohne{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}

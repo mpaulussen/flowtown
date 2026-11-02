@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.32.2';
+  const VERSION = '0.33.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -308,6 +308,158 @@
       best = Math.min(best, Math.hypot(ax + u * dx, ay + u * dy));
     }
     return best;
+  }
+  // ---------- Radwege aus OpenStreetMap ----------
+  // Kacheln von 0,04° (etwa 4,4 × 2,7 km): nur diese Rechtecke gehen an die Overpass-API, nie eine Route oder ein Standort
+  const RAD_TILE = 0.04;
+  const RAD_CLS = {
+    gut: { col: '#17784f', label: 'eigener Radweg oder Fahrradstraße', kurz: 'Radweg' },
+    ruhig: { col: '#7cc49a', label: 'ruhige Straße oder Weg', kurz: 'ruhig' },
+    mittel: { col: '#e0a326', label: 'Radstreifen oder Tempo 30', kurz: 'Radstreifen' },
+    schlecht: { col: '#d64933', label: 'Hauptstraße ohne Radweg', kurz: 'ohne Radweg' }
+  };
+  const RAD_RANK = { gut: 0, ruhig: 1, mittel: 2, schlecht: 3 };
+  const radTiles = {};       // Schlüssel -> { t, ways: [{ c, n, v, g: [[lat, lon], …] }] }
+  const radLoading = {};
+  (() => { try { Object.assign(radTiles, JSON.parse(localStorage.getItem('ww.radnetz') || '{}')); } catch (e) { /* ohne Speicher */ } })();
+  function radSave() {
+    // höchstens vier Kacheln auf dem Handy behalten, die jüngsten zuerst,
+    const keys = Object.keys(radTiles).sort((a, b) => radTiles[b].t - radTiles[a].t);
+    // höchstens 1,5 MB, damit für die Fahrten immer Platz bleibt
+    for (let n = Math.min(4, keys.length); n >= 0; n--) {
+      const keep = {};
+      keys.slice(0, n).forEach((k) => { keep[k] = radTiles[k]; });
+      const str = JSON.stringify(keep);
+      if (str.length > 1.5e6 && n > 0) continue;
+      try { localStorage.setItem('ww.radnetz', str); return; } catch (e) { /* zu groß: eine Kachel weniger */ }
+    }
+  }
+  const speedOf = (v) => {
+    if (!v) return null;
+    if (/zone:?30|^30/.test(v)) return 30;
+    if (/urban/.test(v)) return 50;
+    if (/rural/.test(v)) return 100;
+    if (v === 'walk') return 7;
+    const n = parseInt(v, 10);
+    return isFinite(n) ? n : null;
+  };
+  // Einstufung einer Straße oder eines Wegs für das Rad
+  function radClass(t) {
+    const hw = t.highway;
+    if (t.bicycle === 'no' || t.bicycle === 'dismount') return null;
+    if (t.bicycle_road === 'yes' || t.cyclestreet === 'yes' || hw === 'cycleway') return 'gut';
+    if (/^(path|footway|track|pedestrian|service|bridleway)$/.test(hw)) return t.bicycle === 'designated' ? 'gut' : 'ruhig';
+    const cw = ['cycleway', 'cycleway:both', 'cycleway:right', 'cycleway:left'].map((k) => t[k] || '').join(' ');
+    if (/track|separate/.test(cw) || t.bicycle === 'use_sidepath' || /designated/.test(t['sidewalk:both:bicycle'] || t['sidewalk:right:bicycle'] || t['sidewalk:left:bicycle'] || '')) return 'gut';
+    const v = speedOf(t.maxspeed);
+    if (/lane|share_busway|opposite_lane/.test(cw)) return 'mittel';
+    if (hw === 'living_street') return 'ruhig';
+    if (/^(residential|unclassified)$/.test(hw)) return v != null && v >= 50 ? (hw === 'residential' ? 'mittel' : 'schlecht') : 'ruhig';
+    // Hauptstraßen: ohne Radweg nur bei Tempo 30 noch gelb
+    return v != null && v <= 30 ? 'mittel' : 'schlecht';
+  }
+  const radKey = (lat, lon) => `${Math.floor(lat / RAD_TILE)}_${Math.floor(lon / RAD_TILE)}`;
+  async function radTile(key) {
+    const old = radTiles[key];
+    if (old && Date.now() - old.t < 30 * 864e5) return old;
+    if (radLoading[key]) return radLoading[key];
+    const [a, b] = key.split('_').map(Number);
+    const bb = `${(a * RAD_TILE).toFixed(3)},${(b * RAD_TILE).toFixed(3)},${((a + 1) * RAD_TILE).toFixed(3)},${((b + 1) * RAD_TILE).toFixed(3)}`;
+    const q = `[out:json][timeout:25];(way[highway~"^(cycleway|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|trunk|trunk_link)$"](${bb});way[highway~"^(path|footway|track|pedestrian|service|bridleway)$"][bicycle~"^(designated|yes)$"](${bb});way[bicycle_road=yes](${bb}););out tags geom;`;
+    radLoading[key] = (async () => {
+      let lastErr;
+      for (const url of OVERPASS) {
+        try {
+          const res = await fetchWithTimeout(url, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } }, 40000);
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          const json = await res.json();
+          if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
+          const ways = [];
+          for (const w of json.elements || []) {
+            if (w.type !== 'way' || !w.geometry || w.geometry.length < 2) continue;
+            const c = radClass(w.tags || {});
+            if (!c) continue;
+            ways.push({ c, n: (w.tags.name || w.tags.ref || '').slice(0, 60), v: speedOf(w.tags.maxspeed), g: w.geometry.map((p) => [round5(p.lat), round5(p.lon)]) });
+          }
+          radTiles[key] = { t: Date.now(), ways };
+          radSave();
+          return radTiles[key];
+        } catch (e) { lastErr = e; }
+      }
+      throw lastErr || new Error('Radwege nicht erreichbar');
+    })();
+    try { return await radLoading[key]; } finally { delete radLoading[key]; }
+  }
+  // Raster für die Suche nach dem nächsten Weg: Zellen von etwa 100 m
+  const RAD_CELL = 0.001;
+  function radIndex(tile) {
+    if (tile.idx) return tile.idx;
+    const idx = new Map();
+    tile.ways.forEach((w, wi) => {
+      for (let i = 0; i < w.g.length - 1; i++) {
+        const [la1, lo1] = w.g[i], [la2, lo2] = w.g[i + 1];
+        for (let la = Math.floor(Math.min(la1, la2) / RAD_CELL); la <= Math.floor(Math.max(la1, la2) / RAD_CELL); la++)
+          for (let lo = Math.floor(Math.min(lo1, lo2) / RAD_CELL); lo <= Math.floor(Math.max(lo1, lo2) / RAD_CELL); lo++) {
+            const k = la + '_' + lo;
+            if (!idx.has(k)) idx.set(k, []);
+            idx.get(k).push(wi, i);
+          }
+      }
+    });
+    Object.defineProperty(tile, 'idx', { value: idx, enumerable: false });
+    return idx;
+  }
+  const radBearing = (a, b) => (Math.atan2((b[1] - a[1]) * Math.cos(a[0] * toR), b[0] - a[0]) / toR + 360) % 360;
+  // Bewertung einer Radroute: welcher Anteil auf welcher Art Weg, und die längsten Stücke ohne Radweg
+  async function radRate(pts) {
+    if (!pts || pts.length < 2) return null;
+    // Punkte etwa alle 15 m
+    const s = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      const d = dist({ lat: a[0], lon: a[1] }, { lat: b[0], lon: b[1] });
+      const n = Math.max(1, Math.round(d / 15));
+      for (let k = 0; k < n; k++) s.push({ p: [a[0] + (b[0] - a[0]) * k / n, a[1] + (b[1] - a[1]) * k / n], m: d / n, h: radBearing(a, b) });
+    }
+    const keys = [...new Set(s.map((x) => radKey(x.p[0], x.p[1])))];
+    if (keys.length > 8) keys.length = 8;   // lange Strecken: nur die ersten Kacheln, der Rest bleibt „unbekannt“
+    const tiles = {};
+    for (const k of keys) tiles[k] = await radTile(k);
+    const m = { gut: 0, ruhig: 0, mittel: 0, schlecht: 0, unbekannt: 0 };
+    const runs = [];
+    let run = null;
+    for (const x of s) {
+      const tile = tiles[radKey(x.p[0], x.p[1])];
+      let best = null;
+      if (tile) {
+        const idx = radIndex(tile);
+        const cla = Math.floor(x.p[0] / RAD_CELL), clo = Math.floor(x.p[1] / RAD_CELL);
+        const P = { lat: x.p[0], lon: x.p[1] };
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) {
+          const list = idx.get((cla + a) + '_' + (clo + b));
+          if (!list) continue;
+          for (let j = 0; j < list.length; j += 2) {
+            const w = tile.ways[list[j]], i = list[j + 1];
+            const geom = [{ lat: w.g[i][0], lon: w.g[i][1] }, { lat: w.g[i + 1][0], lon: w.g[i + 1][1] }];
+            const d = distToWay(P, geom);
+            if (d > 18) continue;
+            let ad = Math.abs(radBearing(w.g[i], w.g[i + 1]) - x.h) % 180;
+            ad = Math.min(ad, 180 - ad);
+            if (ad > 35) continue;   // querende Wege zählen nicht
+            if (!best || RAD_RANK[w.c] < RAD_RANK[best.w.c] || (w.c === best.w.c && d < best.d)) best = { w, d };
+          }
+        }
+      }
+      const c = best ? best.w.c : 'unbekannt';
+      m[c] += x.m;
+      if (c === 'schlecht') {
+        const name = best.w.n || 'Straße ohne Namen';
+        if (run && run.name === name) { run.m += x.m; run.pts.push(x.p); }
+        else { run = { name, m: x.m, pts: [x.p] }; runs.push(run); }
+      } else if (c !== 'unbekannt') run = null;
+    }
+    const total = Object.values(m).reduce((a, b) => a + b, 0) || 1;
+    return { m, total, ohne: runs.filter((r) => r.m >= 120).sort((a, b) => b.m - a.m) };
   }
   // Namen für mehrere Kreuzungen mit einer einzigen Abfrage: die nächste Straße zuerst, dann die Querstraße
   async function crossingNames(list) {
@@ -1476,7 +1628,7 @@
     const parts = kind === 'l' ? (btn.dataset.lines || '').split('|').map((x, i) => Object.assign(parse(x), { art: arts[i] || btn.dataset.art })).filter((x) => x.length) : [];
     const route = kind === 'l' ? parse(btn.dataset.pts) : [];
     $('#peek-meta').textContent = kind === 'r' ? `${pts.length} Ampeln auf diesem Weg · grün: erste, rot: letzte Ampel`
-      : kind === 'l' ? (btn.dataset.arts != null ? `Strecke · ${parts.length ? 'rot und gelb: Meldungen' : 'keine Meldungen'}` : `${LAGE_LABEL[btn.dataset.art] || 'Meldung'} · farbig: betroffener Abschnitt, grün gestrichelt: dein Weg`) : 'Ampel, an der du gewartet hast';
+      : kind === 'l' ? (btn.dataset.art === 'rad' ? 'Ohne Radweg · rot: dieser Abschnitt, grün gestrichelt: dein Weg' : btn.dataset.arts != null ? `Strecke · ${parts.length ? 'rot und gelb: Meldungen' : 'keine Meldungen'}` : `${LAGE_LABEL[btn.dataset.art] || 'Meldung'} · farbig: betroffener Abschnitt, grün gestrichelt: dein Weg`) : 'Ampel, an der du gewartet hast';
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
     if (typeof L === 'undefined' || !(pts.length || parts.length || route.length)) { $('#peek-meta').textContent = 'Die Karte braucht eine Internetverbindung.'; return; }
     if (!peekMap) {
@@ -1490,7 +1642,7 @@
       const whole = btn.dataset.arts != null;   // ganze Strecke eines Ziels
       if (route.length > 1) L.polyline(route, whole ? { color: accent, weight: 5, opacity: 0.8 } : { color: accent, weight: 3, opacity: 0.6, dashArray: '6 6' }).addTo(peekLayer);
       for (const p of parts) {
-        const col = LAGE_CLS[p.art] === 'red' ? '#d64933' : '#e0a326';
+        const col = LAGE_CLS[p.art] === 'red' || p.art === 'rad' ? '#d64933' : '#e0a326';
         if (p.length > 1) L.polyline(p, { color: col, weight: 7, opacity: 0.9 }).addTo(peekLayer); else L.circleMarker(p[0], { radius: 9, color: '#ffffff', weight: 2, fillColor: col, fillOpacity: 1 }).addTo(peekLayer);
       }
       const all = whole || !parts.length ? route : [].concat(...parts);
@@ -1518,6 +1670,8 @@
       map = L.map('map', { zoomControl: true });
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap-Mitwirkende' }).addTo(map);
       map.setView([52.0211, 8.5325], 13);
+      let radT = null;
+      map.on('moveend', () => { if (mapMode === 'rad') { clearTimeout(radT); radT = setTimeout(drawRad, 300); } });
     }
     setTimeout(() => map.invalidateSize(), 50);
     if (layer) layer.remove();
@@ -1527,6 +1681,16 @@
       : 'Je größer der Kreis, desto länger wartest du dort im Schnitt. Farbe: grün kurz, rot lang. Tippe auf einen Kreis für die Werte je Richtung.';
     $('#map-window').hidden = mapMode !== 'grid';
     $('#map-insights').hidden = mapMode !== 'grid';
+    if (mapMode === 'rad') {
+      $('#map-empty').hidden = true;
+      const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
+      $('#map-legend').innerHTML = `<span class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}</span><span class="rad-src">Laut OpenStreetMap, nicht überall vollständig.</span>`;
+      mapHasData = false;
+      if (map.getZoom() < 14) map.setView(meMarker ? meMarker.getLatLng() : map.getCenter(), 15);
+      drawRad();
+      startMyLocation();
+      return;
+    }
     if (mapMode === 'grid') {
       const gp = drawGrid();
       mapHasData = gp.length > 0;
@@ -1555,6 +1719,35 @@
     startMyLocation();
   }
 
+  // Karte: Radwege der sichtbaren Kacheln, farbig nach Einstufung
+  let radRenderer = null, radDrawn = '';
+  async function drawRad() {
+    if (!map || mapMode !== 'rad') return;
+    const z = map.getZoom(), b = map.getBounds();
+    const msg = $('#map-loc-msg');
+    if (z < 14) { layer.clearLayers(); radDrawn = ''; msg.textContent = 'Zum Anzeigen der Radwege näher heranzoomen.'; return; }
+    const keys = [];
+    for (let a = Math.floor(b.getSouth() / RAD_TILE); a <= Math.floor(b.getNorth() / RAD_TILE); a++)
+      for (let o = Math.floor(b.getWest() / RAD_TILE); o <= Math.floor(b.getEast() / RAD_TILE); o++) keys.push(a + '_' + o);
+    if (keys.length > 4) { msg.textContent = 'Zum Anzeigen der Radwege näher heranzoomen.'; return; }
+    const sig = keys.join('|');
+    if (sig === radDrawn) return;
+    msg.textContent = keys.some((k) => !radTiles[k]) ? 'Radwege werden geladen …' : '';
+    let tiles;
+    try { tiles = await Promise.all(keys.map(radTile)); }
+    catch (e) { msg.textContent = 'Die Radwege konnten gerade nicht geladen werden. Bitte später noch einmal versuchen.'; return; }
+    if (mapMode !== 'rad') return;
+    msg.textContent = '';
+    layer.clearLayers();
+    radRenderer = radRenderer || L.canvas({ padding: 0.3 });
+    const order = ['ruhig', 'mittel', 'schlecht', 'gut'];   // Radwege obenauf
+    for (const c of order) for (const t of tiles) for (const w of t.ways) {
+      if (w.c !== c) continue;
+      L.polyline(w.g, { renderer: radRenderer, color: RAD_CLS[c].col, weight: c === 'ruhig' ? 3 : 5, opacity: 0.9 })
+        .bindPopup(`<strong>${esc(w.n || 'Weg ohne Namen')}</strong><br>${esc(RAD_CLS[c].label)}${w.v ? `<br>Tempo ${w.v}` : ''}`).addTo(layer);
+    }
+    radDrawn = sig;
+  }
   // Eigener Standort auf der Karte, nur solange die Karte offen ist
   let meMarker = null, meCircle = null, meWatch = null, meCenterNext = false, mapHasData = false;
   function startMyLocation() {
@@ -1583,7 +1776,8 @@
   $('#map-mode').addEventListener('click', (ev) => {
     const b = ev.target.closest('button[data-mode]');
     if (!b) return;
-    mapMode = b.dataset.mode; mapFitted = false;
+    mapMode = b.dataset.mode; mapFitted = false; radDrawn = '';
+    $('#map-loc-msg').textContent = '';
     $$('#map-mode button').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
     renderMap();
   });
@@ -2295,7 +2489,7 @@
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => it.pts.map((q) => q.join(',')).join(';')).join('|')}" data-arts="${items.map((it) => it.art).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
     const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}Fahrt starten mit Ziel</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
-    return `<div class="vf-panel">${head}${sum}${alt}${rows}${bars}${zielHistory(z)}${go}${all}${foot}</div>`;
+    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : ''}${alt}${rows}${bars}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
   // Bus und Bahn: die nächsten Verbindungen, ab Standort oder einer eigenen Haltestelle
   const ART_LABEL = { zug: 'rail', bahn: 'tram', bus: '' };
@@ -2325,6 +2519,24 @@
     return `<div class="vf-panel">${head}${abs}${list}${zielHistory(z)}${go}${foot}</div>`;
   }
   // Aus deinen Fahrten: frühere Fahrten zu diesem Ziel, nur angekommene
+  // Rad: wie gut ist die Strecke für das Rad, und wo fehlt ein Radweg
+  const fmtLen = (m) => (m < 1000 ? `${Math.round(m / 10) * 10} m` : `${fmtNum(m / 1000, 1)} km`);
+  function radBlock(r, route) {
+    if (!r) return '';
+    if (r.loading) return '<p class="small muted" role="status">Radwege entlang der Strecke werden geprüft …</p>';
+    if (r.error) return `<p class="small muted">${esc(r.error)}</p>`;
+    const known = r.total - r.m.unbekannt;
+    if (known < r.total * 0.3) return '<p class="small muted">Zu dieser Strecke gibt es kaum Angaben zu Radwegen.</p>';
+    const order = ['gut', 'ruhig', 'mittel', 'schlecht'];
+    const pct = (k) => Math.round(r.m[k] / known * 100);
+    const good = pct('gut') + pct('ruhig');
+    const title = pct('schlecht') >= 20 ? 'Teils ohne Radweg' : good >= 75 ? 'Gut mit dem Rad' : 'Gemischt';
+    const say = order.filter((k) => pct(k)).map((k) => `${pct(k)} % ${RAD_CLS[k].kurz}`).join(', ');
+    const bar = `<div class="rad-bar" role="img" aria-label="${esc(say)}">${order.map((k) => (r.m[k] ? `<i style="width:${(r.m[k] / known * 100).toFixed(1)}%;background:${RAD_CLS[k].col}"></i>` : '')).join('')}</div>`;
+    const legend = `<p class="rad-legend small">${order.filter((k) => pct(k)).map((k) => `<span><i style="background:${RAD_CLS[k].col}"></i>${pct(k)} % ${esc(RAD_CLS[k].kurz)}</span>`).join('')}</p>`;
+    const rows = r.ohne.slice(0, 3).map((x) => `<li class="vf-line"><button type="button" class="place" data-peek="l" data-name="${esc(x.name)}" data-art="rad" data-lines="${x.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${route}">${esc(x.name)}</button><span class="small muted"> · ${fmtLen(x.m)} ohne Radweg</span></li>`).join('');
+    return `<div class="rad-rate"><h4 class="vf-h4">${title}</h4>${bar}${legend}${rows ? `<ul class="rad-ohne">${rows}</ul>` : ''}<p class="small muted">Laut OpenStreetMap, nicht überall vollständig.</p></div>`;
+  }
   function zielHistory(z) {
     const mine = trips.filter((t) => t.plan && t.plan.ziel === z.id && !(t.plan.rest > 2));
     if (!mine.length) return '';
@@ -2360,6 +2572,13 @@
     try {
       const data = await api(`/api/ziel?from=${from.join(',')}&to=${z.lat},${z.lon}&mode=${group}${halt ? '&ab=halt' : ''}`);
       zielRes[key] = { t: Date.now(), data, fallback: !pos };
+      if (group === 'rad' && data.pts && data.pts.length > 1) {
+        const res = zielRes[key];
+        res.rad = { loading: true };
+        radRate(data.pts).then((r) => { res.rad = r || { error: 'Zu dieser Strecke gibt es keine Angaben zu Radwegen.' }; })
+          .catch(() => { res.rad = { error: 'Die Radwege konnten gerade nicht geprüft werden.' }; })
+          .then(() => { if (zielOpen === z.id) renderVorfahrt(); });
+      }
     } catch (e) {
       zielRes[key] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : e.message };
     }
