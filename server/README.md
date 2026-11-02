@@ -86,6 +86,12 @@ Nach einem Update des Auszugs (etwa 0.24 mit Zügen) einfach die alte Datei lös
 
 Von Hand neu holen: `sudo bash -c 'set -a; . /etc/flowtown.env; node /opt/flowtown/server/flowtown-server.mjs fahrplan' && sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`. Lizenz: CC BY 4.0, Quelle DELFI e.V.; die App nennt sie unter den Abfahrten.
 
+### Radwege (OpenStreetMap)
+
+Laufen ohne Einrichtung. Der Server lädt nach dem Start die Radwege für ganz Bielefeld bei der Overpass-API (FOSSGIS e.V.) in Kacheln von etwa 3 × 2 km, stuft sie ein (eigener Radweg, ruhige Straße, Radstreifen oder Tempo 30, ohne Radweg) und legt sie gepackt unter `/var/lib/flowtown/radnetz/` ab: rund 90 Kacheln, zusammen etwa 10 bis 25 MB. Er fragt immer nur eine Kachel zur Zeit mit Pause dazwischen, das erste Füllen dauert deshalb 10 bis 30 Minuten; danach erneuert er alte Kacheln alle 14 Tage nachts (2 bis 5 Uhr). Die App holt fertige Kacheln von `/api/radnetz?k=…` in Sekundenbruchteilen. Kacheln außerhalb Bielefelds holt der Server bei Bedarf und behält sie ebenfalls. Im Protokoll: „Radwege: 88 Kacheln geladen“.
+
+Einstellungen (optional): `OVERPASS_URL=` für einen anderen Overpass-Server, `RAD_PREFETCH=0` schaltet das Vorab-Laden ab (dann nur bei Bedarf).
+
 ### Pilot: Codes vergeben und Fahrten exportieren
 
 Testpersonen bekommen einen Pilot-Code (Form `FT-XXXX-XXXX`). Mit Code und Einwilligung überträgt die App ihre Fahrten pseudonym an den Server (ohne Zielnamen). Der Server speichert nur einen Hash des Codes, nie einen Namen.

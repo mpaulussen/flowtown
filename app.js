@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.34.0';
+  const VERSION = '0.35.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -321,6 +321,7 @@
   const RAD_RANK = { gut: 0, ruhig: 1, mittel: 2, schlecht: 3 };
   const radTiles = {};       // Schlüssel -> { t, ways: [{ c, n, v, g: [[lat, lon], …] }] }
   const radLoading = {};
+  let radNoServer = false;
   (() => { try { localStorage.removeItem('ww.radnetz'); Object.assign(radTiles, JSON.parse(localStorage.getItem('ww.radnetz3') || '{}')); } catch (e) { /* ohne Speicher */ } })();
   function radSave() {
     // höchstens vier Kacheln auf dem Handy behalten, die jüngsten zuerst,
@@ -367,6 +368,19 @@
     const bb = `${(a * RAD_TILE).toFixed(3)},${(b * RAD_TILE).toFixed(3)},${((a + 1) * RAD_TILE).toFixed(3)},${((b + 1) * RAD_TILE).toFixed(3)}`;
     const q = `[out:json][timeout:25];(way[highway~"^(cycleway|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|trunk|trunk_link)$"](${bb});way[highway~"^(path|footway|track|pedestrian|service|bridleway)$"][bicycle~"^(designated|yes)$"](${bb});way[bicycle_road=yes](${bb}););out tags geom;`;
     radLoading[key] = (async () => {
+      // zuerst vom Flowtown-Server: fertig eingestuft, gepackt und meist sofort da
+      if (apiBase() && !radNoServer) {
+        try {
+          const res = await fetchWithTimeout(apiBase() + '/api/radnetz?k=' + key, {}, 60000);
+          if (res.status === 404) radNoServer = true;   // älterer Server ohne Radwege: direkt bei Overpass
+          else if (res.ok) {
+            const j = await res.json();
+            radTiles[key] = { t: Date.now(), ways: j.ways || [] };
+            radSave();
+            return radTiles[key];
+          }
+        } catch (e) { /* weiter mit Overpass */ }
+      }
       let lastErr;
       // ausgelastet (429, 504) oder abgebrochen: kurz warten und bis zu zweimal neu versuchen
       for (let attempt = 0; attempt < 3; attempt++) for (const url of OVERPASS) {
@@ -1705,6 +1719,7 @@
     if (mapLayers.grid) { layer = groups.grid; fit.push(...drawGrid()); }
     $('#map-empty').hidden = true;
     // Radwege, Stadtbahn, Verkehrslage
+    if (mapLayers.rad && !mapFitted && map.getZoom() < 14) { map.setView(meMarker ? meMarker.getLatLng() : map.getCenter(), 15, { animate: false }); mapFitted = true; }
     if (mapLayers.rad) drawRad(); else { groups.rad.clearLayers(); radDrawn = ''; }
     if (mapLayers.tram) drawTram(); else groups.tram.clearLayers();
     if (mapLayers.lage) drawLage(); else groups.lage.clearLayers();
@@ -1741,20 +1756,33 @@
     const run = ++radRun;
     g.clearLayers();
     radRenderer = radRenderer || L.canvas({ padding: 0.3 });
-    let failed = 0, why = '';
-    for (let i = 0; i < keys.length; i++) {
-      const fresh = radTiles[keys[i]] && Date.now() - radTiles[keys[i]].t < 30 * 864e5;
-      if (!fresh) mapStatus(keys.length > 1 ? `Radwege werden geladen … (${i + 1} von ${keys.length})` : 'Radwege werden geladen …');
-      try {
-        const t = await radTile(keys[i]);
-        if (run !== radRun || !mapLayers.rad) return;
-        for (const c of ['ruhig', 'mittel', 'schlecht', 'gut']) for (const w of t.ways) {   // Radwege obenauf
-          if (w.c !== c) continue;
-          L.polyline(w.g, { renderer: radRenderer, color: RAD_CLS[c].col, weight: c === 'ruhig' ? 3 : 5, opacity: 0.9 })
-            .bindPopup(`<strong>${esc(w.n || 'Weg ohne Namen')}</strong><br>${esc(RAD_CLS[c].label)}${w.v ? `<br>Tempo ${w.v}` : ''}`).addTo(g);
-        }
-      } catch (e) { failed++; why = e.message; }
-    }
+    // Kachel in der Mitte zuerst, je zwei gleichzeitig
+    const c0 = map.getCenter();
+    const mid = (k) => { const [a, o] = k.split('_').map(Number); return Math.hypot((a + 0.5) * RAD_TILE - c0.lat, ((o + 0.5) * RAD_TILE - c0.lng) * 0.62); };
+    keys.sort((x, y) => mid(x) - mid(y));
+    let failed = 0, why = '', done = 0, next = 0;
+    const need = keys.filter((k) => !(radTiles[k] && Date.now() - radTiles[k].t < 30 * 864e5)).length;
+    if (need) mapStatus('Radwege werden geladen …');
+    const drawTile = (t) => {
+      for (const c of ['ruhig', 'mittel', 'schlecht', 'gut']) for (const w of t.ways) {   // Radwege obenauf
+        if (w.c !== c) continue;
+        L.polyline(w.g, { renderer: radRenderer, color: RAD_CLS[c].col, weight: c === 'ruhig' ? 3 : 5, opacity: 0.9 })
+          .bindPopup(`<strong>${esc(w.n || 'Weg ohne Namen')}</strong><br>${esc(RAD_CLS[c].label)}${w.v ? `<br>Tempo ${w.v}` : ''}`).addTo(g);
+      }
+    };
+    const worker = async () => {
+      while (next < keys.length) {
+        const k = keys[next++];
+        try {
+          const t = await radTile(k);
+          if (run !== radRun || !mapLayers.rad) return;
+          drawTile(t);
+        } catch (e) { failed++; why = e.message; }
+        done++;
+        if (need && done < keys.length && run === radRun) mapStatus(`Radwege werden geladen … (${done} von ${keys.length})`);
+      }
+    };
+    await Promise.all([worker(), worker()]);
     if (run !== radRun) return;
     if (failed) { radDrawn = ''; mapStatus(`Radwege ${failed === keys.length ? 'nicht' : 'nur teilweise'} geladen (${why}). Verschieb die Karte oder versuch es gleich noch einmal.`); }
     else mapStatus('');

@@ -792,6 +792,125 @@ function exportPilot() {
 }
 
 // ---------- HTTP ----------
+// ---------- Radwege aus OpenStreetMap: je Kachel eingestuft, gepackt und auf dem Server zwischengespeichert ----------
+// Die App holt fertige Kacheln von hier statt selbst bei Overpass zu fragen: schneller, und das Handy spricht nicht mit Dritten.
+// Kacheln für ganz Bielefeld lädt der Server vorab, nacheinander und mit Pausen, und erneuert sie alle 14 Tage nachts.
+const OVERPASS_URL = process.env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter';
+const RAD_TILE = 0.03;   // wie in der App
+const RAD_DIR = path.join(DATA_DIR, 'radnetz');
+const RAD_AGE = 14 * 864e5;
+const RAD_PREFETCH = process.env.RAD_PREFETCH !== '0';
+const radMem = new Map();       // Schlüssel -> { t, gz, etag }
+const radPending = new Map();
+let radQueue = Promise.resolve(), radFill = false;
+const radSpeed = (v) => {
+  if (!v) return null;
+  if (/zone:?30|^30/.test(v)) return 30;
+  if (/urban/.test(v)) return 50;
+  if (/rural/.test(v)) return 100;
+  if (v === 'walk') return 7;
+  const n = parseInt(v, 10);
+  return isFinite(n) ? n : null;
+};
+// gleiche Einstufung wie in der App (app.js, radClass)
+function radClass(t) {
+  const hw = t.highway;
+  if (t.bicycle === 'no' || t.bicycle === 'dismount') return null;
+  if (t.bicycle_road === 'yes' || t.cyclestreet === 'yes' || hw === 'cycleway') return 'gut';
+  if (/^(path|footway|track|pedestrian|service|bridleway)$/.test(hw)) return t.bicycle === 'designated' ? 'gut' : 'ruhig';
+  const cw = ['cycleway', 'cycleway:both', 'cycleway:right', 'cycleway:left'].map((k) => t[k] || '').join(' ');
+  if (/track|separate/.test(cw) || t.bicycle === 'use_sidepath' || /designated/.test(t['sidewalk:both:bicycle'] || t['sidewalk:right:bicycle'] || t['sidewalk:left:bicycle'] || '')) return 'gut';
+  const v = radSpeed(t.maxspeed);
+  if (/lane|share_busway|opposite_lane/.test(cw)) return 'mittel';
+  if (hw === 'living_street') return 'ruhig';
+  if (/^(residential|unclassified)$/.test(hw)) return v != null && v >= 50 ? (hw === 'residential' ? 'mittel' : 'schlecht') : 'ruhig';
+  return v != null && v <= 30 ? 'mittel' : 'schlecht';
+}
+const radKeyOk = (k) => {
+  const m = /^(-?\d{1,5})_(-?\d{1,5})$/.exec(k || '');
+  if (!m) return false;
+  const lat = Number(m[1]) * RAD_TILE, lon = Number(m[2]) * RAD_TILE;
+  return lat >= 47 && lat <= 55.1 && lon >= 5.8 && lon <= 15.1;   // Deutschland
+};
+function radCached(k) {
+  if (radMem.has(k)) return radMem.get(k);
+  try {
+    const f = path.join(RAD_DIR, k + '.json.gz');
+    const gz = fs.readFileSync(f);
+    const c = { t: fs.statSync(f).mtimeMs, gz, etag: '"' + crypto.createHash('sha1').update(gz).digest('hex').slice(0, 16) + '"' };
+    radMem.set(k, c);
+    if (radMem.size > 300) radMem.delete(radMem.keys().next().value);
+    return c;
+  } catch (e) { return null; }
+}
+// eine Kachel bei Overpass holen; immer nur eine Anfrage zur Zeit
+function radFetch(k) {
+  if (radPending.has(k)) return radPending.get(k);
+  const job = radQueue.then(async () => {
+    const [a, b] = k.split('_').map(Number);
+    const bb = `${(a * RAD_TILE).toFixed(3)},${(b * RAD_TILE).toFixed(3)},${((a + 1) * RAD_TILE).toFixed(3)},${((b + 1) * RAD_TILE).toFixed(3)}`;
+    const q = `[out:json][timeout:60];(way[highway~"^(cycleway|primary|primary_link|secondary|secondary_link|tertiary|tertiary_link|unclassified|residential|living_street|trunk|trunk_link)$"](${bb});way[highway~"^(path|footway|track|pedestrian|service|bridleway)$"][bicycle~"^(designated|yes)$"](${bb});way[bicycle_road=yes](${bb}););out tags geom;`;
+    let lastErr;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt) await new Promise((r) => setTimeout(r, attempt * 10000));
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 90000);
+      try {
+        const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' }, signal: ctrl.signal });
+        if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
+        const json = await res.json();
+        if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
+        const ways = [];
+        for (const w of json.elements || []) {
+          if (w.type !== 'way' || !w.geometry || w.geometry.length < 2) continue;
+          const c = radClass(w.tags || {});
+          if (!c) continue;
+          ways.push({ c, n: (w.tags.name || w.tags.ref || '').slice(0, 60), v: radSpeed(w.tags.maxspeed), g: w.geometry.map((p) => [r5(p.lat), r5(p.lon)]) });
+        }
+        const gz = zlib.gzipSync(JSON.stringify({ t: Date.now(), ways }), { level: 9 });
+        fs.mkdirSync(RAD_DIR, { recursive: true });
+        fs.writeFileSync(path.join(RAD_DIR, k + '.json.gz.tmp'), gz);
+        fs.renameSync(path.join(RAD_DIR, k + '.json.gz.tmp'), path.join(RAD_DIR, k + '.json.gz'));
+        radMem.delete(k);
+        return radCached(k);
+      } catch (e) { lastErr = e.name === 'AbortError' ? new Error('Overpass antwortet nicht') : e; }
+      finally { clearTimeout(timer); }
+    }
+    throw lastErr;
+  });
+  radQueue = job.then(() => new Promise((r) => setTimeout(r, 1500)), () => new Promise((r) => setTimeout(r, 5000)));   // Pause für Overpass
+  radPending.set(k, job);
+  job.finally(() => radPending.delete(k)).catch(() => {});
+  return job;
+}
+async function sendRad(req, res, origin, k) {
+  let c = radCached(k);
+  if (!c) c = await radFetch(k);
+  else if (Date.now() - c.t > RAD_AGE) radFetch(k).catch(() => {});   // alte Kachel ausliefern, im Hintergrund erneuern
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=86400', ETag: c.etag, Vary: 'Origin, Accept-Encoding' };
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
+  if (req.headers['if-none-match'] === c.etag) { res.writeHead(304, h); return res.end(); }
+  if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) { h['Content-Encoding'] = 'gzip'; res.writeHead(200, h); return res.end(c.gz); }
+  res.writeHead(200, h);
+  res.end(zlib.gunzipSync(c.gz));
+}
+// Bielefeld vorab: fehlende Kacheln sofort, alte nachts zwischen 2 und 5 Uhr
+async function radTick() {
+  if (!RAD_PREFETCH || radFill) return;
+  radFill = true;
+  const night = (() => { const h = new Date().getHours(); return h >= 2 && h < 5; })();
+  let n = 0;
+  try {
+    for (let a = Math.floor(LAGE_BBOX[1] / RAD_TILE); a <= Math.floor(LAGE_BBOX[3] / RAD_TILE); a++)
+      for (let b = Math.floor(LAGE_BBOX[0] / RAD_TILE); b <= Math.floor(LAGE_BBOX[2] / RAD_TILE); b++) {
+        const k = a + '_' + b, c = radCached(k);
+        if (c && (Date.now() - c.t < RAD_AGE || !night)) continue;
+        try { await radFetch(k); n++; } catch (e) { console.error('Radwege', k + ':', e.message); }
+      }
+  } finally { radFill = false; }
+  if (n) console.log(`Radwege: ${n} Kacheln geladen`);
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -814,7 +933,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -827,6 +946,11 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
+    if (req.method === 'GET' && p === '/api/radnetz') {
+      const k = url.searchParams.get('k') || '';
+      if (!radKeyOk(k)) return send(res, 400, { fehler: 'Unbekannte Kachel.' }, origin);
+      try { return await sendRad(req, res, origin, k); } catch (e) { return send(res, 502, { fehler: 'Radwege gerade nicht abrufbar: ' + e.message }, origin); }
+    }
     if (req.method === 'GET' && p === '/api/fahrplan') return fahrplan ? sendFahrplan(req, res, origin) : send(res, 404, { fehler: 'Noch kein Fahrplan auf dem Server.' }, origin);
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);
@@ -877,5 +1001,6 @@ if (cli === 'fahrplan') {
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
+  setTimeout(radTick, 20000); setInterval(radTick, 1800e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }
