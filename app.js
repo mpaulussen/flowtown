@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.39.0';
+  const VERSION = '0.40.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1647,7 +1647,7 @@
     const parts = kind === 'l' ? (btn.dataset.lines || '').split('|').map((x, i) => Object.assign(parse(x), { art: arts[i] || btn.dataset.art })).filter((x) => x.length) : [];
     const route = kind === 'l' ? parse(btn.dataset.pts) : [];
     $('#peek-meta').textContent = kind === 'r' ? `${pts.length} Ampeln auf diesem Weg · grün: erste, rot: letzte Ampel`
-      : kind === 'l' ? (btn.dataset.art === 'rad' ? 'Ohne Radweg · rot: dieser Abschnitt, grün gestrichelt: dein Weg' : btn.dataset.arts != null ? `Strecke · ${parts.length ? 'rot und gelb: Meldungen' : 'keine Meldungen'}` : `${LAGE_LABEL[btn.dataset.art] || 'Meldung'} · farbig: betroffener Abschnitt, grün gestrichelt: dein Weg`) : 'Ampel, an der du gewartet hast';
+      : kind === 'l' ? (btn.dataset.art === 'alt' ? 'Besserer Weg · grün durchgezogen: für dich, grün gestrichelt: der übliche Weg' : btn.dataset.art === 'rad' ? 'Rot: diese Stelle, grün gestrichelt: dein Weg' : btn.dataset.arts != null ? `Strecke · ${parts.length ? 'rot und gelb: Meldungen' : 'keine Meldungen'}` : `${LAGE_LABEL[btn.dataset.art] || 'Meldung'} · farbig: betroffener Abschnitt, grün gestrichelt: dein Weg`) : 'Ampel, an der du gewartet hast';
     if (typeof dlg.showModal === 'function') dlg.showModal(); else dlg.setAttribute('open', '');
     if (typeof L === 'undefined' || !(pts.length || parts.length || route.length)) { $('#peek-meta').textContent = 'Die Karte braucht eine Internetverbindung.'; return; }
     if (!peekMap) {
@@ -1661,7 +1661,7 @@
       const whole = btn.dataset.arts != null;   // ganze Strecke eines Ziels
       if (route.length > 1) L.polyline(route, whole ? { color: accent, weight: 5, opacity: 0.8 } : { color: accent, weight: 3, opacity: 0.6, dashArray: '6 6' }).addTo(peekLayer);
       for (const p of parts) {
-        const col = LAGE_CLS[p.art] === 'red' || p.art === 'rad' ? '#d64933' : '#e0a326';
+        const col = p.art === 'alt' ? accent : LAGE_CLS[p.art] === 'red' || p.art === 'rad' ? '#d64933' : '#e0a326';
         if (p.length > 1) L.polyline(p, { color: col, weight: 7, opacity: 0.9 }).addTo(peekLayer); else L.circleMarker(p[0], { radius: 9, color: '#ffffff', weight: 2, fillColor: col, fillOpacity: 1 }).addTo(peekLayer);
       }
       const all = whole || !parts.length ? route : [].concat(...parts);
@@ -1761,8 +1761,12 @@
     'Jahnplatz': [52.0226, 8.5319, 150], 'Hauptbahnhof': [52.0292, 8.5326, 200], 'Bahnhofstraße': [52.0257, 8.5328, 200],
     'Kunsthalle': [52.0153, 8.5300, 150], 'Altstadt': [52.0205, 8.5335, 600], 'Innenstadt': [52.0215, 8.5325, 900]
   };
+  // genauer Mittelpunkt aus OpenStreetMap (vom Server), sonst die Näherung oben
   function faqPlace(name) {
-    if (name === 'Kunsthalle' && bfData && bfData.orte) { const o = bfData.orte.find((x) => /^Kunsthalle/.test(x.n)); if (o) return [o.lat, o.lon, 150]; }
+    const r = FAQ_PLACES[name] ? FAQ_PLACES[name][2] : 150;
+    const o = bfData && bfData.faqOrte && bfData.faqOrte[name];
+    if (o && o.c) return [o.c[0], o.c[1], r];
+    if (name === 'Kunsthalle' && bfData && bfData.orte) { const k = bfData.orte.find((x) => /^Kunsthalle/.test(x.n)); if (k) return [k.lat, k.lon, 150]; }
     return FAQ_PLACES[name] || null;
   }
   // Einträge für das Profil: erst die eigenen Gruppen, dann „Alle“; die Krisen-Nummern stehen unter „Hilfe“
@@ -1849,8 +1853,14 @@
             let ad = Math.abs(radBearing(w.g[i], w.g[i + 1]) - x.h) % 180;
             ad = Math.min(ad, 180 - ad);
             if (ad > 35 && d > 4) continue;
-            // zu Fuß zählt der nächste Weg, nicht der beste; Stufen direkt am Weg gehen immer vor
-            if (!best || (w.c === 'stufen' && d <= 5 && best.w.c !== 'stufen') || (d < best.d && !(best.w.c === 'stufen' && best.d <= 5))) best = { w, d };
+            // zu Fuß zählt der nächste Weg, nicht der beste; Stufen in Gehrichtung direkt am Weg gehen vor
+            const par = ad <= 35, stufe = w.c === 'stufen' && d <= 5 && par;
+            if (w.c === 'stufen' && !stufe) continue;   // querende Treppe an einer Kreuzung zählt nicht
+            if (stufe) {   // nur auf der Treppe selbst, nicht an ihrem Anfang oder Ende (dort zweigt man oft nur ab)
+              const e0 = w.g[0], e1 = w.g[w.g.length - 1], lenW = dist({ lat: e0[0], lon: e0[1] }, { lat: e1[0], lon: e1[1] }), tol = Math.min(3, lenW / 3);
+              if (dist(P, { lat: e0[0], lon: e0[1] }) < tol || dist(P, { lat: e1[0], lon: e1[1] }) < tol) continue;
+            }
+            if (!best || (stufe && !best.stufe) || (d < best.d && !best.stufe)) best = { w, d, stufe };
           }
         }
         for (const nd of tile.nodes) {
@@ -1880,7 +1890,7 @@
     }
     // Hinweise aus der Altstadt-FAQ für Orte unterwegs
     const places = Object.keys(FAQ_PLACES).filter((n) => n !== 'Altstadt' && n !== 'Innenstadt').filter((n) => { const p = faqPlace(n); return p && s.some((x, i) => i % 3 === 0 && dist({ lat: p[0], lon: p[1] }, { lat: x.p[0], lon: x.p[1] }) <= p[2]); });
-    return { m, total, stellen: Object.values(by).sort((a, b) => FUSS_BAD.indexOf(a.c) - FUSS_BAD.indexOf(b.c) || b.m - a.m), bord: nodeHits.b.length, gleis: nodeHits.g, ampeln: nodeHits.a, places };
+    return { m, total, pts, stellen: Object.values(by).sort((a, b) => FUSS_BAD.indexOf(a.c) - FUSS_BAD.indexOf(b.c) || b.m - a.m), bord: nodeHits.b.length, gleis: nodeHits.g, ampeln: nodeHits.a, places };
   }
   const FUSS_WEIGHT = { rollstuhl: ['stufen', 'kopfstein', 'steil', 'unbefestigt', 'holprig'], rollator: ['stufen', 'kopfstein', 'unbefestigt', 'steil', 'holprig'], sehen: ['stufen'], hoeren: [], lernen: ['stufen'], ruhe: ['stufen', 'steil'] };
   function fussBlock(r, route) {
@@ -1901,17 +1911,156 @@
     if (r.gleis.length && (type === 'rollstuhl' || type === 'rollator' || type === 'sehen' || type === 'hoeren')) lines.push(`<li>${bfMark(0)} ${peek(r.gleis.length === 1 ? 'Gleise queren' : r.gleis.length + '× Gleise queren', 'rad', r.gleis.map((g) => [[g[0], g[1]]]))}<span class="small muted"> · ${type === 'hoeren' ? 'Stadtbahn kommt leise, auf Signale achten' : 'möglichst im rechten Winkel'}</span></li>`);
     const ohneTon = r.ampeln.filter((a) => a[3] === 0).length, mitTon = r.ampeln.filter((a) => a[3] === 1).length;
     if (r.ampeln.length && type === 'sehen') lines.push(`<li>${mitTon === r.ampeln.length ? bfMark(1) : bfMark(0)} ${r.ampeln.length} Ampel${r.ampeln.length === 1 ? '' : 'n'}${mitTon ? `, ${mitTon} mit Tonsignal` : ''}${ohneTon ? `, ${ohneTon} ohne` : ''}${r.ampeln.length - mitTon - ohneTon ? `, ${r.ampeln.length - mitTon - ohneTon} ohne Angabe` : ''}</li>`);
+    const near = r.pts ? hinwNear(r.pts) : [];
+    for (const h of near.slice(0, 3)) lines.push(`<li>${bfMark(0)} ${peek(HINW[h.art] || h.art, 'rad', [[[h.lat, h.lon]]])}<span class="small muted"> · gemeldet ${ago(h.t)}${h.ok ? `, ${h.ok}× bestätigt` : ''}</span></li>`);
     const bad = important.reduce((a, k) => a + pct(k), 0);
-    const title = !known ? 'Weg-Check' : !lines.length ? 'Keine Hindernisse bekannt' : bad >= 15 || r.stellen.some((x) => x.c === 'stufen' && important.includes('stufen')) ? 'Mit Hindernissen' : 'Einzelne Hindernisse';
+    const title = !known && !lines.length ? 'Weg-Check' : !lines.length ? 'Keine Hindernisse bekannt' : bad >= 15 || r.stellen.some((x) => x.c === 'stufen' && important.includes('stufen')) ? 'Mit Hindernissen' : 'Einzelne Hindernisse';
     const order = ['gut', 'holprig', 'unbefestigt', 'kopfstein', 'steil', 'stufen'];
     const bar = known ? `<div class="rad-bar" role="img" aria-label="${esc(order.filter((k) => pct(k)).map((k) => `${pct(k)} % ${FUSS_CLS[k].label}`).join(', '))}">${order.map((k) => (r.m[k] ? `<i style="width:${(r.m[k] / known * 100).toFixed(1)}%;background:${FUSS_CLS[k].col}"></i>` : '')).join('')}</div>` : '';
     const tips = type && faq ? faq.eintraege.filter((e) => e.orte.some((o) => r.places.includes(o)) && e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))).slice(0, 2) : [];
-    return `<div class="rad-rate"><h4 class="vf-h4">${title}${type ? ' · ' + esc(ACCESS_LABEL[type]) : ''}</h4>${bar}${lines.length ? `<ul class="rad-ohne bf-list">${lines.join('')}</ul>` : ''}`
+    let altHtml = '';
+    if (r.alt) {
+      const fewer = [];
+      const st0 = r.stellen.filter((x) => x.c === 'stufen').length, st1 = r.alt.r.stellen.filter((x) => x.c === 'stufen').length;
+      if (st0 && !st1) fewer.push('ohne Stufen');
+      if (r.m.kopfstein > 20 && r.alt.r.m.kopfstein < r.m.kopfstein / 2) fewer.push('ohne Kopfsteinpflaster');
+      if (r.bord > r.alt.r.bord) fewer.push('weniger hohe Bordsteine');
+      if (r.gleis.length > r.alt.r.gleis.length) fewer.push('weniger Gleise');
+      const plus = Math.max(0, Math.round(r.alt.plus / 10) * 10);
+      altHtml = `<div class="alt-weg"><p><b>${ic('route')} Besserer Weg für dich</b><br>${esc(fewer.join(', ') || 'mit weniger Hindernissen')}, ${plus ? `etwa ${plus} m länger (+${Math.max(1, Math.round(plus / 60))} min)` : 'kaum länger'}.</p>`
+        + `<button type="button" class="btn quiet" data-peek="l" data-name="Besserer Weg" data-art="alt" data-lines="${r.alt.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${route}">${ic('map')}Weg auf der Karte</button></div>`;
+    } else if (FUSS_PEN[type] && lines.length && !r.altDone) altHtml = '<p class="small muted" role="status">Flowtown sucht einen Weg mit weniger Hindernissen …</p>';
+    else if (FUSS_PEN[type] && lines.length && r.altDone) altHtml = '<p class="small muted">Einen besseren Weg ohne große Umwege gibt es laut den Kartendaten nicht.</p>';
+    return `<div class="rad-rate"><h4 class="vf-h4">${title}${type ? ' · ' + esc(ACCESS_LABEL[type]) : ''}</h4>${bar}${lines.length ? `<ul class="rad-ohne bf-list">${lines.join('')}</ul>` : ''}${altHtml}`
       + (tips.length ? `<div class="bf-ziel"><h4 class="vf-h4">${ic('info')} Unterwegs gut zu wissen</h4>${tips.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}</div>` : '')
       + `<p class="small muted">${known < r.total * 0.5 ? 'Zu Teilen des Wegs gibt es keine Angaben. ' : ''}Laut OpenStreetMap, nicht überall vollständig.</p></div>`;
   }
   // Gehzeit für das Profil: HERE rechnet mit zügigem Gehen
   const WALK_FACTOR = { rollator: 1.4, ruhe: 1.3, rollstuhl: 1.1, sehen: 1.2 };
+  // ---------- Stufenloser Weg: eigene Suche im Fußnetz, je Profil mit Aufschlägen für Hindernisse ----------
+  const FUSS_PEN = {
+    rollstuhl: { stufen: Infinity, kopfstein: 6, unbefestigt: 4, steil: 5, holprig: 2, offen: 1.15, gut: 1, b: 60, g: 25 },
+    rollator: { stufen: 12, kopfstein: 4, unbefestigt: 3, steil: 3, holprig: 1.8, offen: 1.1, gut: 1, b: 30, g: 15 },
+    sehen: { stufen: 2, kopfstein: 1.1, unbefestigt: 1.2, steil: 1.1, holprig: 1, offen: 1.05, gut: 1, b: 0, g: 30 },
+    ruhe: { stufen: 3, kopfstein: 1.3, unbefestigt: 1.2, steil: 2, holprig: 1.2, offen: 1.05, gut: 1, b: 0, g: 0 }
+  };
+  // Maß für „wie hinderlich“ ein geprüfter Weg für das Profil ist
+  function fussBad(r, type) {
+    const pen = FUSS_PEN[type];
+    if (!r || !pen) return 0;
+    let x = 0;
+    for (const [c, m] of Object.entries(r.m)) if (c !== 'offen' && c !== 'gut') x += m * (Math.min(pen[c], 20) - 1);
+    return x + r.stellen.filter((s) => s.c === 'stufen').length * (pen.stufen === Infinity ? 1000 : pen.stufen * 20) + r.bord * pen.b + r.gleis.length * pen.g;
+  }
+  async function fussRoute(from, to, type) {
+    const pen = FUSS_PEN[type];
+    if (!pen) return null;
+    const la0 = Math.min(from[0], to[0]) - 0.0025, la1 = Math.max(from[0], to[0]) + 0.0025, lo0 = Math.min(from[1], to[1]) - 0.004, lo1 = Math.max(from[1], to[1]) + 0.004;
+    const keys = [];
+    for (let a = Math.floor(la0 / RAD_TILE); a <= Math.floor(la1 / RAD_TILE); a++) for (let o = Math.floor(lo0 / RAD_TILE); o <= Math.floor(lo1 / RAD_TILE); o++) keys.push(a + '_' + o);
+    if (keys.length > 6) return null;
+    const tiles = [];
+    for (const k of keys) tiles.push(await fussTile(k));
+    // Graph: gleiche Koordinate = gleicher Knoten (OpenStreetMap teilt Knoten an Kreuzungen)
+    const id = new Map(), lat = [], lon = [], adj = [];
+    const node = (p) => { const k = p[0] + ',' + p[1]; let i = id.get(k); if (i == null) { i = lat.length; id.set(k, i); lat.push(p[0]); lon.push(p[1]); adj.push([]); } return i; };
+    const inBox = (p) => p[0] >= la0 && p[0] <= la1 && p[1] >= lo0 && p[1] <= lo1;
+    for (const t of tiles) for (const w of t.ways) {
+      const f = pen[w.c] == null ? 1.1 : pen[w.c];
+      if (f === Infinity) continue;
+      for (let i = 0; i < w.g.length - 1; i++) {
+        if (!inBox(w.g[i]) && !inBox(w.g[i + 1])) continue;
+        const a = node(w.g[i]), b = node(w.g[i + 1]);
+        const d = dist({ lat: lat[a], lon: lon[a] }, { lat: lat[b], lon: lon[b] });
+        adj[a].push(b, d, d * f); adj[b].push(a, d, d * f);
+      }
+    }
+    const extra = new Float64Array(lat.length);
+    for (const t of tiles) for (const n of t.nodes) { const i = id.get(n[0] + ',' + n[1]); if (i != null) extra[i] += n[2] === 'b' ? pen.b : n[2] === 'g' ? pen.g : 0; }
+    const snap = (p) => { let best = -1, bd = 80; for (let i = 0; i < lat.length; i++) { if (!adj[i].length) continue; const d = dist({ lat: lat[i], lon: lon[i] }, { lat: p[0], lon: p[1] }); if (d < bd) { bd = d; best = i; } } return best; };
+    const s = snap(from), e = snap(to);
+    if (s < 0 || e < 0) return null;
+    // A*: Kosten = Länge mal Aufschlag, Schätzung = Luftlinie (nie zu hoch, weil Aufschläge mindestens 1 sind)
+    const g = new Float64Array(lat.length).fill(Infinity), prev = new Int32Array(lat.length).fill(-1), len = new Float64Array(lat.length);
+    const h = (i) => dist({ lat: lat[i], lon: lon[i] }, { lat: lat[e], lon: lon[e] });
+    const heap = [[h(s), s]];
+    const push = (x) => { heap.push(x); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+    const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+    g[s] = 0;
+    let steps = 0;
+    while (heap.length && steps++ < 400000) {
+      const [, u] = pop();
+      if (u === e) break;
+      const a = adj[u];
+      for (let k = 0; k < a.length; k += 3) {
+        const v = a[k], c = g[u] + a[k + 2] + extra[v];
+        if (c < g[v]) { g[v] = c; prev[v] = u; len[v] = len[u] + a[k + 1]; push([c + h(v), v]); }
+      }
+    }
+    if (g[e] === Infinity) return null;
+    const path = [];
+    for (let i = e; i >= 0; i = prev[i]) path.push([lat[i], lon[i]]);
+    path.reverse();
+    return { pts: path, m: len[e] };
+  }
+  // ---------- Hinweise von Nutzer*innen: Hindernisse melden, bestätigen, als erledigt markieren ----------
+  const HINW = { stufe: 'Stufe oder Treppe', bordstein: 'Hoher Bordstein', pflaster: 'Schlechter Belag', aufzug: 'Aufzug defekt', blockiert: 'Gehweg blockiert', toilette: 'Toilette nicht nutzbar', ampel: 'Ampel zu kurz grün oder ohne Ton', gut: 'Gut zugänglich' };
+  let hinw = null, hinwAt = 0;
+  async function loadHinweise(force) {
+    if (!apiBase()) return [];
+    if (!force && hinw && Date.now() - hinwAt < 120000) return hinw;
+    const j = await api('/api/hinweise');
+    hinw = j.hinweise || []; hinwAt = Date.now();
+    return hinw;
+  }
+  const ago = (t) => { const d = Math.floor((Date.now() - t) / 864e5); return d < 1 ? 'heute' : d === 1 ? 'gestern' : `vor ${d} Tagen`; };
+  function hinwPopup(h) {
+    return `<strong>${esc(HINW[h.art] || h.art)}</strong><br><span class="muted">gemeldet ${ago(h.t)}${h.ok ? `, ${h.ok}× bestätigt` : ''}${h.t2 && h.ok ? `, zuletzt ${ago(h.t2)}` : ''}</span>`
+      + `<div class="hv-row"><button type="button" class="btn quiet" data-hv="${h.id}|1">Stimmt noch</button><button type="button" class="btn quiet" data-hv="${h.id}|0">Ist weg</button></div><p class="small muted">Von Nutzer*innen gemeldet</p>`;
+  }
+  const hinwIcon = (art) => L.divIcon({ className: 'hinw-pin' + (art === 'gut' ? ' gut' : ''), html: `<span>${art === 'gut' ? '✓' : '!'}</span>`, iconSize: [26, 26] });
+  // Melden: erst die Stelle auf der Karte antippen, dann die Art wählen
+  let meldenAt = null;
+  function startMelden() {
+    if (!map) return;
+    mapStatus('Tippe auf der Karte auf die Stelle, die du melden willst.');
+    $('#btn-melden').setAttribute('aria-pressed', 'true');
+    map.once('click', (ev) => {
+      $('#btn-melden').setAttribute('aria-pressed', 'false');
+      mapStatus('');
+      meldenAt = [ev.latlng.lat, ev.latlng.lng];
+      $('#melden-msg').textContent = '';
+      $$('#melden-dlg input[name="hart"]').forEach((i) => { i.checked = false; });
+      const d = $('#melden-dlg');
+      if (typeof d.showModal === 'function') d.showModal(); else d.setAttribute('open', '');
+    });
+  }
+  async function sendMelden() {
+    const art = ($('#melden-dlg input[name="hart"]:checked') || {}).value;
+    if (!art) { $('#melden-msg').textContent = 'Bitte wähle aus, was du melden willst.'; return; }
+    $('#melden-msg').textContent = 'Wird gesendet …';
+    try {
+      await postJson('/api/hinweis', { lat: meldenAt[0], lon: meldenAt[1], art });
+      $('#melden-dlg').close();
+      await loadHinweise(true);
+      if (mapLayers.acc) drawAcc();
+      mapStatus('Danke! Dein Hinweis ist auf der Karte.');
+      setTimeout(() => mapStatus(''), 4000);
+    } catch (e) { $('#melden-msg').textContent = e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : e.message; }
+  }
+  document.addEventListener('click', async (ev) => {
+    const b = ev.target.closest('[data-hv]');
+    if (!b) return;
+    const [id, yes] = b.dataset.hv.split('|');
+    b.disabled = true;
+    try { await postJson('/api/hinweis/stimme', { id, stimmt: yes === '1' }); b.textContent = 'Danke!'; await loadHinweise(true); setTimeout(() => { if (mapLayers.acc) drawAcc(); }, 800); }
+    catch (e) { b.textContent = e.message; }
+  });
+  // Hinweise nahe an einem Weg (bis 20 m)
+  function hinwNear(pts) {
+    if (!hinw || !hinw.length) return [];
+    return hinw.filter((h) => h.art !== 'gut' && pts.some((p, i) => i % 2 === 0 && dist({ lat: p[0], lon: p[1] }, h) <= 20));
+  }
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
   const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc'];
   let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: false }, settings.mapLayers || {});
@@ -1961,6 +2110,7 @@
     if (mapLayers.tram) drawTram(); else groups.tram.clearLayers();
     if (mapLayers.lage || mapLayers.stau) drawLage(); else { groups.lage.clearLayers(); groups.stau.clearLayers(); }
     if (mapLayers.acc) drawAcc(); else groups.acc.clearLayers();
+    $('#btn-melden').hidden = !mapLayers.acc || !apiBase();
     renderMapLegend();
     mapHasData = fit.length > 0;
     if (!mapFitted && fit.length && !mapLayers.rad) { map.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }); mapFitted = true; }
@@ -2055,10 +2205,14 @@
         const p = faqPlace(name);
         const list = faq.eintraege.filter((e) => e.orte.includes(name) && e.id !== 'AS-35' && (!type || e.gruppen.includes('Alle') || e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))));
         if (!p || !list.length) continue;
+        const geo = bfData && bfData.faqOrte && bfData.faqOrte[name] && bfData.faqOrte[name].g;
+        if (geo) for (const l of geo) if (l.length > 1) L.polyline(l, { color: '#1d5fa6', weight: 4, opacity: 0.45, dashArray: '6 6', interactive: false }).addTo(g);
         L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'faq-pin', html: '<span>i</span>', iconSize: [26, 26] }), keyboard: true, title: 'Gut zu wissen: ' + name })
           .bindPopup(`<strong>${esc(name)}</strong>${list.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}<p class="small muted">Aus der Altstadt-FAQ von barrierefrAI</p>`, { maxWidth: 290, maxHeight: 300 }).addTo(g);
       }
     }
+    try { await loadHinweise(); } catch (e) { /* ohne Hinweise weiter */ }
+    for (const h of hinw || []) L.marker([h.lat, h.lon], { icon: hinwIcon(h.art), title: HINW[h.art] || h.art }).bindPopup(() => hinwPopup(h), { maxWidth: 260 }).addTo(g);
     for (const o of bfData.orte || []) {
       L.circleMarker([o.lat, o.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: bfColor(bfScore(o)), fillOpacity: 1 }).bindPopup(() => bfPopup(o), { maxWidth: 280, maxHeight: 260, autoPanPaddingTopLeft: [10, 60] }).addTo(g);
     }
@@ -2174,6 +2328,9 @@
     if (k === 'rad') { radDrawn = ''; if (mapLayers.rad && map && map.getZoom() < 14) { map.setZoom(15); } }
     renderMap();
   });
+  $('#btn-melden').addEventListener('click', startMelden);
+  $('#btn-melden-ok').addEventListener('click', sendMelden);
+  $('#btn-melden-no').addEventListener('click', () => $('#melden-dlg').close());
   $('#map-window').innerHTML = WINDOWS.map((w) => `<option value="${w.id}">${esc(w.label)}</option>`).join('');
   $('#map-window').addEventListener('change', (ev) => { mapWindow = ev.target.value; renderMap(); });
   $('#btn-locate').addEventListener('click', () => {
@@ -2390,6 +2547,7 @@
   }
   function renderToday() {
     const group = MODE_GROUP[selectedMode()];
+    renderAccRow();
     renderStatus(group);
     renderVorfahrt();
     if (lageOn() && Date.now() - lageAt >= 300000) loadLage().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
@@ -2895,7 +3053,7 @@
     if (!r || r.loading) return `<div class="vf-panel">${head}${abs}<p class="small muted" role="status">Verbindungen werden gesucht …</p></div>`;
     if (r.error) return `<div class="vf-panel">${head}${abs}<p class="small" role="status">${esc(r.error)}</p><button type="button" class="btn quiet" data-vf="again">Noch einmal suchen</button></div>`;
     const d = r.data, now = Date.now();
-    const cons = d.verbindungen.filter((c) => Date.parse(c.ab) > now - 60000);
+    const cons = (d.verbindungen || []).filter((c) => Date.parse(c.ab) > now - 60000);
     if (conOpen >= cons.length) conOpen = 0;
     const badge = (x) => `<span class="dep-line${ART_LABEL[x.art] ? ' ' + ART_LABEL[x.art] : ''}">${esc(x.linie || '?')}</span>`;
     const rows = cons.map((c, i) => {
@@ -2970,7 +3128,20 @@
       if (group === 'fuss' && data.pts && data.pts.length > 1) {
         const res = zielRes[key];
         res.fuss = { loading: true };
-        Promise.all([fussRate(data.pts), settings.access.on ? loadFaq() : null]).then(([r]) => { res.fuss = r || { error: 'Zu diesem Weg gibt es keine Angaben.' }; })
+        Promise.all([fussRate(data.pts), settings.access.on ? loadFaq() : null, loadHinweise().catch(() => null)]).then(async ([r]) => {
+          res.fuss = r || { error: 'Zu diesem Weg gibt es keine Angaben.' };
+          const type = settings.access.on ? settings.access.type : null;
+          if (r && FUSS_PEN[type] && fussBad(r, type) > 30) {
+            if (zielOpen === z.id) renderVorfahrt();
+            const alt = await fussRoute(data.pts[0], data.pts[data.pts.length - 1], type).catch(() => null);
+            const mainM = data.km * 1000;
+            if (alt && alt.m <= mainM * 1.8 + 300) {
+              const ra = await fussRate(alt.pts).catch(() => null);
+              if (ra && fussBad(ra, type) < fussBad(r, type) * 0.6) r.alt = { pts: alt.pts, m: alt.m, plus: alt.m - mainM, r: ra };
+            }
+            r.altDone = true;
+          }
+        })
           .catch((e) => { res.fuss = { error: /kennt/.test(e.message) ? 'Für den Weg-Check braucht der Flowtown-Server ein Update.' : 'Der Weg konnte gerade nicht geprüft werden.' }; })
           .then(() => { if (zielOpen === z.id) renderVorfahrt(); });
       }
@@ -3646,6 +3817,38 @@
     applyModeWords(settings.mode);
     renderToday();
   }));
+  // Heute, bei Bus & Bahn und zu Fuß: Profil mit einem Tipp wählen, dazu passende Hinweise
+  let accTipOpen = null;
+  function renderAccRow() {
+    const group = MODE_GROUP[selectedMode()];
+    const show = group === 'oepnv' || group === 'fuss';
+    $('#acc-row').hidden = !show;
+    $$('#acc-row .acc-chip').forEach((b) => b.setAttribute('aria-pressed', String(settings.access.on && settings.access.type === b.dataset.acc)));
+    $('.access-row').hidden = show;   // die alte Zeile unten nur noch bei Auto und Rad
+    const box = $('#acc-tips');
+    if (!show || !settings.access.on) { box.hidden = true; box.innerHTML = ''; return; }
+    if (!faq) { loadFaq().then(() => { if (faq) renderAccRow(); }); return; }
+    const type = settings.access.type, mine = FAQ_GROUPS[type] || [];
+    const oepnv = (e) => /Nahverkehr/.test(e.kat) || e.orte.some((o) => ['Haltestelle Rathaus', 'Jahnplatz', 'Hauptbahnhof'].includes(o));
+    const list = faq.eintraege.filter((e) => e.id !== 'AS-35' && e.gruppen.some((g) => mine.includes(g)) && (group === 'oepnv' ? oepnv(e) : !oepnv(e))).slice(0, 3);
+    const hint = group === 'fuss' ? 'Wähle unter „Wohin fahren?“ ein Ziel: Flowtown prüft den Weg auf Stufen, Pflaster und Bordsteine und sucht einen besseren.' : 'Auf der Karte unter „Stadtbahn“ siehst du, welche Haltestellen stufenlos sind.';
+    box.innerHTML = `<p class="acc-hint">${ic('access')}<span><b>${esc(ACCESS_LABEL[type])}:</b> ${esc(hint)}</span></p>`
+      + list.map((e) => `<div class="tipcard" data-world="tip"><button type="button" class="tip-row" data-acctip="${e.id}" aria-expanded="${accTipOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${accTipOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`).join('');
+    box.hidden = false;
+  }
+  $('#acc-row').addEventListener('click', (ev) => {
+    const b = ev.target.closest('.acc-chip');
+    if (!b) return;
+    const on = !(settings.access.on && settings.access.type === b.dataset.acc);
+    settings.access = { on, type: b.dataset.acc };
+    store.set('settings', settings);
+    applyAccessUI();
+    renderToday();
+  });
+  $('#acc-tips').addEventListener('click', (ev) => {
+    const t = ev.target.closest('[data-acctip]');
+    if (t) { accTipOpen = accTipOpen === t.dataset.acctip ? null : t.dataset.acctip; renderAccRow(); }
+  });
   // Profil barrierefrei: auf „Heute“ und in den Einstellungen, beide zeigen immer dasselbe
   function applyAccessUI() {
     const a = settings.access;

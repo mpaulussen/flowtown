@@ -1069,6 +1069,86 @@ async function bfOsm() {
   }
   return { wc, lift };
 }
+// Orte der Altstadt-FAQ genau aus OpenStreetMap: Mittelpunkt und Umriss (Plätze, Straßen) im Zentrum
+const FAQ_OSM = {
+  'Alter Markt': ['way["name"="Alter Markt"]["highway"]', 'way["name"="Alter Markt"]["place"]', 'relation["name"="Alter Markt"]["place"]'],
+  'Obernstraße': ['way["name"="Obernstraße"]["highway"]'],
+  'Jahnplatz': ['way["name"="Jahnplatz"]["highway"]', 'way["name"="Jahnplatz"]["place"]'],
+  'Haltestelle Rathaus': ['node["name"="Rathaus"]["railway"="tram_stop"]', 'node["name"="Rathaus"]["public_transport"="stop_position"]["tram"="yes"]'],
+  'Hauptbahnhof': ['node["name"="Bielefeld Hbf"]["railway"="station"]', 'node["name"~"^Bielefeld Hauptbahnhof"]["railway"="station"]'],
+  'Bahnhofstraße': ['way["name"="Bahnhofstraße"]["highway"]'],
+  'Kunsthalle': ['way["name"~"^Kunsthalle Bielefeld"]', 'node["name"~"^Kunsthalle Bielefeld"]']
+};
+async function faqOrte() {
+  const bb = '52.008,8.515,52.036,8.548';   // Innenstadt
+  const parts = [];
+  for (const [name, qs] of Object.entries(FAQ_OSM)) qs.forEach((q) => parts.push(`${q}(${bb});out tags geom center;`));
+  const q = `[out:json][timeout:60];${parts.join('')}`;
+  const res = await fetch(OVERPASS_URL, { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'Flowtown/1.0 (info@barrierefrai.com)' } });
+  if (!res.ok) throw new Error('Overpass HTTP ' + res.status);
+  const j = await res.json();
+  // Elemente den Orten über ihren Namen zuordnen
+  const out = {};
+  const nameOf = (t) => {
+    if (!t) return null;
+    if (t.railway === 'station' || (t.public_transport === 'station' && /Bielefeld H/.test(t.name || ''))) return /Bielefeld H/.test(t.name || '') ? 'Hauptbahnhof' : null;
+    if (t.name === 'Rathaus' && (t.railway === 'tram_stop' || t.tram === 'yes')) return 'Haltestelle Rathaus';
+    if (/^Kunsthalle Bielefeld/.test(t.name || '')) return 'Kunsthalle';
+    return FAQ_OSM[t.name] ? t.name : null;
+  };
+  for (const e of j.elements || []) {
+    const n = nameOf(e.tags);
+    if (!n) continue;
+    const o = out[n] || (out[n] = { pts: [], g: [] });
+    if (e.type === 'node') o.pts.push([e.lat, e.lon]);
+    else if (e.geometry && e.geometry.length) { o.g.push(thin(e.geometry.map((p) => [p.lat, p.lon]))); e.geometry.forEach((p) => o.pts.push([p.lat, p.lon])); }
+    else if (e.center) o.pts.push([e.center.lat, e.center.lon]);
+  }
+  const res2 = {};
+  for (const [n, o] of Object.entries(out)) {
+    if (!o.pts.length) continue;
+    const c = [r5(o.pts.reduce((a, p) => a + p[0], 0) / o.pts.length), r5(o.pts.reduce((a, p) => a + p[1], 0) / o.pts.length)];
+    res2[n] = { c, g: o.g.slice(0, 12) };
+  }
+  return res2;
+}
+
+// ---------- Hinweise von Nutzer*innen: Hindernisse melden, bestätigen, als erledigt markieren ----------
+// Nur feste Arten, kein freier Text (nichts zu moderieren). Gespeichert ohne IP und ohne Kennung der Person.
+const HINWEIS_FILE = path.join(DATA_DIR, 'hinweise.json');
+const HINWEIS_ART = { stufe: 365, bordstein: 365, pflaster: 365, aufzug: 7, blockiert: 14, toilette: 14, ampel: 180, gut: 365 };
+let hinweise = [];
+try { hinweise = JSON.parse(fs.readFileSync(HINWEIS_FILE, 'utf8')); } catch (e) { hinweise = []; }
+const hinweisIp = new Map();   // IP -> { day, n } nur im Speicher, gegen Massenmeldungen
+function hinweisAllowed(ip) {
+  const day = new Date().toISOString().slice(0, 10), c = hinweisIp.get(ip);
+  if (!c || c.day !== day) { hinweisIp.set(ip, { day, n: 1 }); return true; }
+  return ++c.n <= 30;
+}
+function saveHinweise() {
+  hinweise = hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).slice(-3000);
+  fs.writeFileSync(HINWEIS_FILE + '.tmp', JSON.stringify(hinweise));
+  fs.renameSync(HINWEIS_FILE + '.tmp', HINWEIS_FILE);
+}
+function addHinweis(b) {
+  const lat = Number(b.lat), lon = Number(b.lon), art = String(b.art || '');
+  if (!HINWEIS_ART[art]) throw Object.assign(new Error('Unbekannte Art.'), { status: 400 });
+  if (!inBox(lat, lon, 0.05)) throw Object.assign(new Error('Nur in Bielefeld möglich.'), { status: 400 });
+  // gleiche Art in 15 m: als Bestätigung zählen statt doppelt
+  const near = hinweise.find((h) => h.art === art && Math.hypot((h.lat - lat) * 111320, (h.lon - lon) * 68500) < 15);
+  if (near) { near.ok++; near.bis = Math.max(near.bis, Date.now() + HINWEIS_ART[art] * 864e5); near.t2 = Date.now(); saveHinweise(); return near; }
+  const h = { id: crypto.randomBytes(6).toString('hex'), lat: r5(lat), lon: r5(lon), art, t: Date.now(), bis: Date.now() + HINWEIS_ART[art] * 864e5, ok: 0, weg: 0 };
+  hinweise.push(h); saveHinweise();
+  return h;
+}
+function voteHinweis(id, stimmt) {
+  const h = hinweise.find((x) => x.id === id);
+  if (!h) throw Object.assign(new Error('Hinweis nicht gefunden.'), { status: 404 });
+  if (stimmt) { h.ok++; h.t2 = Date.now(); h.bis = Math.max(h.bis, Date.now() + HINWEIS_ART[h.art] * 864e5); } else h.weg++;
+  saveHinweise();
+  return h;
+}
+
 async function refreshBf() {
   const out = { t: Date.now(), quelle: 'Bielefeld barrierefrei erleben (v. Bodelschwinghsche Stiftungen Bethel)', link: BF_URL, orte: bf ? bf.orte : [], wc: bf ? bf.wc : [], lift: bf ? bf.lift : [] };
   if (BF_ON) {
@@ -1087,6 +1167,7 @@ async function refreshBf() {
     if (orte.length) out.orte = orte;
   } else out.orte = [];
   try { Object.assign(out, await bfOsm()); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
+  try { out.faqOrte = await faqOrte(); } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
   bf = out;
   fs.writeFileSync(BF_FILE + '.tmp', JSON.stringify(out));
   fs.renameSync(BF_FILE + '.tmp', BF_FILE);
@@ -1095,13 +1176,18 @@ async function refreshBf() {
 }
 function bfTick() {
   if (bfRun) return;
+  if (bf && bf.t && !bf.faqOrte) {
+    bfRun = faqOrte().then((o) => { bf.faqOrte = o; bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('FAQ-Orte:', Object.keys(o).join(', ')); })
+      .catch((e) => console.error('FAQ-Orte:', e.message)).finally(() => { bfRun = null; });
+    return;
+  }
   const age = bf ? Date.now() - bf.t : Infinity, h = new Date().getHours();
   if (age === Infinity || (age > 7 * 864e5 && h >= 2 && h < 5)) {
     bfRun = refreshBf().then((m) => console.log('Barrierefrei:', m)).catch((e) => console.error('Barrierefrei:', e.message)).finally(() => { bfRun = null; });
   }
 }
 function sendBf(req, res, origin) {
-  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: bf.wc, lift: bf.lift }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
+  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: bf.wc, lift: bf.lift, faqOrte: bf.faqOrte || null }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: bf.etag, Vary: 'Origin, Accept-Encoding' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
   if (req.headers['if-none-match'] === bf.etag) { res.writeHead(304, h); return res.end(); }
@@ -1133,7 +1219,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, barrierefrei: !!(bf && bf.t), fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1146,6 +1232,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
+    if (req.method === 'GET' && p === '/api/hinweise') return send(res, 200, { t: Date.now(), hinweise: hinweise.filter((h) => h.bis > Date.now() && h.weg < 2).map(({ id, lat, lon, art, t, t2, ok, weg }) => ({ id, lat, lon, art, t, t2, ok, weg })) }, origin);
+    if (req.method === 'POST' && p === '/api/hinweis') {
+      if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
+      return send(res, 200, { ok: true, hinweis: addHinweis(await readBody(req, 2048)) }, origin);
+    }
+    if (req.method === 'POST' && p === '/api/hinweis/stimme') {
+      if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
+      const b = await readBody(req, 1024);
+      return send(res, 200, { ok: true, hinweis: voteHinweis(String(b.id || ''), b.stimmt === true) }, origin);
+    }
     if (req.method === 'GET' && p === '/api/barrierefrei') {
       if (!bf || !bf.t) { bfTick(); return send(res, 404, { fehler: 'Die Angaben zur Barrierefreiheit werden gerade geladen.' }, origin); }
       return sendBf(req, res, origin);

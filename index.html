@@ -141,8 +141,13 @@
         <label><input type="radio" name="pt" value="zug"><span><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Zug</span></label>
       </div>
     </fieldset>
+    <div class="acc-row" id="acc-row" hidden>
+      <p class="acc-q"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei unterwegs?</p>
+      <div class="acc-chips" role="group" aria-label="Profil barrierefrei"><button type="button" class="acc-chip" data-acc="rollstuhl" aria-pressed="false">Rollstuhl</button><button type="button" class="acc-chip" data-acc="rollator" aria-pressed="false">Rollator</button><button type="button" class="acc-chip" data-acc="sehen" aria-pressed="false">Sehen</button><button type="button" class="acc-chip" data-acc="hoeren" aria-pressed="false">Hören</button><button type="button" class="acc-chip" data-acc="lernen" aria-pressed="false">Einfach</button><button type="button" class="acc-chip" data-acc="ruhe" aria-pressed="false">Ruhe</button></div>
+    </div>
     <button id="btn-start" class="btn primary big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Losfahren</span></button>
     </div>
+    <div id="acc-tips" class="acc-tips" hidden></div>
     <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="a2hs" class="a2hs" hidden></div>
     <section class="today-list" aria-labelledby="h-weg"><h3 class="eyebrow" id="h-weg">Dein Weg heute</h3><div id="weg"></div><div id="st-detail"></div></section>
@@ -246,12 +251,21 @@
       <p id="map-status" class="map-status" role="status" aria-live="polite" hidden></p>
       <button id="btn-locate" class="map-locate" type="button" aria-label="Zu meinem Standort"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg></button>
     </div>
+    <button id="btn-melden" class="btn" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Hindernis melden</button>
     <p id="map-loc-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="map-legend" class="map-legend small"></div>
     <select id="map-window" aria-label="Zeitfenster des Flow-Rasters" hidden></select>
     <p id="map-empty" class="msg" hidden></p>
     <div id="map-insights" class="card insights" hidden></div>
   </section>
+
+  <dialog id="melden-dlg" class="melden-dlg" aria-labelledby="melden-h">
+    <h3 id="melden-h">Was ist an dieser Stelle?</h3>
+    <fieldset class="hart-list"><legend class="sr-only">Art des Hinweises</legend><label class="hart"><input type="radio" name="hart" value="stufe"><span>Stufe oder Treppe</span></label><label class="hart"><input type="radio" name="hart" value="bordstein"><span>Hoher Bordstein</span></label><label class="hart"><input type="radio" name="hart" value="pflaster"><span>Schlechter Belag</span></label><label class="hart"><input type="radio" name="hart" value="aufzug"><span>Aufzug defekt</span></label><label class="hart"><input type="radio" name="hart" value="blockiert"><span>Gehweg blockiert</span></label><label class="hart"><input type="radio" name="hart" value="toilette"><span>Toilette nicht nutzbar</span></label><label class="hart"><input type="radio" name="hart" value="ampel"><span>Ampel zu kurz grün oder ohne Ton</span></label><label class="hart"><input type="radio" name="hart" value="gut"><span>Gut zugänglich</span></label></fieldset>
+    <p class="small muted">Dein Hinweis erscheint für alle auf der Karte, ohne Namen. Gesendet wird nur die Stelle und die Art. Aufzüge und blockierte Wege verschwinden nach 1 bis 2 Wochen von selbst.</p>
+    <p id="melden-msg" class="msg" role="status" aria-live="polite"></p>
+    <div class="btn-col"><button type="button" class="btn primary" id="btn-melden-ok">Melden</button><button type="button" class="btn quiet" id="btn-melden-no">Abbrechen</button></div>
+  </dialog>
 
   <!-- Mehr -->
   <section id="view-more" class="view" hidden aria-labelledby="h-more">
