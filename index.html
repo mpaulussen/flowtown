@@ -78,7 +78,7 @@
     <header class="claim">
       <p class="eyebrow">Willkommen bei Flowtown</p>
       <h2 id="h-welcome" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
-      <p class="claim-sub">Weniger warten, besser ankommen.<br>Mit Auto, Öffis, Rad oder zu Fuß.<br>Optimal ans Ziel.</p>
+      <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
     </header>
     <ul class="tip-list intro-list">
       <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg></span><span class="tip-main"><b>Vor der Fahrt</b><span>Stau und Baustellen auf deinen Wegen, die beste Abfahrt, Bus und Bahn zu jedem Ziel.</span></span></div></li>
@@ -124,9 +124,11 @@
     <header class="claim">
       <p class="eyebrow" id="today-date"></p>
       <h2 id="h-start" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
-      <p class="claim-sub">Weniger warten, besser ankommen.<br>Mit Auto, Öffis, Rad oder zu Fuß.<br>Optimal ans Ziel.</p>
+      <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
     </header>
-    <div class="entry">
+    <section class="entry go-card" aria-labelledby="h-go">
+      <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
+    <div id="mode-box" class="mode-box">
     <fieldset class="switch">
       <legend>Womit?</legend>
       <div class="switch-row">
@@ -145,15 +147,20 @@
       <p class="acc-q"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei unterwegs?</p>
       <div class="acc-chips" role="group" aria-label="Profil barrierefrei"><button type="button" class="acc-chip" data-acc="rollstuhl" aria-pressed="false">Rollstuhl</button><button type="button" class="acc-chip" data-acc="rollator" aria-pressed="false">Rollator</button><button type="button" class="acc-chip" data-acc="sehen" aria-pressed="false">Sehen</button><button type="button" class="acc-chip" data-acc="hoeren" aria-pressed="false">Hören</button><button type="button" class="acc-chip" data-acc="lernen" aria-pressed="false">Einfach</button><button type="button" class="acc-chip" data-acc="ruhe" aria-pressed="false">Ruhe</button></div>
     </div>
-    <button id="btn-start" class="btn primary big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Losfahren</span></button>
     </div>
+    <div id="mode-slot-start"></div>
+    <button id="btn-start" class="btn primary big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Losfahren</span></button>
+    </section>
+    <section class="entry plan-card" id="plan-card" aria-labelledby="h-plan">
+      <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-route"/></svg></span><div><h3 id="h-plan" class="go-h">Wohin?</h3><p class="go-sub">Plane deinen Weg.</p></div></div>
+      <div id="plan-teaser"></div>
+      <button id="btn-plan" class="btn big plan-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>
+    </section>
     <div id="acc-tips" class="acc-tips" hidden></div>
     <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="a2hs" class="a2hs" hidden></div>
     <section class="today-list" aria-labelledby="h-weg"><h3 class="eyebrow" id="h-weg">Dein Weg heute</h3><div id="weg"></div><div id="st-detail"></div></section>
-    <div id="wohin" class="wohin"></div>
     <div id="tip-strip"></div>
-    <div id="vorfahrt" class="vorfahrt" hidden></div>
     <div class="access-row">
       <label class="check"><input type="checkbox" id="inp-access"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg> Profil barrierefrei</label>
       <select id="inp-access-type" aria-label="Art der Einschränkung" hidden>
@@ -174,6 +181,16 @@
         <li><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Gespeichert werden nur Halte an Ampeln und Ampeln ohne Halt, keine Start- und Zielorte. Fährst du mit Ziel los, nur dessen Name.</span></li>
       </ul>
     </details>
+  </section>
+
+  <!-- Planen -->
+  <section id="view-plan" class="view" hidden aria-labelledby="h-plan-page">
+    <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>Heute</button>
+    <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
+    <div class="entry plan-mode"><div id="mode-slot-plan"></div></div>
+    <p id="plan-off" class="msg" hidden>Zum Planen braucht Flowtown den Server. Trag ihn unter Mehr → Verbindung ein.</p>
+    <div id="wohin" class="wohin"></div>
+    <div id="vorfahrt" class="vorfahrt" hidden></div>
   </section>
 
   <!-- Aufzeichnung -->

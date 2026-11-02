@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.43.0';
+  const VERSION = '0.44.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2513,7 +2513,9 @@
     if (name !== 'map') stopMyLocation();
     $$('.view').forEach((v) => { v.hidden = v.id !== 'view-' + name; });
     document.body.dataset.view = name;   // Farbe und Ruhe je Ansicht (Aufzeichnung ohne Menü)
-    const tabFor = { drive: 'start', review: 'stats' };
+    const tabFor = { drive: 'start', review: 'stats', plan: 'start' };
+    // Womit? und das Profil gehören zu beiden Seiten: Heute (Losfahren) und Planen
+    if (name === 'start' || name === 'plan') { const slot = $('#mode-slot-' + name), box = $('#mode-box'); if (box.parentNode !== slot) slot.appendChild(box); }
     $$('.tabs button').forEach((b) => {
       const active = b.dataset.view === (tabFor[name] || name);
       if (active) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
@@ -2522,6 +2524,7 @@
     if (name === 'tips') renderTips();
     if (name === 'map') { mapFitted = false; renderMap(); }
     if (name === 'start') { renderToday(); renderLastTrip(); }
+    if (name === 'plan') { $('#plan-off').hidden = !!apiBase(); renderToday(); }
     if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
     if (name === 'start') renderA2hs();
     const h = $('#view-' + name + ' h2');
@@ -2531,6 +2534,21 @@
   $$('.tabs button').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
 
   // ---------- Heute: Verkehrsmittel, eigene Wege, beste Abfahrtszeit ----------
+  const heuteOn = () => !$('#view-start').hidden || !$('#view-plan').hidden;
+  // Heute, Karte „Wohin?“: die eigenen Ziele zum direkten Antippen, Planen öffnet eine eigene Seite
+  function renderPlanTeaser() {
+    const el = $('#plan-teaser');
+    el.innerHTML = apiBase() && settings.ziele.length
+      ? `<div class="vf-chips" role="group" aria-label="Deine Ziele">${settings.ziele.map((z) => `<button type="button" class="vf-chip" data-plan-ziel="${z.id}">${esc(z.name)}</button>`).join('')}</div>`
+      : '';
+    $('#btn-plan span').textContent = settings.ziele.length ? 'Weg planen' : 'Erstes Ziel anlegen';
+  }
+  function openPlan(id) {
+    zielEdit = false;
+    if (id) { zielOpen = id; if (id !== 'neu') { const z = settings.ziele.find((x) => x.id === id); if (z) checkZiel(z); } }
+    showView('plan');
+    if (zielOpen === 'neu') { const i = $('#inp-ziel'); if (i) i.focus(); }
+  }
   const MODE_GROUP = { auto: 'auto', rad: 'rad', bus: 'oepnv', bahn: 'oepnv', zug: 'oepnv', fuss: 'fuss' };
   const GROUP_WITH = { auto: 'mit dem Auto', rad: 'mit dem Rad', oepnv: 'mit Bus und Bahn', fuss: 'zu Fuß' };
   const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
@@ -2639,9 +2657,10 @@
     renderAccRow();
     renderStatus(group);
     renderVorfahrt();
-    if (lageOn() && Date.now() - lageAt >= 300000) loadLage().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
-    if (group === 'oepnv' && lageOn() && Date.now() - mbAt >= 900000) loadMobiel().then((ok) => { if (ok && !$('#view-start').hidden) renderToday(); });
-    if (group === 'oepnv' && lageOn() && Date.now() - fpAt >= 6 * 3600e3) loadFahrplan().then(() => { if (!$('#view-start').hidden) renderVorfahrt(); });
+    renderPlanTeaser();
+    if (lageOn() && Date.now() - lageAt >= 300000) loadLage().then((ok) => { if (ok && heuteOn()) renderToday(); });
+    if (group === 'oepnv' && lageOn() && Date.now() - mbAt >= 900000) loadMobiel().then((ok) => { if (ok && heuteOn()) renderToday(); });
+    if (group === 'oepnv' && lageOn() && Date.now() - fpAt >= 6 * 3600e3) loadFahrplan().then(() => { if (heuteOn()) renderVorfahrt(); });
   }
   function sortedRoutes(group) {
     const now = new Date().getHours();
@@ -2690,7 +2709,7 @@
     if (!b) return;
     if (b.dataset.goto) showView(b.dataset.goto);
     else if (b.dataset.weg === 'lage') { vfOpen = !vfOpen; renderStatus(MODE_GROUP[selectedMode()]); }
-    else if (b.dataset.weg === 'mobiel' && !$('#vorfahrt').hidden) $('#vorfahrt').scrollIntoView({ behavior: 'smooth', block: 'start' });
+    else if (b.dataset.weg === 'mobiel') { showView('plan'); if (!$('#vorfahrt').hidden) $('#vorfahrt').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   }));
 
   // ---------- Flowtown-Server: Ebene „Wir“, KI-Einschätzung, Meldungen ----------
@@ -3088,7 +3107,7 @@
     if (openZ && !zielRes[zKey(openZ, group)]) { checkZiel(openZ); return null; }
     const panel = !can ? ''
       : zielOpen === 'neu' ? zielForm() : zielOpen ? (group === 'oepnv' ? zielPanelOepnv : zielPanel)(settings.ziele.find((z) => z.id === zielOpen), group) : '';
-    return `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Wohin fahren?</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
+    return `<section class="vf world-vor" aria-labelledby="vf-h"><h3 class="vf-title" id="vf-h">Deine Ziele</h3><div class="vf-chips" role="group" aria-label="Deine Ziele">${chips}</div>${panel}</section>`;
   }
   function zielForm() {
     const list = ortList ? (ortList.length
@@ -3386,7 +3405,7 @@
   });
   // Abfahrten laufen mit der Uhr: jede halbe Minute neu, solange nichts eingegeben wird
   setInterval(() => {
-    if (fp && !hsAdd && !mbAdd && !$('#view-start').hidden && MODE_GROUP[selectedMode()] === 'oepnv' && settings.haltestellen.length) renderVorfahrt();
+    if (fp && !hsAdd && !mbAdd && heuteOn() && MODE_GROUP[selectedMode()] === 'oepnv' && settings.haltestellen.length) renderVorfahrt();
   }, 30000);
   onVf('submit', (ev) => {
     ev.preventDefault();
@@ -3908,6 +3927,9 @@
 
   // ---------- Ereignisse ----------
   $('#btn-start').addEventListener('click', startTrip);
+  $('#btn-plan').addEventListener('click', () => openPlan(settings.ziele.length || !apiBase() ? null : 'neu'));
+  $('#plan-teaser').addEventListener('click', (ev) => { const c = ev.target.closest('[data-plan-ziel]'); if (c) openPlan(c.dataset.planZiel); });
+  $('#btn-plan-back').addEventListener('click', () => showView('start'));
   $('#tips-body').addEventListener('click', (ev) => {
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
     const t = ev.target.closest('.tip-row[data-tip]');
@@ -3957,7 +3979,7 @@
     const type = settings.access.type, mine = FAQ_GROUPS[type] || [];
     const oepnv = (e) => /Nahverkehr/.test(e.kat) || e.orte.some((o) => ['Haltestelle Rathaus', 'Jahnplatz', 'Hauptbahnhof'].includes(o));
     const list = faq.eintraege.filter((e) => e.id !== 'AS-35' && e.gruppen.some((g) => mine.includes(g)) && (group === 'oepnv' ? oepnv(e) : !oepnv(e))).slice(0, 3);
-    const hint = group === 'fuss' ? 'Wähle unter „Wohin fahren?“ ein Ziel: Flowtown prüft den Weg auf Stufen, Pflaster und Bordsteine und sucht einen besseren.' : 'Auf der Karte unter „Stadtbahn“ siehst du, welche Haltestellen stufenlos sind.';
+    const hint = group === 'fuss' ? 'Tippe auf „Weg planen“ und wähle ein Ziel: Flowtown prüft den Weg auf Stufen, Pflaster und Bordsteine und sucht einen besseren.' : 'Auf der Karte unter „Stadtbahn“ siehst du, welche Haltestellen stufenlos sind.';
     box.innerHTML = `<p class="acc-hint">${ic('access')}<span><b>${esc(ACCESS_LABEL[type])}:</b> ${esc(hint)}</span></p>`
       + list.map((e) => `<div class="tipcard" data-world="tip"><button type="button" class="tip-row" data-acctip="${e.id}" aria-expanded="${accTipOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${accTipOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`).join('');
     box.hidden = false;
@@ -4056,7 +4078,7 @@
   $('#inp-ki').checked = !!settings.server.ki;
   $('#inp-lage').checked = settings.server.lage !== false;
   // Meldungen beim Start laden, damit sie auf „Heute“ erscheinen
-  loadNews().then(() => { if (newsCache.length && !$('#view-start').hidden) renderToday(); });
+  loadNews().then(() => { if (newsCache.length && heuteOn()) renderToday(); });
   $('#inp-cut').value = String(settings.cut);
   $('#inp-fuel').value = fmtNum(settings.fuelPrice, 2);
   $('#inp-power').value = fmtNum(settings.powerPrice, 2);
