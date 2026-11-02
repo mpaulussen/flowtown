@@ -1131,15 +1131,50 @@ async function faqOrte() {
     for (const [n, re] of Object.entries(delfi)) {
       if (out[n] && out[n].pts.length) continue;
       const ps = (stops || []).filter((x) => re.test(x[1])).map((x) => [x[2], x[3]]);
-      if (ps.length) out[n] = { pts: ps, g: [] };
+      if (ps.length) out[n] = { pts: ps, g: [], src: 'fahrplan' };
     }
+  }
+  // Mittelpunkt: bei Flächen (geschlossener Umriss) deren Mitte, bei Straßen der Punkt auf der Straße nahe der
+  // längengewichteten Mitte; Punkte ohne Linie (Haltestellen, Bahnhof) einfach gemittelt
+  const m = (a, b) => Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1]) * 68500);
+  function middle(o) {
+    const lines = o.g.filter((l) => l.length > 1);
+    if (!lines.length) return [o.pts.reduce((a, p) => a + p[0], 0) / o.pts.length, o.pts.reduce((a, p) => a + p[1], 0) / o.pts.length];
+    const closed = lines.filter((l) => l.length > 3 && m(l[0], l[l.length - 1]) < 2).sort((a, b) => b.length - a.length);
+    if (closed.length) { const l = closed[0].slice(0, -1); return [l.reduce((a, p) => a + p[0], 0) / l.length, l.reduce((a, p) => a + p[1], 0) / l.length]; }
+    let w = 0, la = 0, lo = 0;
+    for (const l of lines) for (let i = 0; i < l.length - 1; i++) { const d = m(l[i], l[i + 1]); w += d; la += d * (l[i][0] + l[i + 1][0]) / 2; lo += d * (l[i][1] + l[i + 1][1]) / 2; }
+    const c = [la / w, lo / w];
+    // nächster Punkt auf der Linie (nicht nur auf einem Eckpunkt)
+    let best = null, bd = Infinity;
+    for (const l of lines) for (let i = 0; i < l.length - 1; i++) {
+      const ax = (l[i][1] - c[1]) * 68500, ay = (l[i][0] - c[0]) * 111320, bx = (l[i + 1][1] - c[1]) * 68500, by = (l[i + 1][0] - c[0]) * 111320;
+      const dx = bx - ax, dy = by - ay, len = dx * dx + dy * dy;
+      const u = len ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / len)) : 0;
+      const d = Math.hypot(ax + u * dx, ay + u * dy);
+      if (d < bd) { bd = d; best = [l[i][0] + u * (l[i + 1][0] - l[i][0]), l[i][1] + u * (l[i + 1][1] - l[i][1])]; }
+    }
+    return best || c;
   }
   const res2 = {};
   for (const [n, o] of Object.entries(out)) {
     if (!o.pts.length) continue;
-    const c = [r5(o.pts.reduce((a, p) => a + p[0], 0) / o.pts.length), r5(o.pts.reduce((a, p) => a + p[1], 0) / o.pts.length)];
-    res2[n] = { c, g: o.g.slice(0, 12) };
+    const c = middle(o);
+    res2[n] = { c: [r5(c[0]), r5(c[1])], g: o.g.slice(0, 12), q: o.src || 'osm' };
   }
+  // Pin für Plätze und Straßen lieber von HERE: dessen Suche trifft bekannte Orte genau, OpenStreetMap liefert nur den Umriss
+  if (HERE_KEY) {
+    const query = { 'Alter Markt': 'Alter Markt, 33602 Bielefeld', 'Obernstraße': 'Obernstraße, 33602 Bielefeld', 'Jahnplatz': 'Jahnplatz, 33602 Bielefeld', 'Bahnhofstraße': 'Bahnhofstraße, 33602 Bielefeld', 'Kunsthalle': 'Kunsthalle Bielefeld, Artur-Ladebeck-Straße 5, Bielefeld' };
+    for (const [n, text] of Object.entries(query)) {
+      try {
+        const j = await getJson(`${GEOCODE_URL}?${new URLSearchParams({ q: text, limit: '1', lang: 'de-DE', in: ORT_LAENDER, apiKey: HERE_KEY })}`, 8000);
+        const pos = j.items && j.items[0] && j.items[0].position;
+        if (pos && pos.lat > 52.0 && pos.lat < 52.05 && pos.lng > 8.5 && pos.lng < 8.56) res2[n] = Object.assign(res2[n] || { g: [] }, { c: [r5(pos.lat), r5(pos.lng)], q: 'here' });
+      } catch (e) { /* dann bleibt der Punkt aus OpenStreetMap */ }
+    }
+  }
+  // von Hand festgelegte Orte gehen immer vor (node flowtown-server.mjs faq-ort "Name" Breite Länge)
+  for (const [n, c] of Object.entries((bf && bf.faqFest) || {})) res2[n] = Object.assign(res2[n] || { g: [] }, { c, q: 'fest' });
   return res2;
 }
 
@@ -1197,7 +1232,7 @@ async function refreshBf() {
     if (orte.length) out.orte = orte;
   } else out.orte = [];
   try { const o = await bfOsm(); if (o.wc.length || o.lift.length) Object.assign(out, o); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
-  try { out.faqOrte = await faqOrte(); out.faqOrteV = 2; } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
+  try { out.faqOrte = await faqOrte(); out.faqOrteV = 3; } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
   bf = out;
   fs.writeFileSync(BF_FILE + '.tmp', JSON.stringify(out));
   fs.renameSync(BF_FILE + '.tmp', BF_FILE);
@@ -1212,8 +1247,8 @@ function bfTick() {
       .catch((e) => console.error('Barrierefrei OSM:', e.message)).finally(() => { bfRun = null; });
     return;
   }
-  if (bf && bf.t && (!bf.faqOrte || Object.keys(bf.faqOrte).length < 4 || !bf.faqOrteV)) {
-    bfRun = faqOrte().then((o) => { if (Object.keys(o).length < 2) throw new Error('kaum Treffer: ' + Object.keys(o).join(', ')); bf.faqOrte = o; bf.faqOrteV = 2; bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('FAQ-Orte:', Object.keys(o).join(', ')); })
+  if (bf && bf.t && (!bf.faqOrte || Object.keys(bf.faqOrte).length < 4 || (bf.faqOrteV || 0) < 3)) {
+    bfRun = faqOrte().then((o) => { if (Object.keys(o).length < 2) throw new Error('kaum Treffer: ' + Object.keys(o).join(', ')); bf.faqOrte = o; bf.faqOrteV = 3; bf.gz = null; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('FAQ-Orte:', Object.keys(o).join(', ')); })
       .catch((e) => console.error('FAQ-Orte:', e.message)).finally(() => { bfRun = null; });
     return;
   }
@@ -1336,11 +1371,24 @@ if (cli === 'neue-codes') {
   process.exit(0);
 }
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
-if (cli === 'faq-orte') {
+if (cli === 'faq-ort') {
+  // einen Ort von Hand festlegen oder die Festlegung aufheben: faq-ort "Alter Markt" 52.0214 8.5339  |  faq-ort "Alter Markt" weg
+  const [n, a, b] = process.argv.slice(3);
+  if (!bf || !n) { console.error('Aufruf: node flowtown-server.mjs faq-ort "Alter Markt" 52.0214 8.5339   (oder: … weg)'); process.exit(1); }
+  bf.faqFest = bf.faqFest || {};
+  if (a === 'weg') delete bf.faqFest[n];
+  else if (isFinite(Number(a)) && isFinite(Number(b))) bf.faqFest[n] = [r5(Number(a)), r5(Number(b))];
+  else { console.error('Bitte Breite und Länge angeben, z. B. 52.0214 8.5339'); process.exit(1); }
+  if (bf.faqOrte) { if (a === 'weg') delete bf.faqOrte[n]; else bf.faqOrte[n] = Object.assign(bf.faqOrte[n] || { g: [] }, { c: bf.faqFest[n], q: 'fest' }); }
+  if (a === 'weg') bf.faqOrteV = 0;   // beim nächsten Start neu bestimmen
+  fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined })));
+  console.log(a === 'weg' ? n + ': Festlegung aufgehoben.' : `${n}: festgelegt auf ${bf.faqFest[n].join(', ')}.`, 'Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
+  process.exit(0);
+} else if (cli === 'faq-orte') {
   loadFahrplan();
   faqOrte().then((o) => {
-    for (const [n, v] of Object.entries(o)) console.log(n.padEnd(20), v.c.join(', '), v.g.length ? `(${v.g.length} Linien)` : '');
-    if (bf && Object.keys(o).length >= 4) { bf.faqOrte = o; bf.faqOrteV = 2; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('Gespeichert. Jetzt neu starten: sudo systemctl restart flowtown'); }
+    for (const [n, v] of Object.entries(o)) console.log(n.padEnd(20), v.c.join(', ').padEnd(20), { here: 'HERE', osm: 'OpenStreetMap', fest: 'von Hand', fahrplan: 'Fahrplan' }[v.q] || '', v.g.length ? `(${v.g.length} Linien)` : '');
+    if (bf && Object.keys(o).length >= 4) { bf.faqOrte = o; bf.faqOrteV = 3; fs.writeFileSync(BF_FILE, JSON.stringify(Object.assign({}, bf, { gz: undefined, raw: undefined }))); console.log('Gespeichert. Jetzt neu starten: sudo systemctl restart flowtown'); }
     process.exit(0);
   }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'barrierefrei') {
@@ -1348,7 +1396,7 @@ if (cli === 'faq-orte') {
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, faq-orte'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, faq-orte, faq-ort'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
