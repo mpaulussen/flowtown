@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.62.0';
+  const VERSION = '0.63.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1210,7 +1210,7 @@
     if (text && !keep) micT = setTimeout(() => { el.hidden = true; }, 6000);
   }
   function micUI(on) {
-    ['#btn-mic', '#btn-mic-drive', '.assist-mic'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
+    ['#btn-mic', '#btn-mic-drive', '.assist-mic', '#ask-mic'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
   }
   // Gesprächsmodus: nach einer gesprochenen Antwort oder Rückfrage geht das Mikrofon von selbst wieder an.
   // Kommt nichts, endet es still; „Danke“, „Das war's“ oder „Tschüss“ beenden das Gespräch.
@@ -1315,7 +1315,7 @@
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
       const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '',
-        unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele };
+        unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-4);
       assistAct = r.aktion || null;
@@ -1329,6 +1329,29 @@
       assistLast = msg;
       say(msg);
     } finally { assistBusy = false; }
+  }
+  // Kurze Zusammenfassung der eigenen Auswertung für Fragen wie „Wo warte ich am längsten?“; nur mit Einstellung
+  function assistStats() {
+    // nur echte Namen; Ampeln ohne Namen heißen intern nach ihren Koordinaten, die gehen nicht mit
+    const safe = (n) => (/\d+[.,]\d{2,}/.test(String(n || '')) ? 'Ampel ohne Namen' : String(n || '').slice(0, 60));
+    const real = trips.filter((t) => !t.demo);
+    if (!real.length) return { fahrten_gesamt: 0 };
+    const since = Date.now() - 30 * 864e5, month = real.filter((t) => t.start >= since);
+    const week = real.filter((t) => t.start >= weekStart()), wag = aggregate(week), mag = aggregate(month);
+    const by = {}; month.forEach((t) => { by[t.mode] = (by[t.mode] || 0) + 1; });
+    const fresser = mag.per.filter((a) => a.halts).sort((x, y) => y.wait - x.wait).slice(0, 3)
+      .map((a) => ({ ampel: safe(labelFor(a.sample || a)), halte: a.halts, vorbei_ohne_halt: a.passes, warten_s_schnitt: Math.round(a.wait / a.halts / 1000) }));
+    const { routes, own } = sortedRoutes(MODE_GROUP[selectedMode()]);
+    const g = routes.find((x) => own(x)) || routes[0];
+    const weg = g ? { name: `${safe(labelFor(g.first))} bis ${safe(labelFor(g.last))}`, fahrten: g.trips.length, fahrzeit_min: Math.round(avgOf(g.trips.map((t) => (t.end || t.start) - t.start)) / 60000), ampel_warten_min: Math.round(avgOf(g.trips.map(tripWait)) / 6000) / 10 } : null;
+    return {
+      fahrten_gesamt: real.length,
+      woche: { fahrten: week.length, ampeln_mit_halt_prozent: wag.halts + wag.passes ? Math.round(wag.halts / (wag.halts + wag.passes) * 100) : null, gewartet_min: Math.round(wag.wait / 60000) },
+      letzte_30_tage: { fahrten: month.length, nach_verkehrsmittel: by, gewartet_min: Math.round(mag.wait / 60000) },
+      haeufigster_weg: weg,
+      zeitfresser: fresser,
+      tipps: computeTips().slice(0, 5).map((t) => `${plain(t.head || t.title)}: ${plain(t.short)}`.replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen').slice(0, 200))
+    };
   }
   function showAssist(frage, antwort) {
     const el = $('#assist');
@@ -3143,10 +3166,19 @@
 
   // ---------- Navigation ----------
   // Frag Flowtown oben auf den Hauptseiten, mit einem kurzen Beispiel, das zur Seite passt
-  const ASK_EX = { start: 'z. B. nächste Bahn?', plan: 'z. B. Rollstuhl-WC?', tips: 'z. B. Park + Ride?', stats: 'z. B. Baustellen?' };
+  const ASK_EX = { start: 'Nächste Bahn?', plan: 'Rollstuhl-WC?', tips: 'Park + Ride?', stats: 'Baustellen?' };
+  const ASK_EX_MINE = { tips: 'Mein Zeitfresser?', stats: 'Wo warte ich lange?' };   // mit eingeschalteter Auswertung
   function askBar(name) {
-    $('#ask-wrap').hidden = !(ASK_EX[name] && apiBase());
-    if (ASK_EX[name]) $('#ask-inp').placeholder = 'Frag Flowtown … ' + ASK_EX[name];
+    const on = !!(ASK_EX[name] && apiBase());
+    $('#ask-wrap').hidden = !on;
+    if (on) {
+      const slot = $('#ask-slot-' + name), w = $('#ask-wrap');
+      if (slot && w.parentNode !== slot) slot.appendChild(w);
+      $('#ask-inp').placeholder = 'Frag Flowtown: ' + ((settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
+    }
+    $('#ask-mic').hidden = !SR;
+    // ein Mikrofon genügt: steht das Feld da, sitzt es im Feld statt oben in der Leiste
+    const hm = $('#btn-mic'); if (hm) hm.hidden = !SR || on;
   }
   function showView(name) {
     if (name !== 'map') stopMyLocation();
@@ -4824,6 +4856,8 @@
     wirCache = null; wirAt = 0; newsAt = 0; lageAt = 0; lageCache = null;
     if (settings.server.wir) flushWir();
   };
+  $('#inp-ask-stats').checked = !!settings.assistStats;
+  $('#inp-ask-stats').addEventListener('change', (ev) => { settings.assistStats = ev.target.checked; store.set('settings', settings); renderMoreSubs(); });
   ['#inp-server', '#inp-wir', '#inp-ki', '#inp-lage'].forEach((id) => $(id).addEventListener('change', () => { saveServer(); renderMoreSubs(); }));
   $('#btn-server-test').addEventListener('click', async () => {
     saveServer();
@@ -4919,7 +4953,8 @@
     store.set('settings', settings);
     applyAccessUI(); updateVoiceBtn();
   }
-  ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = !SR; b.addEventListener('click', listen); } });
+  ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = !SR; b.addEventListener('click', () => listen()); } });
+  askBar(document.body.dataset.view || 'start');
   let sosBack = null;
   function openSos() {
     const el = $('#sos'), src = $('#box-krise .tip-detail');
@@ -4952,6 +4987,7 @@
     }
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
+  $('#ask-mic').addEventListener('click', () => listen());
   $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });

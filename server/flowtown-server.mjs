@@ -1763,7 +1763,8 @@ Regeln:
 - Entfernungen runden (etwa 200 Meter), Zeiten als Uhrzeit oder in Minuten.
 - Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
 - Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
-- Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.`;
+- Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
+- Fragen zu den eigenen Fahrten (Wartezeiten, Zeitfresser, Ampeln, häufigster Weg, Tipps) beantwortest du nur aus „eigene_auswertung“ im Kontext. Steht dort „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
@@ -1904,6 +1905,23 @@ async function mistralChat(messages) {
     return (await res.json()).choices[0].message;
   } finally { clearTimeout(timer); }
 }
+// eigene Auswertung aus der App: nur Zahlen und kurze Texte, nichts wird gespeichert
+function assistStatsClean(a) {
+  if (!a || typeof a !== 'object') return 'ausgeschaltet';
+  const n = (x) => (Number.isFinite(Number(x)) ? Math.round(Number(x) * 10) / 10 : null);
+  const by = {};
+  if (a.letzte_30_tage && a.letzte_30_tage.nach_verkehrsmittel && typeof a.letzte_30_tage.nach_verkehrsmittel === 'object') for (const [m, v] of Object.entries(a.letzte_30_tage.nach_verkehrsmittel).slice(0, 8)) by[clip(m, 12)] = n(v);
+  const w = a.woche || {}, l = a.letzte_30_tage || {}, h = a.haeufigster_weg;
+  const nm = (x, len) => { const t = clip(x, len); return /\d+[.,]\d{2,}/.test(t) ? 'Ampel ohne Namen' : t; };   // keine Koordinaten als Namen
+  return {
+    fahrten_gesamt: n(a.fahrten_gesamt),
+    woche: { fahrten: n(w.fahrten), ampeln_mit_halt_prozent: n(w.ampeln_mit_halt_prozent), gewartet_min: n(w.gewartet_min) },
+    letzte_30_tage: { fahrten: n(l.fahrten), nach_verkehrsmittel: by, gewartet_min: n(l.gewartet_min) },
+    haeufigster_weg: h && typeof h === 'object' ? { name: nm(h.name, 80), fahrten: n(h.fahrten), fahrzeit_min: n(h.fahrzeit_min), ampel_warten_min: n(h.ampel_warten_min) } : null,
+    zeitfresser: (Array.isArray(a.zeitfresser) ? a.zeitfresser : []).slice(0, 3).map((z) => ({ ampel: nm(z && z.ampel, 60), halte: n(z && z.halte), vorbei_ohne_halt: n(z && z.vorbei_ohne_halt), warten_s_schnitt: n(z && z.warten_s_schnitt) })),
+    tipps: (Array.isArray(a.tipps) ? a.tipps : []).slice(0, 5).map((t) => clip(t, 200).replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen'))
+  };
+}
 async function assist(body) {
   if (!MISTRAL_KEY) throw Object.assign(new Error('Die Assistenz ist auf dem Server noch nicht eingerichtet.'), { status: 503 });
   const frage = clip(body.frage, 300);
@@ -1911,7 +1929,7 @@ async function assist(body) {
   const k = body.kontext || {};
   const pos = Array.isArray(k.pos) && k.pos.length === 2 && inBox(Number(k.pos[0]), Number(k.pos[1]), 0.3) ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau
   const ctx = { pos, ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
-  const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }) };
+  const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: assistStatsClean(k.auswertung) };
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-4).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   const messages = [{ role: 'system', content: ASSIST_SYSTEM + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage }];
   const act = {}, used = [];

@@ -76,8 +76,6 @@
 
 <main id="main">
   <p id="app-error" class="msg warn app-error" role="alert" hidden></p>
-  <!-- Frag Flowtown: auf Heute, Wohin?, Tipps und Verlauf immer ganz oben -->
-  <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
   <!-- Einstieg beim ersten Start -->
   <section id="view-welcome" class="view welcome" hidden aria-labelledby="h-welcome">
     <div id="w-step1" class="w-step">
@@ -138,6 +136,10 @@
       <h2 id="h-start" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
       <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
     </header>
+    <div class="ask-slot" id="ask-slot-start">
+      <!-- Frag Flowtown: ein Feld, wandert unter den ersten Absatz von Heute, Wohin?, Tipps und Verlauf -->
+      <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><button type="button" class="ask-mic" id="ask-mic" aria-label="Sprechen statt tippen" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
+    </div>
     <section class="entry go-card" aria-labelledby="h-go">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
     <div id="mode-box" class="mode-box">
@@ -199,6 +201,7 @@
   <section id="view-plan" class="view" hidden aria-labelledby="h-plan-page">
     <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>Heute</button>
     <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
+    <div class="ask-slot" id="ask-slot-plan"></div>
     <div class="entry plan-mode"><div id="mode-slot-plan"></div></div>
     <p id="plan-off" class="msg" hidden>Zum Planen braucht Flowtown den Server. Trag ihn unter Mehr → Verbindung ein.</p>
     <div id="wohin" class="wohin"></div>
@@ -259,6 +262,7 @@
   <!-- Tipps -->
   <section id="view-tips" class="view" hidden aria-labelledby="h-tips">
     <header class="page-head"><h2 id="h-tips" class="display">Tipps</h2><p class="page-sub" id="tips-small"></p></header>
+    <div class="ask-slot" id="ask-slot-tips"></div>
     <div id="tips-body" class="tip-list"></div>
     <p class="note"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg><span>Aus deinen Fahrten, auf deinem Gerät ausgewertet.</span></p>
   </section>
@@ -271,6 +275,7 @@
     </div></header>
     <p class="page-sub" id="stats-small"></p>
     <p id="stats-demo" class="msg warn" hidden>Enthält Demo-Daten aus der Testfahrt.</p>
+    <div class="ask-slot" id="ask-slot-stats"></div>
     <div id="stats-body"></div>
   </section>
 
@@ -320,12 +325,14 @@
         <label class="check"><input type="checkbox" id="inp-wir"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg> Fahrten anonym beitragen</label>
         <label class="check"><input type="checkbox" id="inp-lage"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg> Verkehrslage vor der Fahrt</label>
         <label class="check"><input type="checkbox" id="inp-ki"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> KI-Einschätzung erlauben</label>
+        <label class="check"><input type="checkbox" id="inp-ask-stats"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Frag Flowtown darf meine Auswertung nutzen</label>
         <button id="btn-server-test" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Verbindung prüfen</button>
         <p class="small muted" id="server-status" role="status" aria-live="polite"></p>
         <details class="more-info"><summary><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>Was wird gesendet?</summary>
           <ul class="ilist small">
             <li><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span><b>Beitragen:</b> je Ampel nur Richtung, Zeitfenster und Wartezeit. Keine Uhrzeiten, kein Start, kein Ziel. Werte anderer erscheinen ab fünf Personen.</span></li>
             <li><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b>Verkehrslage:</b> Die App lädt die Lage für ganz Bielefeld und prüft auf dem Handy, was deine Wege betrifft. Über dich wird dabei nichts gesendet.</span></li>
+            <li><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span><b>Auswertung für Fragen:</b> nur wenn eingeschaltet. Mit jeder Frage an „Frag Flowtown“ geht dann eine kurze Zusammenfassung mit: Zahl der Fahrten, Wartezeiten, die drei größten Zeitfresser mit Ampelnamen und deine Tipps. Keine einzelnen Fahrten, keine Koordinaten, keine Uhrzeiten; nichts wird gespeichert.</span></li>
             <li><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span><b>KI:</b> auf Knopfdruck zusammengefasste Werte an Mistral (EU), etwa Wartezeiten und Ampelnamen. Keine Koordinaten, nichts wird gespeichert.</span></li>
           </ul></details>
       </div>
