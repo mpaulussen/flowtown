@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.58.0';
+  const VERSION = '0.58.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1328,7 +1328,9 @@
       return false;
     }
     // Abfahrten: „Nächste Bahn ab Jahnplatz“, „Wann fährt der nächste Bus“, „Abfahrten Rathaus“
-    if (/nächste[rn]? (bahn|stadtbahn|straßenbahn|bus|zug|abfahrt)|wann f(ä|a)hrt|abfahrten/.test(c)) {
+    // Befehle nur, wenn der ganze Satz einer ist; sonst geht die Frage an die Assistenz
+    const PRE = '^(?:(?:jetzt|bitte|ich will|ich möchte)\\s+)?(?:(?:mit dem|mit der)\\s+\\S+\\s+|zu ?fu(?:ß|ss)\\s+)?';
+    if (/^(?:wann f(?:ä|a)hrt (?:die |der |das )?)?nächste[rn]? (?:bahn|stadtbahn|straßenbahn|bus|zug|abfahrt(?:en)?)\b|^abfahrten\b/.test(c) && !/\b(zum|zur|nach)\b/.test(c)) {
       if (!fp) await loadFahrplan();
       if (!fp) { speak('Der Fahrplan ist gerade nicht geladen.', { now: true, force: true }); return true; }
       const kind = /\bbus\b/.test(c) ? 3 : /\bzug\b/.test(c) ? 2 : /bahn/.test(c) ? 0 : null;
@@ -1344,7 +1346,7 @@
       return true;
     }
     // Losfahren, optional mit Verkehrsmittel: „Mit dem Rad los“, „Zu Fuß losgehen“, „Aufzeichnung starten“
-    if (/\blos\b|losfahren|losgehen|starte|aufzeichnung starten|fahrt starten|^start\b/.test(c) && !/\b(zum|zur|nach)\b/.test(c)) {
+    if (new RegExp(PRE + '(?:los|losfahren|losgehen|starten|start|aufzeichnung starten|fahrt starten|starte (?:die )?(?:aufzeichnung|fahrt))(?:\\s+bitte)?$').test(c)) {
       const m = modeIn(c);
       if (m) setModeVoice(m);
       if ($('#view-start').hidden) showView('start');
@@ -1352,8 +1354,8 @@
       return true;
     }
     // Ziel: „Zur Uni“, „Mit dem Rad zum Alten Markt“, „Wie komme ich nach Brackwede“
-    const zm = c.match(/(?:\b(?:zum|zur|nach|ins|in die|in den)\b|wie komme ich (?:zum|zur|nach|zu)|\bziel\b)\s+(.+)$/);
-    if (zm) {
+    const zm = c.match(new RegExp(PRE + '(?:zum|zur|nach|ins|in die|in den|ziel|wie komme ich (?:zum|zur|nach|zu))\\s+(.+)$'));
+    if (zm && zm[1].split(' ').length <= 5) {
       const m = modeIn(c);
       if (m) setModeVoice(m);
       const what = zm[1].replace(/\s(mit dem|mit der|zu ?fu(ß|ss)|bitte)(\s.*)?$/, '').trim();
