@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.56.0';
+  const VERSION = '0.57.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1176,6 +1176,168 @@
     c.querySelectorAll('*').forEach((n) => n.append(' '));   // zwischen allen Teilen eine Pause
     c.querySelectorAll('li, p, h4, .vf-sum, .vf-phead, .con-t, br').forEach((n) => n.append('. '));
     speak(c.textContent.replace(/\s+/g, ' ').replace(/([?!:])\s*\./g, '$1').replace(/(\.\s*){2,}/g, '. '), { now: true, force: true });
+  }
+
+  // ---------- Sprachbefehle (Stufe 2): Mikrofon-Knopf, ein kurzer Befehl, Antwort als Ansage ----------
+  // Spracherkennung des Handys (Web Speech API). Sie schickt die Aufnahme an den Anbieter des Betriebssystems
+  // (Apple oder Google); deshalb einmal Einwilligung. Flowtown selbst speichert und sendet nichts davon.
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  let recog = null, sayAfterZiel = null, micT = null;
+  const MIC_HELP = 'Du kannst zum Beispiel sagen: Losfahren. Mit dem Rad los. Zur Uni. Nächste Bahn ab Jahnplatz. '
+    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe.';
+  function micStatus(text, keep) {
+    const el = $('#mic-status');
+    if (!el) return;
+    el.textContent = text; el.hidden = !text;
+    clearTimeout(micT);
+    if (text && !keep) micT = setTimeout(() => { el.hidden = true; }, 6000);
+  }
+  function micUI(on) {
+    ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
+  }
+  function listen() {
+    if (!SR) return;
+    if (recog) { recog.abort(); return; }
+    if (!settings.voiceIn) {
+      const ok = window.confirm('Sprachbefehle nutzen die Spracherkennung deines Handys. Dabei geht die Aufnahme an den Anbieter des Betriebssystems (Apple oder Google). Flowtown speichert davon nichts. Einverstanden?');
+      if (!ok) return;
+      settings.voiceIn = true; store.set('settings', settings);
+    }
+    if (canSpeak) speechSynthesis.cancel();
+    recog = new SR();
+    recog.lang = 'de-DE'; recog.interimResults = false; recog.maxAlternatives = 3; recog.continuous = false;
+    recog.onresult = (e) => {
+      const alts = Array.from(e.results[0] || []).map((a) => a.transcript).filter(Boolean);
+      if (alts.length) handleCommand(alts);
+    };
+    recog.onerror = (e) => {
+      const msg = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Das Mikrofon ist für Flowtown nicht freigegeben. Erlaube es in den Einstellungen des Browsers.' : e.error === 'no-speech' ? 'Ich habe nichts gehört.' : e.error === 'aborted' ? '' : 'Die Spracherkennung ist gerade nicht erreichbar.';
+      if (msg) { micStatus(msg); speak(msg, { now: true, force: true }); }
+    };
+    recog.onend = () => { recog = null; micUI(false); if ($('#mic-status').textContent === 'Ich höre zu …') micStatus(''); };
+    try { recog.start(); micUI(true); micStatus('Ich höre zu …', true); try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) { /* ohne */ } }
+    catch (e) { recog = null; micStatus('Die Spracherkennung konnte nicht starten.'); }
+  }
+  const cmdNorm = (x) => String(x || '').toLowerCase().replace(/[.,!?;:„“"']/g, ' ').replace(/\s+/g, ' ').trim();
+  const MODE_WORDS = [['fuss', /\bzu ?fu(ß|ss)|\blaufen\b|\bgehen\b|\bausgestiegen\b/], ['bahn', /stadtbahn|straßenbahn|strassenbahn|\btram\b|\bbahn\b|\blinie \d/], ['bus', /\bbus\b/], ['zug', /\bzug\b|regionalbahn|\bre ?\d/], ['rad', /\brad\b|fahrrad/], ['auto', /\bauto\b|\bwagen\b/]];
+  const modeIn = (c) => { for (const [m, re] of MODE_WORDS) if (re.test(c)) return m; return null; };
+  const sayMin = (m) => `${m} Minute${m === 1 ? '' : 'n'}`;
+  function sayDepartures(name, kind) {
+    const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
+    const list = departures(name, now, 90).filter((d) => kind == null || d.kind === kind).slice(0, 5);
+    speak(list.length ? `Nächste Abfahrten ${name}: ` + list.map((d) => { const m = d.t - nowMin; return `${d.kind === 0 ? 'Stadtbahn' : d.kind === 2 ? '' : 'Bus'} ${d.line} nach ${d.head}, ${m <= 0 ? 'jetzt' : `in ${sayMin(m)}`}`; }).join('. ') + '.' : `${name}: in der nächsten Zeit keine Abfahrt.`, { now: true, force: true });
+  }
+  // Haltestelle aus dem Gesagten: eigene Haltestellen zuerst, dann alle aus dem Fahrplan
+  function matchStop(phrase) {
+    const k = hstNorm(phrase);
+    if (!k || !fp) return null;
+    const names = settings.haltestellen.concat(fp.names);
+    return names.find((n) => hstNorm(n) === k) || names.find((n) => hstNorm(n).startsWith(k) || k.startsWith(hstNorm(n))) || names.find((n) => hstNorm(n).includes(k)) || null;
+  }
+  // Vergleich ohne Beugung: „zum Alten Markt“ findet „Alter Markt“, „zur Universität“ findet „Universität“
+  const stemKey = (x) => hstNorm(String(x || '').toLowerCase().split(/[\s-]+/).map((w) => (w.length > 4 ? w.replace(/(en|em|er|es|e|n|s)$/, '') : w)).join(' '));
+  function matchZiel(phrase) {
+    const k = stemKey(phrase);
+    if (!k) return null;
+    const zk = (z) => stemKey(z.name);
+    return settings.ziele.find((z) => zk(z) === k) || settings.ziele.find((z) => zk(z).startsWith(k) || k.startsWith(zk(z))) || settings.ziele.find((z) => zk(z).includes(k)) || null;
+  }
+  function setModeVoice(m) {
+    setModeUI(m); settings.mode = m; store.set('settings', settings); applyModeWords(m); renderToday();
+  }
+  async function handleCommand(alts) {
+    micStatus('Verstanden: „' + alts[0] + '“');
+    for (const a of alts) if (await runCommand(cmdNorm(a))) return;
+    speak('Das habe ich nicht verstanden. Sag zum Beispiel: Losfahren, Zur Uni, Nächste Bahn ab Jahnplatz, oder Hilfe.', { now: true, force: true });
+  }
+  async function runCommand(c) {
+    if (!c) return false;
+    if (/\bhilfe\b|was kann ich sagen|welche befehle/.test(c)) { speak(MIC_HELP, { now: true, force: true }); return true; }
+    if (/ansagen (aus|stopp|stop)|sei (still|leise)|ruhe bitte/.test(c)) { setVoice(false); if (canSpeak) speechSynthesis.cancel(); micStatus('Ansagen aus'); return true; }
+    if (/ansagen (an|ein)/.test(c)) { setVoice(true); speak('Ansagen an.', { now: true }); return true; }
+    // Rückfrage unterwegs (Ausgestiegen? Eingestiegen?)
+    if (legSuggest) {
+      if (/^(ja|jawohl|genau|stimmt|richtig|ok|okay)\b/.test(c)) { changeMode(legSuggest.mode, legSuggest.t); return true; }
+      if (/^(nein|nee|falsch|stimmt nicht)\b/.test(c)) { legNo = { mode: legSuggest.mode, t: Date.now() }; hideLegSuggest(); speak('Gut, ich bleibe dabei.', { now: true }); return true; }
+    }
+    if (rec) {
+      if (/(fahrt|aufzeichnung|weg)? ?(beenden|beende|stoppen|stopp\b|stop\b)|angekommen|ich bin da\b/.test(c)) { speak('Fahrt beendet.', { now: true }); finishTrip(); return true; }
+      if (/wie lange noch|wann bin ich|wann komme ich|ankunft|restzeit/.test(c)) {
+        const pl = rec.trip.plan, now = Date.now(), gone = Math.round((now - (rec.trip.start || rec.startedAt)) / 60000);
+        if (pl && pl.dauer) { const left = Math.round((pl.t + pl.dauer * 1000 - now) / 60000); speak(left > 0 ? `Bis ${pl.name} noch etwa ${sayMin(left)}, laut Planung.` : `Laut Planung wärst du schon bei ${pl.name}. Du bist ${sayMin(gone)} unterwegs.`, { now: true, force: true }); }
+        else speak(`Kein Ziel gesetzt. Du bist seit ${sayMin(gone)} unterwegs.`, { now: true, force: true });
+        return true;
+      }
+      if (/nächste[rn]? (halt|haltestelle)|welche haltestelle|wo bin ich|wo sind wir/.test(c)) {
+        const L = rec.ln;
+        if (L && L.seq.length) { const cur = L.est ? L.est.name : L.seq[L.seq.length - 1], nx = L.est ? L.est.next : L.next; speak(`${L.est ? 'Etwa ' : ''}${cur}.${nx ? ' Nächster Halt: ' + nx + '.' : ''}`, { now: true, force: true }); }
+        else speak(`${$('#drive-state').textContent}. ${$('#drive-dir').textContent || ''}`, { now: true, force: true });
+        return true;
+      }
+      if (/bilanz|wie viele ampeln|wie lange gewartet|wartezeit/.test(c)) {
+        speak(`${$('#drive-halts').textContent} Halte an Ampeln, zusammen ${$('#drive-wait').textContent} Minuten. ${$('#drive-pass').textContent} Ampeln ohne Halt.`, { now: true, force: true });
+        return true;
+      }
+      const m = /jetzt|weiter|umgestiegen|eingestiegen|ausgestiegen|wechsel/.test(c) || c.split(' ').length <= 3 ? modeIn(c) : null;
+      if (m) { changeMode(m); return true; }
+      return false;
+    }
+    // Abfahrten: „Nächste Bahn ab Jahnplatz“, „Wann fährt der nächste Bus“, „Abfahrten Rathaus“
+    if (/nächste[rn]? (bahn|stadtbahn|straßenbahn|bus|zug|abfahrt)|wann f(ä|a)hrt|abfahrten/.test(c)) {
+      if (!fp) await loadFahrplan();
+      if (!fp) { speak('Der Fahrplan ist gerade nicht geladen.', { now: true, force: true }); return true; }
+      const kind = /\bbus\b/.test(c) ? 3 : /\bzug\b/.test(c) ? 2 : /bahn/.test(c) ? 0 : null;
+      const at = (c.match(/\b(?:ab|von|an der haltestelle|haltestelle|abfahrten)\s+(.+)$/) || [])[1];
+      const name = at ? matchStop(at) : settings.haltestellen[0];
+      if (!name) { speak(at ? `Die Haltestelle ${at} kenne ich nicht.` : 'Von welcher Haltestelle? Sag zum Beispiel: Nächste Bahn ab Jahnplatz.', { now: true, force: true }); return true; }
+      sayDepartures(name, kind);
+      return true;
+    }
+    if (/vorlesen|lies vor|lies mir/.test(c)) {
+      const panel = !$('#view-plan').hidden && $('#wohin .vf-panel');
+      if (panel) sayPanel(panel); else speak($('#weg').textContent || 'Hier gibt es gerade nichts vorzulesen.', { now: true, force: true });
+      return true;
+    }
+    // Losfahren, optional mit Verkehrsmittel: „Mit dem Rad los“, „Zu Fuß losgehen“, „Aufzeichnung starten“
+    if (/\blos\b|losfahren|losgehen|starte|aufzeichnung starten|fahrt starten|^start\b/.test(c) && !/\b(zum|zur|nach)\b/.test(c)) {
+      const m = modeIn(c);
+      if (m) setModeVoice(m);
+      if ($('#view-start').hidden) showView('start');
+      startTrip();
+      return true;
+    }
+    // Ziel: „Zur Uni“, „Mit dem Rad zum Alten Markt“, „Wie komme ich nach Brackwede“
+    const zm = c.match(/(?:\b(?:zum|zur|nach|ins|in die|in den)\b|wie komme ich (?:zum|zur|nach|zu)|\bziel\b)\s+(.+)$/);
+    if (zm) {
+      const m = modeIn(c);
+      if (m) setModeVoice(m);
+      const what = zm[1].replace(/\s(mit dem|mit der|zu ?fu(ß|ss)|bitte)(\s.*)?$/, '').trim();
+      if (!apiBase()) { speak('Zum Planen braucht Flowtown den Server.', { now: true, force: true }); return true; }
+      let z = matchZiel(what);
+      if (!z) {
+        speak(`Ich suche ${what}.`, { now: true, force: true });
+        try {
+          const o = ((await api('/api/ort?q=' + encodeURIComponent(what))).orte || [])[0];
+          if (!o) { speak(`${what} habe ich nicht gefunden.`, { now: true, force: true }); return true; }
+          sayAfterZiel = 'neu';
+          addZiel(o);
+          z = settings.ziele[settings.ziele.length - 1];
+          sayAfterZiel = z.id;
+          showView('plan');
+          speak(`Ich habe ${z.name} als Ziel angelegt und prüfe den Weg.`, { force: true });
+          return true;
+        } catch (e) { speak('Die Suche ist gerade nicht erreichbar.', { now: true, force: true }); return true; }
+      }
+      sayAfterZiel = z.id;
+      openPlan(z.id);
+      const r = zielRes[zKey(z, MODE_GROUP[selectedMode()])];
+      if (r && r.data) { sayAfterZiel = null; setTimeout(() => sayPanel($('#wohin .vf-panel')), 80); }
+      else speak(`Ich prüfe den Weg ${MODE_GROUP[selectedMode()] === 'oepnv' ? 'mit Bus und Bahn ' : ''}zu ${z.name}.`, { force: true });
+      return true;
+    }
+    const m = c.split(' ').length <= 3 ? modeIn(c) : null;
+    if (m) { setModeVoice(m); speak(`${MODES[m].label} gewählt.`, { now: true }); return true; }
+    return false;
   }
 
   // ---------- Unterwegs mit Bus und Bahn: Haltestelle und nächste Haltestelle ----------
@@ -3833,6 +3995,7 @@
       zielRes[key] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : e.message };
     }
     if (zielOpen === z.id) renderVorfahrt();
+    if (sayAfterZiel === z.id && zielOpen === z.id) { sayAfterZiel = null; setTimeout(() => sayPanel($('#wohin .vf-panel')), 80); }
   }
   async function searchOrt(q) {
     ortQ = q; ortMsg = 'Suche …'; ortList = null; renderVorfahrt();
@@ -4622,6 +4785,7 @@
     store.set('settings', settings);
     applyAccessUI(); updateVoiceBtn();
   }
+  ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = !SR; b.addEventListener('click', listen); } });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });

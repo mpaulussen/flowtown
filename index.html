@@ -53,6 +53,7 @@
   <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4.5M12 17.5v.01"/></symbol>
   <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
   <symbol id="i-gps" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
   <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
   <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></symbol>
   <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
@@ -67,6 +68,7 @@
   <svg class="logo" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#D64933"/><circle cx="20" cy="7" r="5" fill="#F2B33D"/><circle cx="33" cy="7" r="5" fill="#2FA36B"/></svg>
   <h1>Flowtown</h1>
   <span class="proto">Prototyp</span>
+  <button type="button" class="refresh mic" id="btn-mic" aria-label="Sprechen: Befehl sagen" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button>
   <button type="button" class="refresh" id="btn-refresh" aria-label="Aktualisieren"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
 </header>
 
@@ -224,7 +226,10 @@
       <p class="mode-q" id="mode-q">Unterwegs mit</p>
       <div class="leg-chips" role="group" aria-label="Verkehrsmittel wechseln"><button type="button" class="leg-chip" data-leg="fuss" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg><span>Zu Fuß</span></button><button type="button" class="leg-chip" data-leg="bahn" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg><span>Stadtbahn</span></button><button type="button" class="leg-chip" data-leg="bus" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg><span>Bus</span></button><button type="button" class="leg-chip" data-leg="zug" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg><span>Zug</span></button><button type="button" class="leg-chip" data-leg="auto" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg><span>Auto</span></button><button type="button" class="leg-chip" data-leg="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg><span>Rad</span></button></div>
     </div>
+    <div class="voice-row">
+    <button id="btn-mic-drive" class="voice-toggle mic-drive" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><span>Sprechen</span></button>
     <button id="btn-voice" class="voice-toggle" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Ansagen aus</span></button>
+    </div>
     <div class="end-row">
       <button id="btn-end" class="btn danger big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg><span id="btn-end-label">Fahrt beenden</span></button>
       <button id="btn-end-confirm" class="btn danger big" type="button" hidden>Ja, beenden</button>
@@ -460,6 +465,7 @@
   <p id="peek-meta" class="small muted"></p>
 </dialog>
 
+<div id="mic-status" class="mic-status" role="status" aria-live="polite" hidden></div>
 <nav class="tabs" aria-label="Hauptnavigation">
   <button type="button" data-view="start" data-world="go" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Heute</span></button>
   <button type="button" data-view="tips" data-world="tip"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><span>Tipps</span></button>
