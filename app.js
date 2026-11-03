@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.54.0';
+  const VERSION = '0.55.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -86,7 +86,9 @@
   let signalCache = store.get('signals', { areas: [], nodes: {} });
   // Haltestellen ab 0.9.0, Angaben zur Barrierefreiheit ab 0.10.0: Gebiete einmal neu laden
   // Haltestellennamen ab 0.12.0 (Umstiege)
-  if (!signalCache.stops || !signalCache.acc || signalCache.v !== 3) { signalCache.stops = {}; signalCache.acc = signalCache.acc || {}; signalCache.areas = []; signalCache.v = 3; }
+  // ab 0.55: Fahrtrichtung je Ampel (Einbahn-Fahrbahn, traffic_signals:direction); Gebiete einmal neu laden
+  if (!signalCache.stops || !signalCache.acc || signalCache.v !== 4) { signalCache.stops = signalCache.stops || {}; signalCache.acc = signalCache.acc || {}; signalCache.dir = {}; signalCache.areas = []; signalCache.v = 4; }
+  if (!signalCache.dir) signalCache.dir = {};
   let names = store.get('names3', {});   // 'names3': Querstraßen ohne Bahnsteignamen (ab 0.9.0)
   const names2 = store.get('names2', {}); // mit Querstraße (0.6.0 bis 0.8.0)
   const oldNames = store.get('names', {}); // nur Straße (bis 0.5.0), als Übergang bis die neuen Namen da sind
@@ -202,6 +204,7 @@
       for (const part of parts) {
         const c = { id: 'c' + part[0].id, lat: part.reduce((x, p) => x + p.lat, 0) / part.length, lon: part.reduce((x, p) => x + p.lon, 0) / part.length, n: part.length,
           sound: accFlag(part, 's'), vib: accFlag(part, 'v') };
+        if (part.every((p) => signalCache.dir[p.id])) c.dirs = Array.from(new Set([].concat(...part.map((p) => signalCache.dir[p.id]))));
         list.push(c); clusterById[c.id] = c;
         for (const p of part) alias['c' + p.id] = c.id;
       }
@@ -251,7 +254,7 @@
   }
   async function fetchSignals(p) {
     const ar = `(around:${AREA_RADIUS},${p.lat},${p.lon})`;
-    const q = `[out:json][timeout:25];(node${ar}[highway=traffic_signals];node${ar}[crossing=traffic_signals];node${ar}[railway=tram_stop];node${ar}[public_transport=stop_position];node${ar}[highway=bus_stop];);out;`;
+    const q = `[out:json][timeout:25];(node${ar}[highway=traffic_signals];node${ar}[crossing=traffic_signals];)->.s;.s out;(node${ar}[railway=tram_stop];node${ar}[public_transport=stop_position];node${ar}[highway=bus_stop];);out;way(bn.s)[highway];out body geom;`;
     let lastErr;
     for (const url of OVERPASS) {
       try {
@@ -264,6 +267,23 @@
         // Overpass meldet Überlast oft mit „OK“ und leerer oder halber Liste, nur mit Hinweis: dann nicht als geladen merken
         if (json.remark && /error|timeout|memory|abort/i.test(json.remark)) throw new Error('Overpass: ' + json.remark);
         let n = 0;
+        // Fahrtrichtung: an einer Einbahn-Fahrbahn (getrennte Fahrbahnen) oder mit traffic_signals:direction gilt die Ampel nur in eine Richtung
+        const sigTags = {}, dirs = {};
+        for (const el of json.elements || []) if (el.type === 'node' && el.tags && (el.tags.highway === 'traffic_signals' || el.tags.crossing === 'traffic_signals')) sigTags[el.id] = el.tags;
+        for (const w of json.elements || []) {
+          if (w.type !== 'way' || !Array.isArray(w.nodes) || !Array.isArray(w.geometry)) continue;
+          const wt = w.tags || {}, ow = /^(yes|true|1)$/.test(wt.oneway || '') || wt.junction === 'roundabout' || wt.highway === 'motorway' ? 1 : wt.oneway === '-1' ? -1 : 0;
+          w.nodes.forEach((id, i) => {
+            if (!sigTags[id]) return;
+            const a = w.geometry[Math.max(0, i - 1)], b = w.geometry[Math.min(w.geometry.length - 1, i + 1)];
+            if (!a || !b || (a.lat === b.lat && a.lon === b.lon)) return;
+            const h = bearing({ lat: a.lat, lon: a.lon }, { lat: b.lat, lon: b.lon });
+            const td = sigTags[id]['traffic_signals:direction'] || sigTags[id].direction || '';
+            const one = td === 'forward' ? 1 : td === 'backward' ? -1 : ow;
+            const list = dirs[id] || (dirs[id] = []);
+            list.push(one === 1 ? Math.round(h) : one === -1 ? Math.round((h + 180) % 360) : null);
+          });
+        }
         for (const el of json.elements || []) {
           if (el.type !== 'node') continue;
           const tg = el.tags || {};
@@ -273,6 +293,8 @@
             if (tg['traffic_signals:sound']) a.s = tg['traffic_signals:sound'];
             if (tg['traffic_signals:vibration']) a.v = tg['traffic_signals:vibration'];
             if (Object.keys(a).length) signalCache.acc[el.id] = a; else delete signalCache.acc[el.id];
+            const dl = dirs[el.id];
+            if (dl && dl.length && !dl.includes(null)) signalCache.dir[el.id] = Array.from(new Set(dl)); else delete signalCache.dir[el.id];
           }
           else signalCache.stops[el.id] = tg.name ? [round5(el.lat), round5(el.lon), tg.name] : [round5(el.lat), round5(el.lon)];
         }
@@ -617,11 +639,12 @@
     return null;
   }
 
-  function findSignal(p, heading, radius) {
+  const forMe = (c, heading, mode) => !c.dirs || heading == null || mode === 'fuss' || c.dirs.some((h) => angDiff(h, heading) <= 50);
+  function findSignal(p, heading, radius, mode) {
     let best = null, bestScore = Infinity;
     for (const c of allClusters()) {
       const d = dist(c, p);
-      if (d > radius) continue;
+      if (d > radius || !forMe(c, heading, mode)) continue;
       let score = d;
       if (heading != null && d > 15) {
         const diff = angDiff(bearing(p, c), heading);
@@ -686,14 +709,14 @@
           // Bus und Bahn: die Haltestelle geht vor. Beim Umsteigen zu Fuß geht die Fußgängerampel vor.
           // Zug: keine Straßenampeln, Bahnhöfe sind lang (Fahrplan-Halte bis 250 m)
           const train = rec.curMode === 'zug';
-          const near = train ? null : findSignal(s, s.heading, cfg.haltRadius);
+          const near = train ? null : findSignal(s, s.heading, cfg.haltRadius, rec.transfer ? 'fuss' : rec.curMode);
           // zu Fuß (auch beim Umsteigen): am Bahnsteig warten, wenn die Haltestelle näher ist als die Ampel
           const onFoot = rec.transfer || rec.curMode === 'fuss';
           const footStop = onFoot && stopDist(s, 30) < (near ? dist(s, near) : Infinity);
           const atStop = onFoot ? footStop : train ? nearStop(s) || fpStopsNear(s, 250, 2).length > 0 : isTransit(rec.curMode) && nearStop(s);
           const sig = atStop ? null : near;
           // keine Ampel in der Nähe, aber eine voraus: vermutlich Stau davor (endgültig zugeordnet wird am Ende der Fahrt)
-          const queueSig = !sig && !atStop && !train ? findSignal(s, s.heading, QUEUE_M) : null;
+          const queueSig = !sig && !atStop && !train ? findSignal(s, s.heading, QUEUE_M, rec.transfer ? 'fuss' : rec.curMode) : null;
           rec.stop = { t0: s.t, lat: s.lat, lon: s.lon, heading: s.heading, signal: sig, atStop, queueSig };
           rec.fastSince = null;
         }
@@ -777,8 +800,9 @@
   function checkPass(p, heading, t) {
     const cfg = rec.cfg;
     if (rec.curMode === 'zug') return;
+    const mode = rec.transfer ? 'fuss' : rec.curMode;
     for (const c of allClusters()) {
-      if (dist(c, p) > cfg.passRadius) continue;
+      if (dist(c, p) > cfg.passRadius || !forMe(c, heading, mode)) continue;
       if (rec.recentPass[c.id] && t - rec.recentPass[c.id] < 90000) continue;
       if (rec.lastHaltAt[c.id] && t - rec.lastHaltAt[c.id] < 180000) continue;
       rec.recentPass[c.id] = t;
@@ -883,6 +907,13 @@
   function tidyTrip(trip) {
     const ev = trip.events;
     let changed = fixLegs(trip);
+    // Ampeln, die nur für die Gegenrichtung gelten (erst bekannt, seit die App die Fahrtrichtung lädt)
+    for (let i = ev.length - 1; i >= 0; i--) {
+      const e = ev[i], c = e.signal && clusterById[e.signal], mode = e.mode || trip.mode;
+      if (!c || forMe(c, e.heading, mode)) continue;
+      if (e.type === 'pass') ev.splice(i, 1); else { e.signal = null; delete e.distToSignal; }
+      changed = true;
+    }
     // Signale aus der Ampelliste der Stadt, die keine Straßenampeln sind (bis 0.53.0 als Lücke ergänzt)
     if (lsaData && lsaData.anlagen) {
       const drop = new Set(lsaData.anlagen.filter((a) => a[5] && a[3] !== 'kp' && a[3] !== 'fu').map((a) => 'c' + (9e12 + a[5])));
@@ -899,7 +930,7 @@
       if (trip.demo || e.type !== 'halt' || e.signal || e.atStop) continue;
       const p = e.at ? { lat: e.at[0], lon: e.at[1] } : e, mode = e.mode || trip.mode;
       if (isTransit(mode) && nearStop(p)) { e.atStop = true; delete e.queueSig; changed = true; continue; }
-      const c = findSignal(p, e.heading, (MODES[mode] || MODES.auto).haltRadius);
+      const c = findSignal(p, e.heading, (MODES[mode] || MODES.auto).haltRadius, mode);
       if (!c) continue;
       Object.assign(e, { signal: c.id, lat: round5(c.lat), lon: round5(c.lon), distToSignal: Math.round(dist(p, c)) });
       delete e.queueSig; changed = true;
