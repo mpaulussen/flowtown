@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.66.0';
+  const VERSION = '0.67.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -87,7 +87,7 @@
   // Haltestellen ab 0.9.0, Angaben zur Barrierefreiheit ab 0.10.0: Gebiete einmal neu laden
   // Haltestellennamen ab 0.12.0 (Umstiege)
   // ab 0.55: Fahrtrichtung je Ampel (Einbahn-Fahrbahn, traffic_signals:direction); Gebiete einmal neu laden
-  if (!signalCache.stops || !signalCache.acc || signalCache.v !== 4) { signalCache.stops = signalCache.stops || {}; signalCache.acc = signalCache.acc || {}; signalCache.dir = {}; signalCache.areas = []; signalCache.v = 4; }
+  if (!signalCache.stops || !signalCache.acc || signalCache.v !== 5) { signalCache.stops = signalCache.stops || {}; signalCache.acc = signalCache.acc || {}; signalCache.dir = signalCache.dir || {}; signalCache.areas = []; signalCache.v = 5; }
   if (!signalCache.dir) signalCache.dir = {};
   let names = store.get('names3', {});   // 'names3': Querstraßen ohne Bahnsteignamen (ab 0.9.0)
   const names2 = store.get('names2', {}); // mit Querstraße (0.6.0 bis 0.8.0)
@@ -203,7 +203,7 @@
       const parts = g.every((p) => dist(p, m) <= CLUSTER_MAX_M) ? [g] : greedyGroups(g);   // zu lange Ketten wieder aufteilen
       for (const part of parts) {
         const c = { id: 'c' + part[0].id, lat: part.reduce((x, p) => x + p.lat, 0) / part.length, lon: part.reduce((x, p) => x + p.lon, 0) / part.length, n: part.length,
-          sound: accFlag(part, 's'), vib: accFlag(part, 'v') };
+          sound: accFlag(part, 's'), vib: accFlag(part, 'v'), btn: accFlag(part, 'b'), tact: accFlag(part, 't') };
         if (part.every((p) => signalCache.dir[p.id])) c.dirs = Array.from(new Set([].concat(...part.map((p) => signalCache.dir[p.id]))));
         list.push(c); clusterById[c.id] = c;
         for (const p of part) alias['c' + p.id] = c.id;
@@ -292,6 +292,8 @@
             const a = {};
             if (tg['traffic_signals:sound']) a.s = tg['traffic_signals:sound'];
             if (tg['traffic_signals:vibration']) a.v = tg['traffic_signals:vibration'];
+            if (tg.button_operated) a.b = tg.button_operated;
+            if (tg.tactile_paving) a.t = tg.tactile_paving;
             if (Object.keys(a).length) signalCache.acc[el.id] = a; else delete signalCache.acc[el.id];
             const dl = dirs[el.id];
             if (dl && dl.length && !dl.includes(null)) signalCache.dir[el.id] = Array.from(new Set(dl)); else delete signalCache.dir[el.id];
@@ -1358,6 +1360,7 @@
   function sayPanel(el) {
     if (!el) return;
     const c = el.cloneNode(true);
+    c.querySelectorAll('.vf-map, .leaflet-container').forEach((n) => n.remove());   // die kleine Karte nicht vorlesen
     c.querySelectorAll('[role="img"][aria-label]').forEach((n) => n.replaceWith(n.getAttribute('aria-label') + '. '));   // Diagramme mit ihrer Beschreibung
     c.querySelectorAll('.btn, .btn-link, .vf-x, .lg-src, .vf-bars, .vf-chips, form, svg, [aria-hidden="true"], .rad-bar, .rad-legend, .con-lines, [data-say]').forEach((n) => n.remove());
     c.querySelectorAll('.con-list > li').forEach((li) => { if (!li.querySelector('.con.on')) li.remove(); });
@@ -1373,7 +1376,7 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recog = null, sayAfterZiel = null, micT = null;
   const MIC_HELP = 'Du kannst zum Beispiel sagen: Losfahren. Mit dem Rad los. Zur Uni. Nächste Bahn ab Jahnplatz. '
-    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe. Und du kannst frei fragen, zum Beispiel: Wo ist die nächste rollstuhlgerechte Toilette? Nach meiner Antwort höre ich weiter zu, Danke beendet das Gespräch.';
+    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe. Wo bin ich? beschreibt deine Umgebung. Und du kannst frei fragen, zum Beispiel: Wo ist die nächste rollstuhlgerechte Toilette? Nach meiner Antwort höre ich weiter zu, Danke beendet das Gespräch.';
   function micStatus(text, keep) {
     const el = $('#mic-status');
     if (!el) return;
@@ -1464,6 +1467,130 @@
     if (apiBase()) { askAssist(alts[0], true); return; }   // kein fester Befehl: freie Frage an die Assistenz
     speak('Das habe ich nicht verstanden. Sag zum Beispiel: Losfahren, Zur Uni, Nächste Bahn ab Jahnplatz, oder Hilfe.', { now: true, force: true });
   }
+  // ---------- „Wo bin ich?“: Adresse, Blickrichtung, nächste Ampel und Haltestelle mit Ausstattung, zum Vorlesen ----------
+  const WO_RE = /^(wo bin ich|wo stehe ich|wo sind wir|was ist (hier|um mich)|umgebung|beschreib\w* (mir )?(die |meine )?umgebung)/;
+  let compass = null, compassOn = false;
+  const compassWanted = () => settings.compass === true || (settings.compass == null && settings.access.on && settings.access.type === 'sehen');
+  function onOri(e) {
+    let h = null;
+    if (e.webkitCompassHeading != null && isFinite(e.webkitCompassHeading)) h = e.webkitCompassHeading;
+    else if (e.absolute && e.alpha != null) h = (360 - e.alpha) % 360;
+    if (h != null && isFinite(h)) compass = { h, t: Date.now() };
+  }
+  function compassStart(ask) {
+    if (compassOn) return Promise.resolve(true);
+    const D = window.DeviceOrientationEvent;
+    if (!D) return Promise.resolve(false);
+    const go = () => { window.addEventListener('deviceorientationabsolute', onOri, true); window.addEventListener('deviceorientation', onOri, true); compassOn = true; return true; };
+    if (typeof D.requestPermission === 'function') {
+      if (!ask) return Promise.resolve(false);
+      return D.requestPermission().then((r) => (r === 'granted' ? go() : false)).catch(() => false);
+    }
+    return Promise.resolve(go());
+  }
+  // Richtung zu einem Punkt: mit Blickrichtung als „rechts von dir, auf 3 Uhr“, sonst als Himmelsrichtung
+  function woDir(from, to, heading) {
+    const b = bearing(from, to);
+    if (heading == null) return `Richtung ${DIRS[Math.round(b / 45) % 8]}`;
+    const rel = (b - heading + 360) % 360, clock = Math.round(rel / 30) % 12 || 12;
+    const w = rel < 25 || rel > 335 ? 'vor dir' : rel < 70 ? 'halb rechts vor dir' : rel < 110 ? 'rechts von dir' : rel < 160 ? 'halb rechts hinter dir' : rel <= 200 ? 'hinter dir' : rel < 250 ? 'halb links hinter dir' : rel < 290 ? 'links von dir' : 'halb links vor dir';
+    return `${w}, auf ${clock} Uhr`;
+  }
+  const woM = (m) => `etwa ${roundM(m)} Meter`;
+  function woSignal(p, heading) {
+    let best = null, bd = Infinity;
+    for (const c of allClusters()) {
+      const d = dist(c, p);
+      if (d > 250) continue;
+      // in Blickrichtung zählt doppelt so nah
+      const ahead = heading != null && angDiff(bearing(p, c), heading) <= 60;
+      const score = ahead ? d / 2 : d;
+      if (score < bd) { bd = score; best = c; }
+    }
+    if (!best) return '';
+    const yes = (v) => v === 'yes', no = (v) => v === 'no';
+    const has = [yes(best.sound) && 'Tonsignal', yes(best.vib) && 'Vibration', yes(best.btn) && 'Taster', yes(best.tact) && 'Bodenleitstreifen'].filter(Boolean);
+    const not = [no(best.sound) && 'Tonsignal', no(best.tact) && 'Bodenleitstreifen'].filter(Boolean);
+    const n = nameOf(best.id);
+    let t = `${cap(woDir(p, best, heading))}, ${woM(dist(p, best))} entfernt, ist eine Ampel${n ? ` an ${n}` : ''}`;
+    t += has.length ? `, mit ${has.join(', ').replace(/, ([^,]+)$/, ' und $1')}` : '';
+    t += not.length ? `, ohne ${not.join(' und ')}` : '';
+    if (best.sound == null && best.vib == null) t += '. Ob sie ein Tonsignal hat, ist nicht erfasst';
+    return t + '.';
+  }
+  function woStop(p, heading) {
+    if (!fp) return '';
+    const idx = fpStopsNear(p, 400);
+    if (!idx.length) return '';
+    idx.sort((a, b) => dist(p, { lat: fp.stops[a][2], lon: fp.stops[a][3] }) - dist(p, { lat: fp.stops[b][2], lon: fp.stops[b][3] }));
+    const i = idx[0], st = fp.stops[i], q = { lat: st[2], lon: st[3] }, name = st[1].replace(/^Bielefeld,\s*/, '');
+    const tram = fp.kindOf && fp.kindOf[i] && fp.kindOf[i].has(0);
+    let lines = [];
+    try {
+      const seen = new Set();
+      for (const d of departures(name, new Date(), 90)) { const k = `${d.kind}|${d.line}`; if (!seen.has(k)) { seen.add(k); lines.push(d); } }
+    } catch (e) { lines = []; }
+    // ohne Abfahrten in den nächsten 90 Minuten (nachts, Fahrplanwechsel): die Linien aus dem Fahrplan, unabhängig von der Uhrzeit
+    if (!lines.length) {
+      const idx2 = new Set(fp.byName[name] || []), seen = new Set();
+      for (const [r, pi, , , , , nr] of fp.trips) {
+        if (!(fp.patterns[pi] || []).some((si) => idx2.has(si))) continue;
+        const d = { line: fpLine(r, nr), kind: fp.routes[r][1] }, k = `${d.kind}|${d.line}`;
+        if (!seen.has(k)) { seen.add(k); lines.push(d); }
+        if (lines.length > 12) break;
+      }
+    }
+    const byNum = (a, b) => (parseInt(a, 10) || 999) - (parseInt(b, 10) || 999) || String(a).localeCompare(String(b));
+    const tl = lines.filter((d) => d.kind === 0).map((d) => d.line).sort(byNum), bl = lines.filter((d) => d.kind !== 0 && d.kind !== 2).map((d) => d.line).sort(byNum);
+    const info = stopInfo([q.lat, q.lon], tram ? 'bahn' : undefined);
+    let t = `Die Haltestelle ${name} ist ${woM(dist(p, q))} ${woDir(p, q, heading)}`;
+    const ln = [tl.length && `Stadtbahn ${tl.slice(0, 4).join(', ')}`, bl.length && `Bus ${bl.slice(0, 4).join(', ')}`].filter(Boolean);
+    if (ln.length) t += `, ${ln.join(', ')}`;
+    t += '.';
+    if (info && tram) t += info.ok === 1 ? ' Mit Hochbahnsteig, stufenlos.' : info.ok === 0 ? ' Kein Hochbahnsteig, nicht stufenlos.' : info.ok === 2 ? ' Nur teilweise stufenlos.' : ' Ob sie stufenlos ist, ist nicht erfasst.';
+    if (info && info.aufzug) t += ' In der Station gibt es einen Aufzug.';
+    return t;
+  }
+  let woBusy = false;
+  async function whereAmI(spoken) {
+    if (woBusy) return;
+    woBusy = true;
+    const say = (t, o) => { if (spoken || voiceOn()) speak(t, Object.assign({ now: true, force: true }, o || {})); };
+    assistAct = null;
+    showAssist('Wo bin ich?', null);
+    try {
+      const pos = await new Promise((resolve) => {
+        if (!('geolocation' in navigator)) return resolve(null);
+        navigator.geolocation.getCurrentPosition((x) => resolve(x.coords), () => resolve(null), { enableHighAccuracy: true, maximumAge: 5000, timeout: 10000 });
+      });
+      if (!pos) { const m = 'Ich kenne deinen Standort gerade nicht. Erlaube den Standortzugriff und versuch es noch einmal.'; showAssist('Wo bin ich?', m); say(m); return; }
+      const p = { lat: pos.latitude, lon: pos.longitude };
+      // Blickrichtung: beim Gehen die Laufrichtung, im Stehen der Kompass
+      let heading = null;
+      if (rec && rec.samples.length > 2 && (rec.st.lastVs || 0) > 0.8) heading = currentHeading(rec.samples[rec.samples.length - 1]);
+      if (heading == null && compass && Date.now() - compass.t < 5000) heading = compass.h;
+      await Promise.all([!areaCovers(p) ? fetchSignals(p).catch(() => null) : null, !fp ? loadFahrplan().catch(() => null) : null]);
+      let adr = null;
+      if (apiBase()) adr = await api(`/api/wo?pos=${p.lat.toFixed(4)},${p.lon.toFixed(4)}${heading != null ? '&h=' + Math.round(heading) : ''}`).catch(() => null);
+      const parts = [];
+      const h = adr && adr.hier;
+      if (h && h.strasse) parts.push(`Du stehst bei ${h.strasse}${h.nr ? ' ' + h.nr : ''}${h.teil ? ', ' + h.teil : ''}.`);
+      else parts.push('Die Adresse kann ich gerade nicht bestimmen.');
+      if (heading != null) {
+        const v = adr && adr.voraus;
+        parts.push(`Du schaust Richtung ${DIRS[Math.round(heading / 45) % 8]}${v && h && v.strasse === h.strasse && v.nr && v.nr !== h.nr ? `, zu Hausnummer ${v.nr}` : v && v.strasse && h && v.strasse !== h.strasse ? `, zur ${v.strasse}` : ''}.`);
+      }
+      const sig = woSignal(p, heading); if (sig) parts.push(sig);
+      const stp = woStop(p, heading); if (stp) parts.push(stp);
+      if (!sig && !stp) parts.push('In der Nähe kenne ich keine Ampel und keine Haltestelle.');
+      if (pos.accuracy > 25) parts.push(`Achtung: Das GPS ist gerade ungenau, auf etwa ${Math.round(pos.accuracy)} Meter.`);
+      else if (heading == null) parts.push(compassWanted() ? 'Für Angaben wie rechts oder links halte das Handy flach vor dich.' : 'Für Angaben wie rechts oder links schalte unter Barrierefrei unterwegs den Kompass ein, oder geh ein paar Schritte.');
+      const text = parts.join(' ');
+      showAssist('Wo bin ich?', text);
+      assistLast = text;
+      say(text, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : null);
+    } finally { woBusy = false; }
+  }
   // ---------- Assistenz (Stufe 3): freie Fragen, Antwort aus den Flowtown-Daten ----------
   let assistHist = [], assistAct = null, assistBusy = false, assistLast = '';
   // gesprochene Fragen werden immer laut beantwortet, getippte, wenn die Ansagen an sind
@@ -1550,6 +1677,7 @@
       if (/^(ja|jawohl|genau|stimmt|richtig|ok|okay)\b/.test(c)) { changeMode(legSuggest.mode, legSuggest.t); return true; }
       if (/^(nein|nee|falsch|stimmt nicht)\b/.test(c)) { legNo = { mode: legSuggest.mode, t: Date.now() }; hideLegSuggest(); speak('Gut, ich bleibe dabei.', { now: true }); return true; }
     }
+    if (WO_RE.test(c) && !(rec && isTransit(rec.curMode) && !rec.transfer)) { whereAmI(true); return true; }
     if (rec) {
       if (/(fahrt|aufzeichnung|weg)? ?(beenden|beende|stoppen|stopp\b|stop\b)|angekommen|ich bin da\b/.test(c)) { speak('Fahrt beendet.', { now: true }); finishTrip(); return true; }
       if (/wie lange noch|wann bin ich|wann komme ich|ankunft|restzeit/.test(c)) {
@@ -5191,8 +5319,11 @@
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
   $('#ask-mic').addEventListener('click', () => listen());
-  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { askAssist(i.value, false); i.value = ''; i.blur(); } });
+  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
+  document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
+  $('#set-compass').checked = compassWanted();
+  $('#set-compass').addEventListener('change', (ev) => { settings.compass = ev.target.checked; store.set('settings', settings); if (ev.target.checked) compassStart(true).then((ok) => { if (!ok) { $('#set-compass').checked = false; micStatus('Der Kompass ist auf diesem Gerät nicht verfügbar oder nicht freigegeben.'); } }); });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
@@ -5301,5 +5432,5 @@
   });
 
   // Für Tests von außen erreichbar
-  window.__ww = { onPosition: (p) => onPosition(p), lineEst: (t) => { lineEstimate(t); showStopLine(); }, state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)), legAsk: (m, f) => showLegSuggest(m, Date.now(), f) };
+  window.__ww = { onPosition: (p) => onPosition(p), lineEst: (t) => { lineEstimate(t); showStopLine(); }, state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)), compass: () => ({ on: compassOn, c: compass }), legAsk: (m, f) => showLegSuggest(m, Date.now(), f) };
 })();

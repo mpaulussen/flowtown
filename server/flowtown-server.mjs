@@ -557,6 +557,15 @@ async function hereRoute(from, to, mode, opts) {
     return { dauer: sum('duration'), basis: sum('baseDuration') || sum('typicalDuration') || sum('duration'), m: sum('length'), pts, spans, roads, incs, acts };
   });
 }
+// Adresse mit Hausnummer zu einem Punkt (HERE Rückwärtssuche), für „Wo bin ich?“
+async function addrAt(lat, lon) {
+  const j = await getJson(`${REVGEO_URL}?${new URLSearchParams({ at: `${lat},${lon}`, lang: 'de-DE', limit: '5', apiKey: HERE_KEY })}`, 6000);
+  const items = j.items || [];
+  const it = items.find((x) => x.address && x.address.houseNumber) || items.find((x) => x.address && x.address.street) || null;
+  if (!it) return null;
+  const a = it.address || {};
+  return { strasse: clip(a.street || '', 60), nr: clip(a.houseNumber || '', 10), teil: clip(a.district || '', 40), m: it.distance != null ? Math.round(it.distance) : null };
+}
 // Ort zu einem Punkt (für „A2 bei Kamen“), einen Tag zwischengespeichert
 const ortCache = new Map();
 async function placeNear(p) {
@@ -2035,6 +2044,20 @@ const server = http.createServer(async (req, res) => {
       try { return await sendRad(req, res, origin, k); } catch (e) { return send(res, 502, { fehler: 'Radwege gerade nicht abrufbar: ' + e.message }, origin); }
     }
     if (req.method === 'GET' && p === '/api/fahrplan') return fahrplan ? sendFahrplan(req, res, origin) : send(res, 404, { fehler: 'Noch kein Fahrplan auf dem Server.' }, origin);
+    // „Wo bin ich?“: Adresse am Standort (auf etwa 10 m) und 30 m in Blickrichtung; nichts wird gespeichert
+    if (req.method === 'GET' && p === '/api/wo') {
+      if (!HERE_KEY) return send(res, 503, { fehler: 'Adressen braucht einen HERE-Schlüssel auf dem Server.' }, origin);
+      if (!ortAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Abfragen möglich.' }, origin);
+      const [lat, lon] = coord(url.searchParams.get('pos'), 4);
+      const h = Number(url.searchParams.get('h'));
+      const hier = await addrAt(lat, lon);
+      let voraus = null;
+      if (hier && isFinite(h) && url.searchParams.get('h') !== null && url.searchParams.get('h') !== '') {
+        const q = [lat + Math.cos(h * Math.PI / 180) * 30 / 111320, lon + Math.sin(h * Math.PI / 180) * 30 / (111320 * Math.cos(lat * Math.PI / 180))];
+        voraus = await addrAt(q[0], q[1]).catch(() => null);
+      }
+      return send(res, 200, { hier, voraus }, origin);
+    }
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);
       if (p === '/api/ort') {
