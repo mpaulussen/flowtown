@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.65.0';
+  const VERSION = '0.66.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2656,7 +2656,7 @@
     if (!settings.access.on || !faq) return '';
     const list = faqFor(settings.access.type);
     if (!list.length) return '';
-    const card = (e) => `<div class="tipcard" data-world="tip"><button type="button" class="tip-row" data-faq="${e.id}" aria-expanded="${faqOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${faqOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`;
+    const card = (e) => `<div class="tipcard" data-world="acc"><button type="button" class="tip-row" data-faq="${e.id}" aria-expanded="${faqOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${faqOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`;
     const top = list.slice(0, 4), rest = list.slice(4);
     return `<h3 class="eyebrow">Gut zu wissen · ${esc(ACCESS_LABEL[settings.access.type])}</h3>${top.map(card).join('')}`
       + (rest.length ? `<details class="more-box"><summary>${ic('list')}Weitere Fragen (${rest.length})</summary><div class="faq-rest">${rest.map(card).join('')}</div></details>` : '');
@@ -2807,7 +2807,7 @@
         + `<button type="button" class="btn quiet" data-peek="l" data-name="Besserer Weg" data-art="alt" data-lines="${r.alt.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${route}">${ic('map')}Weg auf der Karte</button></div>`;
     } else if (FUSS_PEN[type] && lines.length && !r.altDone) altHtml = '<p class="small muted" role="status">Flowtown sucht einen Weg mit weniger Hindernissen …</p>';
     else if (FUSS_PEN[type] && lines.length && r.altDone) altHtml = '<p class="small muted">Einen besseren Weg ohne große Umwege gibt es laut den Kartendaten nicht.</p>';
-    return `<div class="rad-rate"><h4 class="vf-h4">${title}${type ? ' · ' + esc(ACCESS_LABEL[type]) : ''}</h4>${bar}${lines.length ? `<ul class="rad-ohne bf-list">${lines.join('')}</ul>` : ''}${altHtml}`
+    return `<div class="rad-rate${type ? ' acc-block' : ''}"><h4 class="vf-h4">${title}${type ? ' · ' + esc(ACCESS_LABEL[type]) : ''}</h4>${bar}${lines.length ? `<ul class="rad-ohne bf-list">${lines.join('')}</ul>` : ''}${altHtml}`
       + (tips.length ? `<div class="bf-ziel"><h4 class="vf-h4">${ic('info')} Unterwegs gut zu wissen</h4>${tips.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}</div>` : '')
       + `<p class="small muted">${known < r.total * 0.5 ? 'Zu Teilen des Wegs gibt es keine Angaben. ' : ''}Laut OpenStreetMap, nicht überall vollständig.</p></div>`;
   }
@@ -4657,7 +4657,7 @@
     const news = '';   // Meldungen erscheinen nur, wenn es welche für die eigenen Wege gibt
     $('#tips-body').innerHTML = (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${tips.map(card).join('')}`
       : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
-      + (() => { const help = faqCards() + (kiCard() ? `<h3 class="eyebrow">Mehr Hilfe</h3>${kiCard()}` : ''); return help ? `<div class="tip-help">${help}</div>` : ''; })() + news;
+      + (() => { const f = faqCards(), k = kiCard(); return (f ? `<div class="tip-acc">${f}</div>` : '') + (k ? `<div class="tip-help"><h3 class="eyebrow">Mehr Hilfe</h3>${k}</div>` : ''); })() + news;
     if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
     requestNames([].concat(...trips.map((t) => t.events.filter((e) => e.signal))), () => { if (!$('#view-tips').hidden) renderTips(); });
     // Werte anderer und Meldungen nachladen, dann einmal neu zeichnen

@@ -1039,3 +1039,28 @@ body[data-view="plan"] .ask-bar{--ask:#1f5c99}
 .me-pin span{display:block;width:30px;height:30px;border-radius:50%;background:#2563a8;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative}
 .me-pin span::after{content:"";position:absolute;left:50%;top:-11px;margin-left:-7px;border:7px solid transparent;border-bottom:11px solid #2563a8;border-top:0}
 .me-pin span.noh::after{display:none}
+/* 0.66 Barrierefreiheit in Orange (wie auf dem Flyer): Profil, Hinweise, Weg-Check, Gut zu wissen */
+:root{--acc:#B04E00;--acc-bg:#FDEEDF;--acc-ink:#7A3300;--acc-line:#F0C49E}
+.access-row .ic,.acc-q .ic,.go-card .acc-q .ic,#view-plan .acc-q .ic{color:var(--acc)}
+#inp-access{accent-color:var(--acc)}
+.acc-chip[aria-pressed="true"],.go-card .acc-chip[aria-pressed="true"],#view-plan .acc-chip[aria-pressed="true"],.w-access .acc-chip[aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:none}
+.acc-chip:focus-visible,.go-card .acc-chip:focus-visible,#view-plan .acc-chip:focus-visible{outline:3px solid var(--acc);outline-offset:2px}
+.acc-hint{background:var(--acc-bg);color:var(--acc-ink)}
+.acc-pick{border:1.5px solid var(--acc-line)}
+.w-access{background:var(--acc-bg);border:2px solid var(--acc-line)}
+.w-access .acc-q,.w-access h3{color:var(--acc-ink)}
+.w-access .acc-chip:not([aria-pressed="true"]){background:#fff;border-color:var(--acc-line)}
+.tipcard[data-world="acc"]{--tb:var(--acc-bg);--ti:var(--acc)}
+.tipcard[data-world="acc"]:has(.tip-row[aria-expanded="true"]),#box-access[open]{border-color:var(--acc)}
+.tip-acc{background:var(--acc-bg);border-radius:24px;padding:14px;display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.tip-acc .eyebrow{color:var(--acc-ink);margin-top:2px}
+.tip-acc .tipcard{border-color:transparent;--tb:var(--acc-bg);--ti:var(--acc)}
+.tip-acc .more-box{background:#fff;border-radius:16px}
+.layer-chip[data-layer="acc"] .ic{color:var(--acc)}
+.layer-chip[data-layer="acc"][aria-pressed="true"]{background:var(--acc);border-color:var(--acc);color:#fff}
+.layer-chip[data-layer="acc"][aria-pressed="true"] .ic{color:#fff}
+.bf-ziel{background:var(--acc-bg);border-radius:14px;padding:10px 12px}
+.bf-ziel .vf-h4,.bf-ziel .vf-h4 .ic{color:var(--acc-ink)}
+.rad-rate.acc-block{background:var(--acc-bg);border-radius:14px;padding:10px 12px}
+.rad-rate.acc-block .vf-h4{color:var(--acc-ink)}
+.acc-chip:not([aria-pressed="true"]),.go-card .acc-chip:not([aria-pressed="true"]),#view-plan .acc-chip:not([aria-pressed="true"]){color:var(--acc-ink);border-color:var(--acc-line);box-shadow:0 0 0 1.5px var(--acc-line) inset;background:#fff}
