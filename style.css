@@ -928,3 +928,50 @@ body[data-view="drive"] .assist{top:calc(12px + env(safe-area-inset-top,0px));bo
 .plan-ask input:focus{outline:none}
 .plan-ask:focus-within{outline:3px solid var(--plan,#1f5c99);outline-offset:2px}
 .assist-a,.assist-q{overflow-wrap:anywhere}
+/* 0.60 Heute: „Dein Weg heute“ als Woche + Wegkarte; Tipps mit Blau für Planung */
+#weg{display:flex;flex-direction:column;gap:12px}
+.wk{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:10px;width:100%;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px}
+.wk-head{display:flex;align-items:center;justify-content:space-between;font-family:var(--display);font-weight:700;font-size:18px}
+.wk-tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.wk-t{display:flex;flex-direction:column;gap:2px;background:var(--bg);border-radius:14px;padding:10px 10px 9px;min-width:0}
+.wk-t b{font-family:var(--display);font-size:22px;font-weight:800;letter-spacing:-.02em;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.wk-t span{font-size:13px;line-height:1.25;color:var(--muted)}
+.wk:focus-visible,.lw-more:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.wk-none{margin:0}
+.lw{--lw-bg:var(--surface);--lw-bd:var(--line);--lw-ink:var(--fg);background:var(--lw-bg);border:1px solid var(--lw-bd);border-left-width:6px;border-radius:20px;padding:14px;display:flex;flex-direction:column;gap:12px}
+.lw.green{--lw-bg:#eef7f1;--lw-bd:#2FA36B;--lw-ink:#0f5c3c}
+.lw.amber{--lw-bg:#fdf6e6;--lw-bd:var(--amber);--lw-ink:var(--amber-ink)}
+.lw.red{--lw-bg:#fcf0ee;--lw-bd:var(--bad);--lw-ink:#8a2318}
+.lw-head{display:flex;align-items:center;gap:10px}
+
+.lw-title{flex:1;min-width:0;font-family:var(--display);font-weight:700;font-size:18px}
+.lw-badge{font-weight:700;font-size:14px;border-radius:999px;padding:3px 10px;background:var(--surface);color:var(--lw-ink);border:1px solid color-mix(in srgb,var(--lw-bd) 50%,transparent);white-space:nowrap}
+.lw-nums{display:flex;flex-wrap:wrap;gap:8px}
+.lw-nums>span{flex:1 1 30%;min-width:96px;display:flex;flex-direction:column;gap:1px;background:var(--surface);border-radius:14px;padding:9px 10px}
+.lw-nums b{font-family:var(--display);font-size:20px;font-weight:800;letter-spacing:-.02em;white-space:nowrap;font-variant-numeric:tabular-nums}
+.lw-nums span span{font-size:13px;line-height:1.25;color:var(--muted)}
+.lw-ok{margin:0;color:var(--lw-ink)}
+.lw-more{all:unset;box-sizing:border-box;cursor:pointer;display:flex;flex-direction:column;gap:8px;width:100%;border-top:1px solid color-mix(in srgb,var(--lw-bd) 35%,transparent);padding-top:10px}
+.lw-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:7px}
+.lw-list li{display:flex;align-items:center;gap:10px;font-size:16px;line-height:1.3}
+.lw-list .dot{width:10px;height:10px;border-radius:50%;flex:none}
+.lw-name{flex:1;min-width:0}
+.lw-name b{font-weight:700}
+.lw-right{font-size:14px;color:var(--lw-ink);white-space:nowrap;font-weight:700}
+.lw-go{display:flex;align-items:center;justify-content:flex-end;gap:4px;font-size:15px;font-weight:700;color:var(--lw-ink)}
+.lw-go .wrow-go{color:var(--lw-ink)}
+#st-detail:empty{display:none}
+/* Tipps */
+.tipcard[data-world="plan"]{--tb:#e6eef8;--ti:#173f66}
+.tipcard.tip-top{background:#e6eef8;border-color:transparent;--tb:#ffffff;--ti:#173f66;color:#173f66}
+.tipcard.tip-top .tip-main span{color:#2c4c6e}
+.tipcard.tip-top .tip-main b{font-size:21px}
+.tipcard.tip-top .tip-ic{width:52px;height:52px}
+.tip-kick{font-style:normal;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:#1f5c99}
+.tip-main .tip-kick{display:block;-webkit-line-clamp:unset}
+.tip-help{background:#e6eef8;border-radius:24px;padding:14px;display:flex;flex-direction:column;gap:10px;margin-top:6px}
+.tip-help .eyebrow{color:#173f66;margin-top:2px}
+.tip-help .tipcard,.tip-help .card{border-color:transparent}
+.tip-help .tipcard{--tb:#e6eef8;--ti:#173f66}
+.lw-more[data-weg="lage"] .wrow-go{transform:rotate(90deg)}
+.lw-more[aria-expanded="true"] .wrow-go{transform:rotate(-90deg)}

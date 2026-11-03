@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.59.0';
+  const VERSION = '0.60.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1391,7 +1391,7 @@
     }
     if (/vorlesen|lies vor|lies mir/.test(c)) {
       const panel = !$('#view-plan').hidden && $('#wohin .vf-panel');
-      if (panel) sayPanel(panel); else speak($('#weg').textContent || 'Hier gibt es gerade nichts vorzulesen.', { now: true, force: true });
+      if (panel) sayPanel(panel); else speak(wegSay || $('#weg').textContent || 'Hier gibt es gerade nichts vorzulesen.', { now: true, force: true });
       return true;
     }
     // Losfahren, optional mit Verkehrsmittel: „Mit dem Rad los“, „Zu Fuß losgehen“, „Aufzeichnung starten“
@@ -3305,33 +3305,59 @@
   // Heute: „Dein Weg heute“ als ruhige Liste mit Ampelpunkt; Meldungen sind eine Zeile, Einzelheiten beim Antippen
   const plain = (h) => String(h || '').replace(/<[^>]+>/g, '');
   const wrow = (dot, text, right, act) => `<${act ? `button type="button" ${act}` : 'div'} class="wrow"><span class="dot ${dot}"></span><span class="wrow-text">${text}</span>${right ? `<span class="wrow-right">${right}</span>` : ''}${act ? ic('chevron', 'wrow-go') : ''}</${act ? 'button' : 'div'}>`;
+  // „Dein Weg heute“: oben die Woche in drei Zahlen, darunter eine Karte für den Weg mit Wartezeit, Stau und Störungen
+  let wegSay = '';
   function renderStatus(group) {
     const real = trips.filter((t) => !t.demo);
     const { routes, own } = sortedRoutes(group);
     const ownRoute = routes.find((g) => own(g));
     const mine = ownRoute ? ownRoute.trips.filter((t) => MODE_GROUP[t.mode] === group) : [];
     const bh = mine.length ? bestHour(mine) : null;
-    const rows = [];
-    let detail = '', hit = false;
+    const say = [];
+    let html = '', detail = '';
+    // 1) Diese Woche
+    const week = real.filter((t) => t.start >= weekStart()), wag = aggregate(week);
+    if (week.length) {
+      const sig = wag.halts + wag.passes;
+      const tiles = [[String(week.length), `Fahrt${week.length === 1 ? '' : 'en'}`], [sig ? fmtPct(wag.halts / sig) : '–', 'Ampeln mit Halt'], [hm(wag.wait / 1000), 'an Ampeln gewartet']];
+      html += `<button type="button" class="wk" data-goto="stats"><span class="wk-head">Diese Woche${ic('chevron', 'wrow-go')}</span><span class="wk-tiles">${tiles.map(([v, l]) => `<span class="wk-t"><b>${v}</b><span>${l}</span></span>`).join('')}</span></button>`;
+      say.push(`Diese Woche: ${tiles.map(([v, l]) => `${v} ${l}`).join(', ')}.`);
+    } else if (real.length) html += `<p class="wk-none small muted">Diese Woche noch keine Fahrt.</p>`;
+    // 2) Auf deinem Weg: Fahrzeit, Wartezeit an Ampeln, Stau und Störungen zusammen
+    const items = [];   // { dot, art, name, right, act }
+    let delay = 0, nHits = 0;
     if (group === 'oepnv' && lageOn() && mbItems().mine.some((it) => mbState(it) === 'aktiv')) {
-      mbItems().mine.filter((it) => mbState(it) === 'aktiv').slice(0, 2).forEach((x) => rows.push(wrow('amber', esc(x.titel), esc(mbLines(x)), 'data-weg="mobiel"')));
-      hit = true;
+      const act = mbItems().mine.filter((it) => mbState(it) === 'aktiv'); nHits = act.length;
+      act.slice(0, 3).forEach((x) => items.push({ dot: 'amber', art: 'Störung', name: x.titel, right: mbLines(x), act: 'data-weg="mobiel"' }));
     } else if (lageOn() && lageCache) {
       const { lines, hits } = myLage(group);
-      hits.slice(0, 2).forEach((x) => rows.push(wrow(LAGE_CLS[x.art] === 'red' ? 'red' : 'amber', esc(`${cap(LAGE_LABEL[x.art])}: ${x.titel}`), vfOpen ? 'weniger' : 'ansehen', `data-weg="lage" aria-expanded="${vfOpen}"`)));
-      hit = hits.length > 0;
-      if (hits.length > 2) rows.push(wrow('amber', `und ${hits.length - 2} weitere Meldung${hits.length > 3 ? 'en' : ''}`, '', `data-weg="lage" aria-expanded="${vfOpen}"`));
-      if (hit && vfOpen) detail = `<ul class="lg-list vf-detail">${hits.slice(0, 6).map((y) => lageRow(y.art, lageBtn(y), [LAGE_LABEL[y.art], delayText(y.delay), y.richtungText, lines.length > 1 ? 'auf ' + y.line.name : ''].filter(Boolean).map(esc).join(' · '), y.art !== 'zaeh' ? y.texts[0] : '')).join('')}</ul>`
+      hits.forEach((x) => { delay += x.delay || 0; }); nHits = hits.length;
+      hits.slice(0, 3).forEach((x) => items.push({ dot: LAGE_CLS[x.art] === 'red' ? 'red' : 'amber', art: cap(LAGE_LABEL[x.art]), name: x.titel, right: delayText(x.delay) }));
+      if (hits.length > 3) items.push({ dot: 'amber', art: '', name: `und ${hits.length - 3} weitere Meldung${hits.length > 4 ? 'en' : ''}`, right: '' });
+      if (hits.length && vfOpen) detail = `<ul class="lg-list vf-detail">${hits.slice(0, 6).map((y) => lageRow(y.art, lageBtn(y), [LAGE_LABEL[y.art], delayText(y.delay), y.richtungText, lines.length > 1 ? 'auf ' + y.line.name : ''].filter(Boolean).map(esc).join(' · '), y.art !== 'zaeh' ? y.texts[0] : '')).join('')}</ul>`
         + `<p class="small muted lg-src">Stand ${clock(lageCache.t || Date.now())} Uhr · ${esc(lageSrc((lageCache.quellen || []).map((q) => q.name)))}</p>`;
     }
-    if (ownRoute) rows.unshift(wrow(hit ? 'amber' : 'green', 'Dein häufigster Weg', `<b>${hit ? 'Ø ' + hm(avgOf(mine.map((t) => (t.end || t.start) - t.start)) / 1000) : 'frei'}</b>`));
-    else if (lageOn() && lageCache && !hit) rows.unshift(wrow('green', 'Keine Meldungen auf deinen Wegen', ''));
-    else if (lageOn() && !lageCache) rows.unshift(wrow('grey', 'Verkehrslage wird geladen …', ''));
-    if (bh) rows.push(wrow('grey', 'An Ampeln um diese Zeit', `<b>Ø ${fmtDur(bh.nowAvg)} min</b>`));
-    const week = real.filter((t) => t.start >= weekStart()), wag = aggregate(week);
-    if (week.length) rows.push(wrow('grey', 'Diese Woche', `<b>${week.length} Fahrt${week.length === 1 ? '' : 'en'}</b>${wag.halts + wag.passes ? ` · ${fmtPct(wag.halts / (wag.halts + wag.passes))} mit Halt` : ''}`, 'data-goto="stats"'));
-    if (!real.length) rows.push(wrow('grey', 'Noch keine Fahrt. Wähle oben, womit du unterwegs bist, und tippe auf Losfahren.', ''));
-    $('#weg').innerHTML = rows.join('');
+    const red = items.some((x) => x.dot === 'red');
+    const nums = [];
+    if (ownRoute) nums.push([hm(avgOf(mine.map((t) => (t.end || t.start) - t.start)) / 1000), 'Ø Fahrzeit']);
+    if (bh) nums.push([`${fmtDur(bh.nowAvg)} min`, 'Ø an Ampeln um diese Zeit']);
+    if (delay >= 60) nums.push([`+${Math.round(delay / 60)} min`, 'durch Stau']);
+    const state = nHits ? (red ? 'red' : 'amber') : lageOn() && lageCache ? 'green' : 'grey';
+    const badge = nHits ? `${nHits} Meldung${nHits === 1 ? '' : 'en'}` : lageOn() && lageCache ? 'frei' : lageOn() ? 'lädt …' : '';
+    if (ownRoute || items.length || lageOn()) {
+      const title = ownRoute ? 'Dein häufigster Weg' : 'Auf deinen Wegen';
+      const list = items.length ? `<ul class="lw-list">${items.map((x) => `<li><span class="dot ${x.dot}"></span><span class="lw-name">${x.art ? `<b>${esc(x.art)}</b> · ` : ''}${esc(x.name)}</span>${x.right ? `<span class="lw-right">${esc(x.right)}</span>` : ''}</li>`).join('')}</ul>` : '';
+      const mb = items.some((x) => x.act);
+      const more = items.length ? `<button type="button" class="lw-more" ${mb ? 'data-weg="mobiel"' : `data-weg="lage" aria-expanded="${vfOpen}"`}>${list}<span class="lw-go">${mb ? 'Zu den Abfahrten' : vfOpen ? 'Weniger anzeigen' : 'Einzelheiten und Karte'}${ic('chevron', 'wrow-go')}</span></button>` : '';
+      html += `<div class="lw ${state}"><div class="lw-head"><span class="lw-title">${title}</span>${badge ? `<span class="lw-badge">${badge}</span>` : ''}</div>`
+        + (nums.length ? `<div class="lw-nums">${nums.map(([v, l]) => `<span><b>${v}</b><span>${l}</span></span>`).join('')}</div>` : '')
+        + (!items.length && lageOn() && lageCache ? `<p class="lw-ok small">Keine Störungen, kein Stau, keine Baustellen auf deinen Wegen.</p>` : '')
+        + more + '</div>';
+      say.push(`${title}: ${badge === 'frei' ? 'frei' : badge}. ${nums.map(([v, l]) => `${v} ${l}`).join(', ')}${nums.length ? '.' : ''} ${items.map((x) => `${x.art ? x.art + ': ' : ''}${x.name}${x.right ? ', ' + x.right : ''}.`).join(' ')}`);
+    }
+    if (!real.length) { html += wrow('grey', 'Noch keine Fahrt. Wähle oben, womit du unterwegs bist, und tippe auf Losfahren.', ''); say.push('Noch keine Fahrt.'); }
+    wegSay = say.join(' ').replace(/\s+/g, ' ').trim();
+    $('#weg').innerHTML = html;
     $('#st-detail').innerHTML = detail;
     const top = computeTips()[0];
     $('#tip-strip').innerHTML = top ? `<button type="button" class="tip-strip" data-goto="tips">${ic('bulb')}<span>${top.num ? `<b>${top.num}</b> · ` : ''}${plain(top.short)}</span>${ic('chevron')}</button>` : '';
@@ -4377,16 +4403,17 @@
   }
   // Tipps: je Tipp eine Zeile mit Titel, einem Satz und der Wirkung als Marke; Einzelheiten beim Antippen
   let tipOpen = null;
-  const TIP_WORLD = { Ampeln: 'hist', Ampel: 'hist', Kosten: 'hist', Meldung: 'hist', Weg: 'vor', Rad: 'go', Zeit: 'map', Fahrweise: 'go' };
+  // Farben der Tipps: blau, was beim Planen hilft (Weg, Zeit, Alternativen); grün, was Ampeln und Fahrweise betrifft
+  const TIP_WORLD = { Ampeln: 'hist', Ampel: 'hist', Kosten: 'hist', Meldung: 'hist', Weg: 'plan', Rad: 'plan', Zeit: 'plan', Fahrweise: 'go' };
   function renderTips() {
     const tips = computeTips();
     const n = trips.filter((t) => !t.demo).length;
     $('#tips-small').textContent = tips.length ? `${tips.length} für dich, aus ${n} Fahrt${n === 1 ? '' : 'en'}. Tippe für Einzelheiten.` : `Noch zu wenig Daten (${n} Fahrt${n === 1 ? '' : 'en'}).`;
-    const card = (x, i) => `<div class="tipcard" data-world="${TIP_WORLD[x.cat] || 'tip'}"><button type="button" class="tip-row" data-tip="${i}" aria-expanded="${tipOpen === i}"><span class="tip-ic">${ic(x.icon)}</span><span class="tip-main"><b>${x.head || plain(x.title)}</b><span>${plain(x.short)}</span></span>${x.num ? `<span class="tip-num">${x.num}</span>` : ''}</button>${tipOpen === i ? `<div class="tip-detail">${x.html}</div>` : ''}</div>`;
+    const card = (x, i) => `<div class="tipcard${i === 0 ? ' tip-top' : ''}" data-world="${TIP_WORLD[x.cat] || 'tip'}"><button type="button" class="tip-row" data-tip="${i}" aria-expanded="${tipOpen === i}"><span class="tip-ic">${ic(x.icon)}</span><span class="tip-main">${i === 0 && tips.length > 1 ? '<em class="tip-kick">Wichtigster Tipp</em>' : ''}<b>${x.head || plain(x.title)}</b><span>${plain(x.short)}</span></span>${x.num ? `<span class="tip-num">${x.num}</span>` : ''}</button>${tipOpen === i ? `<div class="tip-detail">${x.html}</div>` : ''}</div>`;
     const news = '';   // Meldungen erscheinen nur, wenn es welche für die eigenen Wege gibt
     $('#tips-body').innerHTML = (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${tips.map(card).join('')}`
       : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
-      + faqCards() + `<h3 class="eyebrow">Mehr Hilfe</h3>${kiCard()}` + news;
+      + (() => { const help = faqCards() + (kiCard() ? `<h3 class="eyebrow">Mehr Hilfe</h3>${kiCard()}` : ''); return help ? `<div class="tip-help">${help}</div>` : ''; })() + news;
     if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
     requestNames([].concat(...trips.map((t) => t.events.filter((e) => e.signal))), () => { if (!$('#view-tips').hidden) renderTips(); });
     // Werte anderer und Meldungen nachladen, dann einmal neu zeichnen
