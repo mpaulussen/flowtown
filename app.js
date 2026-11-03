@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.64.0';
+  const VERSION = '0.65.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1127,8 +1127,8 @@
     const tol = Math.max(NAV_TOL[g], Math.min(50, acc || 0));
     let r = navProject(N, p, N.joined ? Math.max(0, N.k - 5) : 0, N.joined ? Math.min(N.pts.length - 1, N.k + 400) : N.pts.length - 1);
     if (N.joined && r.d > tol) { const r2 = navProject(N, p, 0, N.pts.length - 1); if (r2.d < r.d) r = r2; }
-    // Strecke aus „Wohin?“ beginnt an einem gerundeten Start: liegt sie beim Losfahren weit weg, einmal von hier neu holen
-    if (!N.checked) { N.checked = true; if (r.d > 150) { navReroute(true); } }
+    // Strecke aus „Wohin?“ beginnt an einem gerundeten Start: beim Losfahren einmal genau ab hier holen (außer man steht schon am Anfang)
+    if (!N.checked) { N.checked = true; if (r.d > 25 || r.along > 40) navReroute(true); }
     if (r.d <= tol) { N.joined = true; N.k = r.k; N.along = Math.max(N.along - 30, r.along); N.offSince = null; }
     else if (N.joined && N.offSince == null) N.offSince = t;
     const left = Math.max(0, N.total - (N.joined ? N.along : r.along));
@@ -1168,12 +1168,12 @@
       }
     }
   }
-  // Strecke von hier neu berechnen (Start auf etwa 100 m gerundet), höchstens einmal je Minute
+  // Strecke von hier neu berechnen (Start auf etwa 10 m), beim Losfahren und wenn man abkommt; höchstens einmal je Minute
   async function navReroute(quiet) {
     const N = rec && rec.nav, g = navGroup();
     if (!N || !g || !rec.target || !rec.last || Date.now() - N.reAt < 60000 || !apiBase()) return;
     N.reAt = Date.now();
-    const from = [rec.last.lat, rec.last.lon].map((x) => x.toFixed(3));
+    const from = [rec.last.lat, rec.last.lon].map((x) => x.toFixed(4));
     try {
       const d = await api(`/api/ziel?from=${from.join(',')}&to=${rec.target.lat},${rec.target.lon}&mode=${g}&nav=1`);
       if (!rec || !d.nav) return;
@@ -4014,7 +4014,7 @@
       : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '';
     return `<div class="vf-panel"><form class="vf-form" data-vf="suche"><label class="sr-only" for="inp-ziel">Ziel: Ort, Adresse oder Einrichtung</label><input id="inp-ziel" type="search" placeholder="Ort, Adresse oder z. B. Uni Bielefeld" autocomplete="off" enterkeyhint="search" value="${esc(ortQ)}"><button class="btn" type="submit">Suchen</button></form>
       ${ortMsg ? `<p class="small muted" role="status">${esc(ortMsg)}</p>` : ''}${list}
-      <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit; die Strecke für die Navigation bleibt nur bis zum Ende der Fahrt im Speicher.</p></div>`;
+      <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit; die Strecke für die Navigation bleibt nur bis zum Ende der Fahrt im Speicher. Beim Losfahren mit Ziel holt die App die Strecke einmal ab deinem genauen Standort (auf etwa 10 m), damit die Navigation dort beginnt.</p></div>`;
   }
   function zielPanel(z, group) {
     if (!z) return '';

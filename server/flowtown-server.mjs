@@ -589,8 +589,8 @@ function slots(now) {
   return [0, 1, 2, 3].map((k) => new Date(t.getTime() + k * 30 * 60000));
 }
 const zielCache = new Map();   // kurzer Zwischenspeicher gegen Doppel-Tipps, 3 Minuten
-async function checkZiel(from, to, mode) {
-  const key = [from, to, mode].join('|');
+async function checkZiel(from, to, mode, nav) {
+  const key = [from, to, mode, nav ? 'n' : ''].join('|');
   const hit = zielCache.get(key);
   if (hit && Date.now() - hit.t < 180000) return hit.v;
   const [main, ...alts] = await hereRoute(from, to, mode, { full: true });
@@ -647,7 +647,7 @@ async function checkZiel(from, to, mode) {
   for (const it of items) { if (!it.titel) it.titel = clip(roadAt(it.at).num || roadAt(it.at).name || it.text || 'Meldung', 60); it.km = Math.round(cum[it.at] / 1000); delete it.at; }
   // Abfahrtsleiste (nur Auto): jetzt plus vier Zeiten, mit HEREs Vorhersage
   let abfahrt = null;
-  if (mode === 'auto') {
+  if (mode === 'auto' && !nav) {
     const ts = slots(Date.now());
     const later = await Promise.allSettled(ts.map((t) => hereRoute(from, to, mode, { at: t.toISOString() })));
     abfahrt = [{ t: null, dauer: main.dauer }].concat(later.map((r, k) => (r.status === 'fulfilled' && r.value[0] ? { t: ts[k].toISOString(), dauer: r.value[0].dauer } : null)).filter(Boolean));
@@ -2046,10 +2046,11 @@ const server = http.createServer(async (req, res) => {
       // Start auf etwa 1 km gerundet; bei Bus und Bahn darf er eine gewählte Haltestelle sein (öffentlicher Ort, genau)
       // zu Fuß auf etwa 100 m gerundet: Fußwege sind kurz, ein Start 1 km daneben ergäbe einen anderen Weg
       const m = url.searchParams.get('mode'), mode = m === 'rad' ? 'rad' : m === 'oepnv' ? 'oepnv' : m === 'fuss' ? 'fuss' : 'auto';
-      // während der Navigation (nav=1): Start auf etwa 100 m, sonst führte die Strecke an einem Punkt bis 1 km daneben los
-      const from = coord(url.searchParams.get('from'), mode === 'oepnv' && url.searchParams.get('ab') === 'halt' ? 4 : mode === 'fuss' || url.searchParams.get('nav') === '1' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
+      // Navigation (nav=1): Start auf etwa 10 m, damit die Strecke genau am Standort beginnt (Einwilligung mit „Fahrt starten mit Ziel“)
+      const nav = url.searchParams.get('nav') === '1' && mode !== 'oepnv';
+      const from = coord(url.searchParams.get('from'), nav || (mode === 'oepnv' && url.searchParams.get('ab') === 'halt') ? 4 : mode === 'fuss' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
-      return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode), origin);
+      return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode, nav), origin);
     }
     if (req.method === 'POST' && p.startsWith('/api/pilot/')) {
       if (!pilotAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Übertragungen möglich.' }, origin);
