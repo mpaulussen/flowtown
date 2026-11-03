@@ -1021,3 +1021,21 @@ body[data-view="plan"] .ask-bar{--ask:#1f5c99}
 .ask-mic:focus-visible{outline:3px solid var(--ask);outline-offset:2px}
 .ask-mic[hidden]+label+input{padding-left:8px}
 @media (prefers-reduced-motion:reduce){.ask-mic.listening{animation:none}}
+/* 0.64 Navigation: Karte im Zielfenster */
+.vf-map{height:190px;border-radius:16px;overflow:hidden;cursor:pointer;border:1px solid color-mix(in srgb,var(--w-vor-ink) 20%,transparent);background:#e8ece9;z-index:0}
+.vf-map .leaflet-control-attribution{font-size:9px}
+/* 0.64 Navigation in der Fahransicht */
+.nav-box{background:#ffffff;color:#15191e;border-radius:20px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+.nav-next{display:flex;align-items:center;gap:14px}
+.nav-arrow{width:58px;height:58px;flex:none;border-radius:16px;background:#2563a8;color:#fff;display:grid;place-items:center}
+.nav-arrow svg{width:40px;height:40px;fill:none;stroke:currentColor;stroke-width:2.8;stroke-linecap:round;stroke-linejoin:round;transition:transform .2s}
+.nav-what{display:flex;flex-direction:column;min-width:0}
+.nav-what b{font-family:var(--display);font-size:28px;font-weight:800;line-height:1.05;letter-spacing:-.02em}
+.nav-what span{font-size:18px;line-height:1.25;overflow-wrap:anywhere}
+.nav-rest{margin:0;font-size:14px;color:#4a525a}
+.nav-re{align-self:flex-start;min-height:44px}
+.drive-map{height:230px;border-radius:20px;overflow:hidden;background:#dfe5e1;z-index:0}
+.drive-map .leaflet-control-attribution{font-size:9px}
+.me-pin span{display:block;width:30px;height:30px;border-radius:50%;background:#2563a8;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4);position:relative}
+.me-pin span::after{content:"";position:absolute;left:50%;top:-11px;margin-left:-7px;border:7px solid transparent;border-bottom:11px solid #2563a8;border-top:0}
+.me-pin span.noh::after{display:none}

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.63.0';
+  const VERSION = '0.64.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -746,6 +746,7 @@
     }
     if (rec.samples.length >= 3) detectLeg(p, vs, t);
     voiceAhead(p, t);
+    navUpdate(p, t, c.accuracy, heading);
     lineOnFix(p, t);
     maybeFetchSignals(p, false);
     updateCounters();
@@ -1034,7 +1035,8 @@
     rec = newRecording(mode);
     if (pendingPlan) {   // Fahrt mit Ziel: Name und geplante Zeit bleiben an der Fahrt, die Koordinaten nur bis zum Ende der Aufzeichnung
       rec.target = { lat: pendingPlan.lat, lon: pendingPlan.lon };
-      rec.trip.plan = Object.assign({}, pendingPlan); delete rec.trip.plan.lat; delete rec.trip.plan.lon;
+      rec.trip.plan = Object.assign({}, pendingPlan); delete rec.trip.plan.lat; delete rec.trip.plan.lon; delete rec.trip.plan.nav;
+      rec.nav = navBuild(pendingPlan.nav, pendingPlan.dauer);   // Strecke und Abbiegehinweise: nur bis zum Ende der Aufzeichnung im Speicher
       pendingPlan = null;
     }
     if (settings.access.on) rec.trip.access = settings.access.type;   // Wartezeiten mit Einschränkung getrennt auswertbar
@@ -1056,8 +1058,178 @@
     updateVoiceBtn();
   }
 
+  // ---------- Navigation: Strecke vom Server (nur im Speicher), nächster Hinweis, Ansagen, mitlaufende Karte ----------
+  const NAV_TOL = { auto: 35, rad: 25, fuss: 20 };          // so weit neben der Strecke gilt man noch als „auf der Strecke“
+  const NAV_SAY = { auto: [400, 150], rad: [150, 50], fuss: [60, 25] };
+  const NAV_NOW = { auto: 30, rad: 15, fuss: 8 };
+  const navGroup = () => { const m = rec && (rec.transfer ? 'fuss' : rec.curMode); return m === 'auto' || m === 'rad' || m === 'fuss' ? m : null; };
+  function navBuild(nav, dauer) {
+    if (!nav || !Array.isArray(nav.pts) || nav.pts.length < 2) return null;
+    const pts = nav.pts.map((q) => ({ lat: q[0], lon: q[1] }));
+    const cum = [0];
+    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + dist(pts[k - 1], pts[k]));
+    const total = cum[cum.length - 1];
+    const steps = (nav.schritte || []).filter((x) => x.i > 0 && x.i < pts.length).map((x) => Object.assign({}, x, { at: cum[x.i] }));
+    return { pts, cum, total, steps, v: dauer ? total / dauer : null, k: 0, along: 0, joined: false, offSince: null, said: {}, arrived: false, reAt: 0, checked: false };
+  }
+  // nächster Punkt auf der Strecke zwischen den Stützpunkten a..b
+  function navProject(N, p, a, b) {
+    const mx = 111320 * Math.cos(p.lat * toR), my = 111320;
+    let best = { d: Infinity, k: 0, u: 0 };
+    for (let k = a; k < b; k++) {
+      const A = N.pts[k], B = N.pts[k + 1];
+      const ax = (A.lon - p.lon) * mx, ay = (A.lat - p.lat) * my, dx = (B.lon - A.lon) * mx, dy = (B.lat - A.lat) * my;
+      const l2 = dx * dx + dy * dy, u = l2 ? Math.max(0, Math.min(1, -(ax * dx + ay * dy) / l2)) : 0;
+      const d = Math.hypot(ax + u * dx, ay + u * dy);
+      if (d < best.d) best = { d, k, u };
+    }
+    const A = N.pts[best.k], B = N.pts[best.k + 1];
+    best.along = N.cum[best.k] + best.u * (N.cum[best.k + 1] - N.cum[best.k]);
+    best.q = { lat: A.lat + (B.lat - A.lat) * best.u, lon: A.lon + (B.lon - A.lon) * best.u };
+    return best;
+  }
+  function navText(x) {
+    const on = x.str ? ` auf ${x.str}` : x.nr ? ` auf ${x.nr}` : '';
+    const side = x.dir === 'left' ? 'links' : x.dir === 'right' ? 'rechts' : '';
+    if (x.art === 'arrive') return 'Ziel erreicht';
+    if (x.art === 'turn') return side ? `${x.sev === 'light' ? 'Leicht ' + side : cap(side)} abbiegen${on}` : `Abbiegen${on}`;
+    if (x.art === 'keep') return side ? `${cap(side)} halten${on}` : `Weiter${on}`;
+    if (/^roundabout(Enter|Pass)$/.test(x.art)) return `In den Kreisverkehr${on}`;
+    if (x.art === 'roundaboutExit') return x.exit ? `Im Kreisverkehr die ${x.exit}. Ausfahrt nehmen${on}` : `Kreisverkehr verlassen${on}`;
+    if (x.art === 'uTurn') return 'Wenden';
+    if (x.art === 'exit' || x.art === 'ramp') return `${side ? cap(side) + ' ' : ''}Ausfahrt nehmen${on}`;
+    if (x.art === 'continue') return `Geradeaus weiter${on}`;
+    return on ? `Weiter${on}` : 'Der Strecke folgen';
+  }
+  function navArrow(x) {
+    if (x && x.art === 'arrive') return '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/></svg>';
+    let a = !x ? 0 : x.dir === 'left' ? -90 : x.dir === 'right' ? 90 : 0;
+    if (x && (x.sev === 'light' || /^(keep|exit|ramp)$/.test(x.art))) a /= 2;
+    if (x && x.art === 'uTurn') a = 180;
+    return `<svg viewBox="0 0 24 24" style="transform:rotate(${a}deg)"><path d="M12 21V5M5.5 11.5 12 5l6.5 6.5"/></svg>`;
+  }
+  const navM = (m) => (m >= 1000 ? `${fmtNum(m / 1000, 1)} km` : `${m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50} m`);
+  const navSayM = (m) => (m >= 1000 ? `${fmtNum(m / 1000, 1)} Kilometern` : `${m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50} Metern`);
+  function navShow(arrow, distTxt, text, rest, re) {
+    $('#nav-box').hidden = false;
+    $('#nav-arrow').innerHTML = arrow; $('#nav-dist').textContent = distTxt; $('#nav-text').textContent = text;
+    $('#nav-rest').textContent = rest || ''; $('#btn-nav-re').hidden = !re;
+  }
+  function navReset() {
+    $('#nav-box').hidden = true; $('#btn-nav-re').hidden = true;
+    driveMapSetup();
+  }
+  function navUpdate(p, t, acc, heading) {
+    driveMapMove(p, heading);
+    const N = rec && rec.nav, g = navGroup();
+    if (!N || N.arrived) return;
+    if (!g) { $('#nav-box').hidden = true; return; }   // in Bus und Bahn pausiert
+    const tol = Math.max(NAV_TOL[g], Math.min(50, acc || 0));
+    let r = navProject(N, p, N.joined ? Math.max(0, N.k - 5) : 0, N.joined ? Math.min(N.pts.length - 1, N.k + 400) : N.pts.length - 1);
+    if (N.joined && r.d > tol) { const r2 = navProject(N, p, 0, N.pts.length - 1); if (r2.d < r.d) r = r2; }
+    // Strecke aus „Wohin?“ beginnt an einem gerundeten Start: liegt sie beim Losfahren weit weg, einmal von hier neu holen
+    if (!N.checked) { N.checked = true; if (r.d > 150) { navReroute(true); } }
+    if (r.d <= tol) { N.joined = true; N.k = r.k; N.along = Math.max(N.along - 30, r.along); N.offSince = null; }
+    else if (N.joined && N.offSince == null) N.offSince = t;
+    const left = Math.max(0, N.total - (N.joined ? N.along : r.along));
+    const eta = N.v ? ` · Ankunft etwa ${clock(Date.now() + left / N.v * 1000)}` : '';
+    const rest = `Noch ${navM(left)}${eta}`;
+    if (N.joined && left < 25) {
+      N.arrived = true;
+      navShow(navArrow({ art: 'arrive' }), 'Ziel erreicht', rec.trip.plan ? rec.trip.plan.name : '', '', false);
+      speak(`Du hast dein Ziel erreicht${rec.trip.plan ? ': ' + rec.trip.plan.name : ''}.`, { now: true });
+      return;
+    }
+    if (!N.joined) {
+      const dir = DIRS[Math.round(bearing(p, r.q) / 45) % 8];
+      navShow(navArrow(null), `Zur Strecke ${navM(r.d)}`, `Richtung ${dir}`, rest, false);
+      return;
+    }
+    if (N.offSince != null && t - N.offSince > 8000) {
+      navShow(navArrow({ art: 'uTurn' }), 'Abseits der Strecke', 'Ich berechne sie neu, oder tippe unten.', rest, true);
+      if (!N.said.off) { N.said.off = true; speak('Du bist von der Strecke abgekommen. Ich berechne sie neu.', { now: true }); }
+      if (t - N.offSince > 12000) navReroute(false);
+      return;
+    }
+    const next = N.steps.find((x) => x.at > N.along + 3);
+    if (!next) { navShow(navArrow(null), navM(left), 'Der Strecke folgen', rest, false); return; }
+    const d = next.at - N.along, txt = next.art === 'arrive' ? `Ziel: ${rec.trip.plan ? rec.trip.plan.name : 'erreicht'}` : navText(next);
+    const low = next.art === 'arrive' ? 'erreichst du dein Ziel' : txt.charAt(0).toLowerCase() + txt.slice(1);
+    navShow(navArrow(next), d <= NAV_NOW[g] ? 'Jetzt' : `In ${navM(d)}`, txt, rest, false);
+    // Ansagen: zweimal vorher, dann „Jetzt“
+    const key = next.i;
+    if (d <= NAV_NOW[g] + 5) {
+      if (!N.said[key + 'n']) { N.said[key + 'n'] = true; if (next.art !== 'arrive') speak(`Jetzt ${low}.`, { now: true }); }
+    } else {
+      const th = NAV_SAY[g].find((x, i) => d <= x && (i === NAV_SAY[g].length - 1 || d > NAV_SAY[g][i + 1]));
+      if (th && !N.said[key + '_' + th] && d > NAV_NOW[g] + 15) {
+        NAV_SAY[g].forEach((x) => { if (x >= th) N.said[key + '_' + x] = true; });
+        speak(`In ${navSayM(d)} ${low}.`, { now: true });
+      }
+    }
+  }
+  // Strecke von hier neu berechnen (Start auf etwa 100 m gerundet), höchstens einmal je Minute
+  async function navReroute(quiet) {
+    const N = rec && rec.nav, g = navGroup();
+    if (!N || !g || !rec.target || !rec.last || Date.now() - N.reAt < 60000 || !apiBase()) return;
+    N.reAt = Date.now();
+    const from = [rec.last.lat, rec.last.lon].map((x) => x.toFixed(3));
+    try {
+      const d = await api(`/api/ziel?from=${from.join(',')}&to=${rec.target.lat},${rec.target.lon}&mode=${g}&nav=1`);
+      if (!rec || !d.nav) return;
+      const old = rec.nav;
+      rec.nav = navBuild(d.nav, d.dauer);
+      rec.nav.checked = true; rec.nav.reAt = Date.now();
+      driveMapRoute();
+      if (!quiet && old && old.joined) speak('Neue Strecke berechnet.', { now: true });
+    } catch (e) { /* ohne Netz: alte Strecke bleibt */ }
+  }
+  $('#btn-nav-re').addEventListener('click', () => { if (rec && rec.nav) { rec.nav.reAt = 0; navReroute(false); } });
+  // mitlaufende Karte: Ausschnitt um den Standort, Strecke darauf; nicht verschiebbar, damit der Blick kurz bleibt
+  let driveMap = null, driveLayer = null, driveMe = null;
+  function driveMapSetup() {
+    const el = $('#drive-map'), on = settings.driveMap !== false && typeof L !== 'undefined';
+    $('#btn-drive-map').setAttribute('aria-pressed', String(settings.driveMap !== false));
+    el.hidden = !on;
+    if (!on) return;
+    if (!driveMap) {
+      driveMap = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(driveMap);
+      driveMap.setView([CITY.lat, CITY.lon], 14);
+    }
+    if (driveLayer) driveLayer.remove();
+    driveLayer = L.layerGroup().addTo(driveMap);
+    driveMe = null;
+    setTimeout(() => driveMap && driveMap.invalidateSize(), 60);
+    driveMapRoute();
+  }
+  function driveMapRoute() {
+    if (!driveMap || !driveLayer) return;
+    driveLayer.clearLayers(); driveMe = null;
+    const N = rec && rec.nav;
+    if (N) {
+      const ll = N.pts.map((q) => [q.lat, q.lon]);
+      L.polyline(ll, { color: '#ffffff', weight: 10, opacity: 0.9 }).addTo(driveLayer);
+      L.polyline(ll, { color: '#2563a8', weight: 6, opacity: 0.95 }).addTo(driveLayer);
+      L.circleMarker(ll[ll.length - 1], { radius: 9, color: '#fff', weight: 3, fillColor: '#15191e', fillOpacity: 1 }).addTo(driveLayer);
+    }
+  }
+  function driveMapMove(p, heading) {
+    if (!driveMap || $('#drive-map').hidden) return;
+    const icon = L.divIcon({ className: 'me-pin', iconSize: [30, 30], html: `<span style="transform:rotate(${heading == null ? 0 : Math.round(heading)}deg)"${heading == null ? ' class="noh"' : ''}></span>` });
+    if (!driveMe) driveMe = L.marker([p.lat, p.lon], { icon, interactive: false, keyboard: false }).addTo(driveLayer);
+    else { driveMe.setLatLng([p.lat, p.lon]); driveMe.setIcon(icon); }
+    const g = navGroup() || 'auto';
+    driveMap.setView([p.lat, p.lon], g === 'fuss' ? 18 : g === 'rad' ? 17 : 16, { animate: false });
+  }
+  $('#btn-drive-map').addEventListener('click', () => {
+    settings.driveMap = settings.driveMap === false; store.set('settings', settings);
+    driveMapSetup();
+    if (rec && rec.last) driveMapMove(rec.last, null);
+  });
   function enterDriveView() {
     hideWarn();
+    navReset();
     setDriveState('Warte auf GPS …', '');
     $('#drive-speed').textContent = '–';
     $('#drive-dir').textContent = '';
@@ -2370,7 +2542,7 @@
     }, 60);
   }
   document.addEventListener('click', (ev) => {
-    const b = ev.target.closest('button.place, button[data-peek]');
+    const b = ev.target.closest('button.place, button[data-peek], .vf-map[data-peek]');
     if (b) { ev.preventDefault(); ev.stopPropagation(); openPeek(b); }
   }, true);
   // ---------- Barrierefrei: Orte von „Bielefeld barrierefrei erleben“ (Bethel), Toiletten und Aufzüge ----------
@@ -3793,9 +3965,37 @@
     const wohin = wohinSection(group);
     if (wohin === null) return;   // wird gerade geprüft, zeichnet sich danach neu
     wo.innerHTML = wohin;
+    drawVfMaps();
     // Bus und Bahn: unter den Kacheln die Abfahrten und die Umleitungen von moBiel
     const rest = group === 'oepnv' && lageOn() ? abfahrtSection() + mobielSection() : '';
     el.hidden = !rest; el.innerHTML = rest;
+  }
+  // Kleine Karte im Zielfenster: Strecke, Start, Ziel und Meldungen; nicht verschiebbar, Tippen öffnet die große Karte
+  let vfMaps = [];
+  function drawVfMaps() {
+    vfMaps.forEach((m) => { try { m.remove(); } catch (e) { /* Behälter schon ersetzt */ } });
+    vfMaps = [];
+    if (typeof L === 'undefined') return;
+    const parse = (str) => (str || '').split(';').map((x) => x.split(',').map(Number)).filter((p) => isFinite(p[0]) && isFinite(p[1]));
+    $$('#wohin .vf-map').forEach((el) => {
+      const accent = getComputedStyle(el).getPropertyValue('--w-vor-acc').trim() || '#2563a8';   // Blau wie „Wohin?“ und die Navigation
+      const route = parse(el.dataset.pts);
+      if (route.length < 2) { el.hidden = true; return; }
+      const m = L.map(el, { zoomControl: false, attributionControl: true, dragging: false, touchZoom: false, scrollWheelZoom: false, doubleClickZoom: false, boxZoom: false, keyboard: false, tap: false });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap' }).addTo(m);
+      L.polyline(route, { color: '#ffffff', weight: 9, opacity: 0.9 }).addTo(m);
+      L.polyline(route, { color: accent, weight: 5, opacity: 0.95 }).addTo(m);
+      const arts = (el.dataset.arts || '').split('|');
+      (el.dataset.lines || '').split('|').forEach((x, i) => {
+        const p = parse(x); if (!p.length) return;
+        const col = LAGE_CLS[arts[i]] === 'red' ? '#d64933' : '#e0a326';
+        if (p.length > 1) L.polyline(p, { color: col, weight: 7, opacity: 0.95 }).addTo(m); else L.circleMarker(p[0], { radius: 7, color: '#fff', weight: 2, fillColor: col, fillOpacity: 1 }).addTo(m);
+      });
+      L.circleMarker(route[0], { radius: 7, color: '#fff', weight: 3, fillColor: accent, fillOpacity: 1 }).addTo(m);
+      L.circleMarker(route[route.length - 1], { radius: 9, color: '#fff', weight: 3, fillColor: '#15191e', fillOpacity: 1 }).addTo(m);
+      m.fitBounds(route, { padding: [18, 18], maxZoom: 16 });
+      vfMaps.push(m);
+    });
   }
   function wohinSection(group) {
     const can = zielFor(group);
@@ -3814,7 +4014,7 @@
       : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '';
     return `<div class="vf-panel"><form class="vf-form" data-vf="suche"><label class="sr-only" for="inp-ziel">Ziel: Ort, Adresse oder Einrichtung</label><input id="inp-ziel" type="search" placeholder="Ort, Adresse oder z. B. Uni Bielefeld" autocomplete="off" enterkeyhint="search" value="${esc(ortQ)}"><button class="btn" type="submit">Suchen</button></form>
       ${ortMsg ? `<p class="small muted" role="status">${esc(ortMsg)}</p>` : ''}${list}
-      <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit.</p></div>`;
+      <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit; die Strecke für die Navigation bleibt nur bis zum Ende der Fahrt im Speicher.</p></div>`;
   }
   function zielPanel(z, group) {
     if (!z) return '';
@@ -3847,7 +4047,10 @@
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
     const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}${group === 'fuss' ? 'Losgehen mit Ziel' : 'Fahrt starten mit Ziel'}</button>`;
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
-    return `<div class="vf-panel">${head}${sum}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+    const lines = items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|');
+    const larts = items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|');
+    const mini = `<div class="vf-map" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${lines}" data-arts="${larts}" data-pts="${route}" role="img" aria-label="Karte der Strecke nach ${esc(z.name)}${items.length ? ', Meldungen farbig' : ''}. Tippen öffnet die große Karte."></div>`;
+    return `<div class="vf-panel">${head}${sum}${mini}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
   // ---------- Park + Ride und Radverkehrsnetz der Stadt Bielefeld (Open Data) ----------
   let stadt2 = store.get('stadt2', null), stadt2Loading = null, netzGrid = null;
@@ -4269,7 +4472,7 @@
         pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: Date.now(), dauer, basis: dauer, km: null, meldungen: [],
           verbindung: c.teile.filter((x) => x.art !== 'fuss').map((x) => `${x.linie} ${clock(x.ab)}`).join(', ') };
         if (first) setModeUI(first.art);
-      } else pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km,
+      } else pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km, nav: d.nav || null,
         meldungen: d.items.slice(0, 3).map((it) => ({ titel: it.titel, art: it.art, km: it.km })) };
       zielOpen = null;
       startTrip();

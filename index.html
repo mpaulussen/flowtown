@@ -212,6 +212,12 @@
   <section id="view-drive" class="view" hidden aria-labelledby="h-drive">
     <h2 id="h-drive" class="sr-only">Aufzeichnung läuft</h2>
     <div class="leg-banner" id="leg-banner" role="status" aria-live="assertive" hidden></div>
+    <div class="nav-box" id="nav-box" hidden>
+      <div class="nav-next" role="status" aria-live="polite"><span class="nav-arrow" id="nav-arrow" aria-hidden="true"></span><span class="nav-what"><b id="nav-dist"></b><span id="nav-text"></span></span></div>
+      <p class="nav-rest" id="nav-rest"></p>
+      <button type="button" class="btn nav-re" id="btn-nav-re" hidden><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Strecke neu berechnen</button>
+    </div>
+    <div class="drive-map" id="drive-map" aria-hidden="true" hidden></div>
     <div class="drive-state" id="drive-state" role="status" aria-live="polite">Warte auf GPS …</div>
     <div class="speed"><span id="drive-speed">–</span><small>km/h</small></div>
     <p class="dir" id="drive-dir" aria-live="off"></p>
@@ -236,6 +242,7 @@
     <div class="voice-row">
     <button id="btn-mic-drive" class="voice-toggle mic-drive" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><span>Sprechen</span></button>
     <button id="btn-voice" class="voice-toggle" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Ansagen aus</span></button>
+    <button id="btn-drive-map" class="voice-toggle" type="button" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg><span>Karte</span></button>
     </div>
     <div class="end-row">
       <button id="btn-end" class="btn danger big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg><span id="btn-end-label">Fahrt beenden</span></button>

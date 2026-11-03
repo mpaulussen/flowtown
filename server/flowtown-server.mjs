@@ -283,10 +283,12 @@ async function refreshLage() {
   if (HERE_KEY) jobs.here = Promise.all([hereFlow(), hereIncidents()]).then(([a, b]) => a.concat(b));
   // Baustellen der Stadt ändern sich selten: höchstens alle 30 Minuten
   if (STADT_ON && Date.now() - stadtBauAt > 30 * 60000) { stadtBauAt = Date.now(); jobs.stadt = stadtBaustellen(); }
-  for (const [name, job] of Object.entries(jobs)) {
-    try { lage[name] = { items: await job, t: Date.now() }; }
-    catch (e) { console.error(new Date().toISOString(), 'Lage', name, e.message); }   // ältere Werte bleiben bis 30 Minuten stehen
-  }
+  // alle gemeinsam abwarten: sonst bleibt ein früher Fehler (etwa HERE nicht erreichbar) unbehandelt und beendet den Server
+  const names = Object.keys(jobs), done = await Promise.allSettled(Object.values(jobs));
+  done.forEach((r, k) => {
+    if (r.status === 'fulfilled') lage[names[k]] = { items: r.value, t: Date.now() };
+    else console.error(new Date().toISOString(), 'Lage', names[k], r.reason && r.reason.message);   // ältere Werte bleiben bis 30 Minuten stehen
+  });
   lageAt = Date.now();
 }
 async function readLage() {
@@ -512,21 +514,27 @@ const txt = (v) => (v == null ? '' : typeof v === 'string' ? v : v.value || '');
 // Strecke von HERE: Geometrie, Straßennummern und -namen je Abschnitt, Störungen, die auf genau dieser Strecke liegen
 async function hereRoute(from, to, mode, opts) {
   const q = new URLSearchParams({ transportMode: mode === 'rad' ? 'bicycle' : mode === 'fuss' ? 'pedestrian' : 'car', origin: from.join(','), destination: to.join(','), apiKey: HERE_KEY });
-  if (opts.full && mode === 'fuss') { q.set('return', 'summary,polyline'); q.set('spans', 'names'); q.set('lang', 'de-DE'); }
-  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents'); q.set('spans', 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
+  if (opts.full && mode === 'fuss') { q.set('return', 'summary,polyline,actions,instructions'); q.set('spans', 'names'); q.set('lang', 'de-DE'); }
+  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents,actions,instructions'); q.set('spans', 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
   else q.set('return', 'summary');
   if (opts.at) q.set('departureTime', opts.at);
   const j = await getJson(`${ROUTER_URL}?${q}`, 12000);
   return (j.routes || []).map((r) => {
     const secs = r.sections || [];
     const sum = (k) => secs.reduce((a, x) => a + (Number(x.summary && x.summary[k]) || 0), 0);
-    const pts = [], spans = [], roads = [];
+    const pts = [], spans = [], roads = [], acts = [];
     let incs = null;
     if (opts.full) {
       for (const x of secs) {
         const base = pts.length;
         const sp = x.polyline ? decodeFlex(x.polyline) : [];
         pts.push(...sp);
+        // Abbiegehinweise für die Navigation: Art, Richtung, nächste Straße, Stelle auf der Strecke
+        for (const a of x.actions || []) {
+          const nr = a.nextRoad || {};
+          acts.push({ i: base + (Number(a.offset) || 0), art: clip(a.action, 20), dir: clip(a.direction, 10), sev: clip(a.severity, 10), exit: Number(a.exit) || null,
+            str: clip((nr.name || []).map(txt).find(Boolean) || '', 50), nr: clip((nr.number || []).map(txt).find(Boolean) || '', 10), text: clip(txt(a.instruction), 160) });
+        }
         for (const s of x.spans || []) {
           const num = (s.routeNumbers || []).map((n) => txt(n).replace(/\s+/g, '')).find(Boolean) || '';
           const name = (s.names || []).map(txt).find(Boolean) || '';
@@ -546,7 +554,7 @@ async function hereRoute(from, to, mode, opts) {
         }
       }
     }
-    return { dauer: sum('duration'), basis: sum('baseDuration') || sum('typicalDuration') || sum('duration'), m: sum('length'), pts, spans, roads, incs };
+    return { dauer: sum('duration'), basis: sum('baseDuration') || sum('typicalDuration') || sum('duration'), m: sum('length'), pts, spans, roads, incs, acts };
   });
 }
 // Ort zu einem Punkt (für „A2 bei Kamen“), einen Tag zwischengespeichert
@@ -648,6 +656,8 @@ async function checkZiel(from, to, mode) {
   const v = {
     t: Date.now(), mode, dauer: main.dauer, basis: main.basis, km: Math.round(main.m / 100) / 10, strassen: main.roads.slice(0, 6),
     pts: thin2(main.pts, 160), items, abfahrt,
+    // für die Navigation in der App: volle Strecke (auf etwa 1 m gerundet) und die Abbiegehinweise; bleibt nur im Speicher der App
+    nav: main.pts.length <= 5000 && main.acts.length ? { pts: main.pts.map((p) => [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]), schritte: main.acts } : null,
     alternative: alt ? { dauer: alt.dauer, strassen: alt.roads.filter((r) => !main.roads.includes(r)).slice(0, 3) } : null
   };
   zielCache.set(key, { t: Date.now(), v });
@@ -1756,7 +1766,7 @@ const mAbs = (a, b) => Math.round(Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1
 const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App für Wege in Bielefeld (Auto, Rad, zu Fuß, Bus und Stadtbahn), mit Schwerpunkt Barrierefreiheit.
 Regeln:
 - Antworte auf Deutsch und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
-- Fakten (Orte, Entfernungen, Zeiten, Linien, Barrierefreiheit) nur aus den Ergebnissen der Werkzeuge. Erfinde nichts. Liefert ein Werkzeug nichts, sag das offen und schlage vor, was die Person stattdessen tun kann.
+- Fakten (Orte, Entfernungen, Zeiten, Linien, Barrierefreiheit) nur aus den Ergebnissen der Werkzeuge; Angaben zu den eigenen Fahrten aus dem Werkzeug meine_auswertung. Erfinde nichts. Liefert ein Werkzeug nichts, sag das offen und schlage vor, was die Person stattdessen tun kann.
 - Berücksichtige das Profil: Rollstuhl oder Rollator heißt stufenlos, Hochbahnsteig, Aufzug, rollstuhlgerechte Toilette. Sehbehinderung: Orientierung und Ampeln mit Tonsignal. Einfache Sprache: sehr kurze Sätze und einfache Wörter.
 - Barrierefreiheit nie aus Vermutung: Fehlt eine Angabe (Hochbahnsteig, Aufzug, stufenlos), sag „dazu habe ich keine Angabe“, nie „barrierefrei“ oder „stufenlos“. Bei Aufzügen und Baustellen: „bitte vor Ort prüfen“, weil sich das ändern kann.
 - Sag nie, ob eine Ampel gerade grün ist oder ob man jetzt gehen, queren oder fahren kann. Das entscheidet die Person am Signal selbst.
@@ -1764,7 +1774,7 @@ Regeln:
 - Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
 - Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
-- Fragen zu den eigenen Fahrten (Wartezeiten, Zeitfresser, Ampeln, häufigster Weg, Tipps) beantwortest du nur aus „eigene_auswertung“ im Kontext. Steht dort „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.`;
+- Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
@@ -1777,6 +1787,7 @@ const ASSIST_TOOLS = [
     ziel: { type: 'string' }, verkehrsmittel: { type: 'string', enum: ['auto', 'rad', 'fuss', 'oepnv'] }, start: { type: 'string', description: 'leer = Standort' } }, required: ['ziel', 'verkehrsmittel'] } } },
   { type: 'function', function: { name: 'verkehrslage', description: 'Baustellen, Sperrungen und Stau in der Nähe eines Orts oder des Standorts.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' } } } } },
+  { type: 'function', function: { name: 'meine_auswertung', description: 'Auswertung der eigenen Fahrten der Person (nur auf ihrem Handy berechnet): Fahrten, Wartezeit an Ampeln, größte Zeitfresser, häufigster Weg, persönliche Tipps.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'hinweise', description: 'Hinweise der Redaktion barrierefrAI (häufige Fragen, z. B. Altstadt) und von Nutzerinnen gemeldete Hindernisse.', parameters: { type: 'object', properties: {
     stichwort: { type: 'string' }, ort: { type: 'string' } } } } }
 ];
@@ -1826,6 +1837,7 @@ function serverDepartures(name, kind) {
 }
 async function assistTool(name, a, ctx, act) {
   a = a || {};
+  if (name === 'meine_auswertung') return ctx.auswertung === 'ausgeschaltet' ? { auswertung: 'ausgeschaltet', hinweis: 'Unter Mehr, Server und Dienste: „Frag Flowtown darf meine Auswertung nutzen“' } : ctx.auswertung;
   if (name === 'orte_in_der_naehe') {
     const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Ort unbekannt oder kein Standort' };
@@ -1928,8 +1940,9 @@ async function assist(body) {
   if (!frage) throw Object.assign(new Error('Keine Frage'), { status: 400 });
   const k = body.kontext || {};
   const pos = Array.isArray(k.pos) && k.pos.length === 2 && inBox(Number(k.pos[0]), Number(k.pos[1]), 0.3) ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau
-  const ctx = { pos, ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
-  const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: assistStatsClean(k.auswertung) };
+  const auswertung = assistStatsClean(k.auswertung);
+  const ctx = { pos, auswertung, ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
+  const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-4).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   const messages = [{ role: 'system', content: ASSIST_SYSTEM + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage }];
   const act = {}, used = [];
@@ -2033,7 +2046,8 @@ const server = http.createServer(async (req, res) => {
       // Start auf etwa 1 km gerundet; bei Bus und Bahn darf er eine gewählte Haltestelle sein (öffentlicher Ort, genau)
       // zu Fuß auf etwa 100 m gerundet: Fußwege sind kurz, ein Start 1 km daneben ergäbe einen anderen Weg
       const m = url.searchParams.get('mode'), mode = m === 'rad' ? 'rad' : m === 'oepnv' ? 'oepnv' : m === 'fuss' ? 'fuss' : 'auto';
-      const from = coord(url.searchParams.get('from'), mode === 'oepnv' && url.searchParams.get('ab') === 'halt' ? 4 : mode === 'fuss' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
+      // während der Navigation (nav=1): Start auf etwa 100 m, sonst führte die Strecke an einem Punkt bis 1 km daneben los
+      const from = coord(url.searchParams.get('from'), mode === 'oepnv' && url.searchParams.get('ab') === 'halt' ? 4 : mode === 'fuss' || url.searchParams.get('nav') === '1' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode), origin);
     }
