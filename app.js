@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.60.0';
+  const VERSION = '0.61.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1346,6 +1346,7 @@
     if (!$('#assist').hidden && /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b/.test(c)) {
       $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
     }
+    if (/notfall|notruf|krise|krisendienst|rettungsdienst|^hilfe hilfe/.test(c)) { openSos(); speak('Im Notfall wähle 112. Ich habe die Notrufnummern geöffnet.', { now: true, force: true }); return true; }
     if (/\bhilfe\b|was kann ich sagen|welche befehle/.test(c)) { speak(MIC_HELP, { now: true, force: true }); return true; }
     if (/ansagen (aus|stopp|stop)|sei (still|leise)|ruhe bitte/.test(c)) { setVoice(false); if (canSpeak) speechSynthesis.cancel(); micStatus('Ansagen aus'); return true; }
     if (/ansagen (an|ein)/.test(c)) { setVoice(true); speak('Ansagen an.', { now: true }); return true; }
@@ -4404,7 +4405,7 @@
   // Tipps: je Tipp eine Zeile mit Titel, einem Satz und der Wirkung als Marke; Einzelheiten beim Antippen
   let tipOpen = null;
   // Farben der Tipps: blau, was beim Planen hilft (Weg, Zeit, Alternativen); grün, was Ampeln und Fahrweise betrifft
-  const TIP_WORLD = { Ampeln: 'hist', Ampel: 'hist', Kosten: 'hist', Meldung: 'hist', Weg: 'plan', Rad: 'plan', Zeit: 'plan', Fahrweise: 'go' };
+  const TIP_WORLD = { Ampeln: 'red', Ampel: 'hist', Kosten: 'red', Meldung: 'hist', Weg: 'plan', Rad: 'plan', Zeit: 'plan', Fahrweise: 'go' };
   function renderTips() {
     const tips = computeTips();
     const n = trips.filter((t) => !t.demo).length;
@@ -4911,6 +4912,23 @@
     applyAccessUI(); updateVoiceBtn();
   }
   ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = !SR; b.addEventListener('click', listen); } });
+  let sosBack = null;
+  function openSos() {
+    const el = $('#sos'), src = $('#box-krise .tip-detail');
+    sosBack = document.activeElement;
+    const body = src ? src.cloneNode(true) : document.createElement('div');
+    body.querySelectorAll('a[href="tel:112"]').forEach((a) => { const li = a.closest('li'); if (li) li.remove(); });
+    el.innerHTML = `<div class="assist-head"><b id="sos-h">${ic('sos')}Notfall und Hilfe</b><button type="button" class="vf-x" data-sos="close" aria-label="Schließen">${ic('x')}</button></div>
+      <a class="sos-call" href="tel:112">${ic('phone')}<span><b>112 anrufen</b><small>Feuerwehr und Rettungsdienst</small></span></a>`;
+    body.classList.add('sos-body');
+    el.appendChild(body);
+    el.hidden = false;
+    const x = el.querySelector('[data-sos="close"]'); if (x) x.focus();
+  }
+  function closeSos() { $('#sos').hidden = true; if (sosBack && sosBack.focus) sosBack.focus(); }
+  $('#btn-sos').addEventListener('click', () => { if ($('#sos').hidden) openSos(); else closeSos(); });
+  $('#sos').addEventListener('click', (ev) => { if (ev.target.closest('[data-sos="close"]')) closeSos(); });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('#sos').hidden) closeSos(); });
   $('#assist').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;

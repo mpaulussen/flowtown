@@ -975,3 +975,30 @@ body[data-view="drive"] .assist{top:calc(12px + env(safe-area-inset-top,0px));bo
 .tip-help .tipcard{--tb:#e6eef8;--ti:#173f66}
 .lw-more[data-weg="lage"] .wrow-go{transform:rotate(90deg)}
 .lw-more[aria-expanded="true"] .wrow-go{transform:rotate(-90deg)}
+/* 0.61 Rot für Zeitfresser, Kosten und Krisenhilfe; Notfall-Knopf */
+.tipcard[data-world="red"]{background:#fcf0ee;border-color:#f0c9c3;border-left:6px solid var(--bad);--tb:#ffffff;--ti:#a32b1f}
+.tipcard[data-world="red"] .tip-main b{color:#8a2318}
+.tipcard[data-world="red"] .tip-main span{color:#6e3a33}
+.tipcard[data-world="red"] .tip-kick{color:var(--bad)}
+.tipcard[data-world="red"] .tip-num{border:1px solid #f0c9c3}
+.tipcard[data-world="red"]:has(.tip-row[aria-expanded="true"]),#box-krise[open]{border-color:var(--bad)}
+#box-krise a.tel{color:#a32b1f}
+.refresh.sos{color:var(--bad);margin-left:auto}
+.refresh.sos .ic{width:26px;height:26px}
+.refresh.sos:focus-visible{outline-color:var(--bad)}
+.top .proto{margin-left:0}
+.sos-sheet{top:calc(70px + env(safe-area-inset-top,0px));bottom:auto;max-height:calc(100vh - 160px);z-index:1200;border-top:6px solid var(--bad)}
+body[data-view="drive"] .sos-sheet{top:calc(70px + env(safe-area-inset-top,0px));bottom:auto}
+.sos-sheet .assist-head b .ic{color:var(--bad)}
+.sos-call{display:flex;align-items:center;gap:14px;background:var(--bad);color:#fff;text-decoration:none;border-radius:16px;padding:12px 18px;min-height:68px}
+.sos-call .ic{width:30px;height:30px;flex:none}
+.sos-call span{display:flex;flex-direction:column;line-height:1.15}
+.sos-call b{font-family:var(--display);font-size:26px;font-weight:800;letter-spacing:-.01em}
+.sos-call small{font-size:15px;opacity:.95}
+.sos-call:focus-visible{outline:3px solid var(--fg);outline-offset:2px}
+.sos-body{padding:0!important;gap:12px}
+.sos-body a.tel{color:#a32b1f}
+.top .proto{white-space:nowrap}
+.top h1{white-space:nowrap}
+@media (max-width:400px){.top{gap:6px}.top .proto{font-size:11px;padding:2px 6px}.refresh{width:40px;height:40px}}
+@media (max-width:350px){.top .proto{display:none}}
