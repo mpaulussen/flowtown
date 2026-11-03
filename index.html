@@ -195,6 +195,7 @@
   <section id="view-plan" class="view" hidden aria-labelledby="h-plan-page">
     <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>Heute</button>
     <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
+    <form class="plan-ask" id="plan-ask" role="search"><label class="sr-only" for="plan-ask-inp">Frag Flowtown</label><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><input id="plan-ask-inp" type="text" placeholder="Frag Flowtown, z. B. Wo ist die nächste Behindertentoilette?" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form>
     <div class="entry plan-mode"><div id="mode-slot-plan"></div></div>
     <p id="plan-off" class="msg" hidden>Zum Planen braucht Flowtown den Server. Trag ihn unter Mehr → Verbindung ein.</p>
     <div id="wohin" class="wohin"></div>
@@ -466,6 +467,7 @@
 </dialog>
 
 <div id="mic-status" class="mic-status" role="status" aria-live="polite" hidden></div>
+<section id="assist" class="assist" aria-label="Frag Flowtown" hidden></section>
 <nav class="tabs" aria-label="Hauptnavigation">
   <button type="button" data-view="start" data-world="go" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Heute</span></button>
   <button type="button" data-view="tips" data-world="tip"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><span>Tipps</span></button>

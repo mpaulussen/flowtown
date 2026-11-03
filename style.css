@@ -909,3 +909,22 @@ html,body{overflow-x:clip}
 .mic-status[hidden]{display:none}
 body[data-view="drive"] .top .mic{display:none}
 body[data-view="drive"] .mic-status{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto}
+/* 0.58 Assistenz */
+.assist{position:fixed;left:12px;right:12px;bottom:calc(76px + env(safe-area-inset-bottom,0px));z-index:1150;max-height:70vh;overflow:auto;background:var(--surface);color:var(--fg);border-radius:20px;padding:14px 16px;box-shadow:0 10px 36px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:10px}
+.assist[hidden]{display:none}
+body[data-view="drive"] .assist{top:calc(12px + env(safe-area-inset-top,0px));bottom:auto;max-height:55vh}
+.assist-head{display:flex;align-items:center;gap:8px}
+.assist-head b{display:flex;align-items:center;gap:8px;font-family:var(--display);font-size:19px}
+.assist-head b .ic{width:22px;height:22px;color:var(--accent)}
+.assist-head .vf-x{margin-left:auto}
+.assist-q{margin:0;color:var(--muted);font-style:italic}
+.assist-a{margin:0;font-size:19px;line-height:1.45}
+.assist-form{display:flex;gap:6px}
+.assist-form input{flex:1;min-width:0;min-height:48px;border:1px solid var(--line);border-radius:12px;padding:0 12px}
+.assist-mic .ic{width:22px;height:22px}
+.plan-ask{display:flex;align-items:center;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:16px;padding:6px 6px 6px 12px}
+.plan-ask .ic{width:22px;height:22px;flex:none;color:var(--plan,#1f5c99)}
+.plan-ask input{flex:1;min-width:0;min-height:44px;border:0;background:transparent}
+.plan-ask input:focus{outline:none}
+.plan-ask:focus-within{outline:3px solid var(--plan,#1f5c99);outline-offset:2px}
+.assist-a,.assist-q{overflow-wrap:anywhere}

@@ -164,6 +164,14 @@ Der Server holt von selbst aus dem Geodienst der Stadt (Open Data Bielefeld, CC 
 
 Prüfen: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs stadtdaten'`. Abschalten mit `STADT_DATEN=0` in `/etc/flowtown.env`. `/api/health` zeigt `ampelanlagen` und `baustellenStadt`.
 
+### Assistenz: freie Fragen (Stufe 3 der Sprachsteuerung)
+
+Fragen, die kein fester Sprachbefehl sind („Wo ist die nächste rollstuhlgerechte Toilette?“, „Welche Haltestelle hier ist stufenlos?“), beantwortet Mistral aus den Flowtown-Daten. Getippt geht das auf der Seite „Wohin?“ unter „Frag Flowtown“. Mistral darf dafür sechs Werkzeuge nutzen: Orte in der Nähe (Toiletten, Behindertenparkplätze, Aufzüge, Park + Ride, Orte von Bethel), Haltestelle (Hochbahnsteig, Aufzug, Abfahrten laut Fahrplan), stufenlose Haltestellen in der Nähe, Weg zu einem Ziel (HERE), Verkehrslage, Hinweise der Redaktion und gemeldete Hindernisse. Antworten sind höchstens drei Sätze; Fakten nur aus den Werkzeugen.
+
+Voraussetzung: `MISTRAL_API_KEY` in `/etc/flowtown.env` (wie für die KI-Einschätzung) und vor dem Pilot der Vertrag zur Auftragsverarbeitung mit Mistral, Training mit den Daten aus. Grenze je IP und Tag: `ASSIST_PER_DAY` (Standard 60). `/api/health` zeigt `assistenz: true`.
+
+Testen auf dem Server: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs frage "Wo ist die nächste rollstuhlgerechte Toilette?" 52.0214 8.5339 Rollstuhl'` zeigt die Antwort und welche Werkzeuge benutzt wurden.
+
 ### Gemeldete Hindernisse prüfen
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.

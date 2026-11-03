@@ -1747,6 +1747,192 @@ function sendStadt2(req, res, origin) {
   res.end(gz ? stadt2.gz : stadt2.raw);
 }
 
+// ---------- Assistenz (Stufe 3): freie Fragen, beantwortet von Mistral aus den Flowtown-Daten ----------
+// Die App schickt die Frage, Profil, Verkehrsmittel und den Standort auf etwa 100 m gerundet. Mistral darf nur über die
+// Werkzeuge unten nachschlagen und soll nur aus deren Ergebnissen antworten. Gespeichert wird nichts.
+const ASSIST_PER_DAY = Number(process.env.ASSIST_PER_DAY || 60);
+const assistAllowed = limiter(ASSIST_PER_DAY);
+const mAbs = (a, b) => Math.round(Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1]) * 68500));
+const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App für Wege in Bielefeld (Auto, Rad, zu Fuß, Bus und Stadtbahn), mit Schwerpunkt Barrierefreiheit.
+Regeln:
+- Antworte auf Deutsch und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
+- Fakten (Orte, Entfernungen, Zeiten, Linien, Barrierefreiheit) nur aus den Ergebnissen der Werkzeuge. Erfinde nichts. Liefert ein Werkzeug nichts, sag das offen und schlage vor, was die Person stattdessen tun kann.
+- Berücksichtige das Profil: Rollstuhl oder Rollator heißt stufenlos, Hochbahnsteig, Aufzug, rollstuhlgerechte Toilette. Sehbehinderung: Orientierung und Ampeln mit Tonsignal. Einfache Sprache: sehr kurze Sätze und einfache Wörter.
+- Entfernungen runden (etwa 200 Meter), Zeiten als Uhrzeit oder in Minuten.
+- Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
+- Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
+- Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.`;
+const ASSIST_TOOLS = [
+  { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
+    art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
+    ort: { type: 'string', description: 'Ortsname, Platz oder Adresse; leer = Standort der Person' } }, required: ['art'] } } },
+  { type: 'function', function: { name: 'haltestelle', description: 'Angaben zu einer Haltestelle: Hochbahnsteig/stufenlos, Aufzug, Linien und die nächsten Abfahrten laut Fahrplan.', parameters: { type: 'object', properties: {
+    name: { type: 'string' }, nur: { type: 'string', enum: ['stadtbahn', 'bus', 'zug', 'alle'] } }, required: ['name'] } } },
+  { type: 'function', function: { name: 'haltestellen_in_der_naehe', description: 'Stadtbahn-Haltestellen in der Nähe, mit Angabe Hochbahnsteig ja/nein.', parameters: { type: 'object', properties: {
+    ort: { type: 'string', description: 'leer = Standort' }, nur_stufenlos: { type: 'boolean' } } } } },
+  { type: 'function', function: { name: 'weg', description: 'Prüft den Weg zu einem Ziel: Dauer, Meldungen auf der Strecke, bei Bus und Bahn die nächsten Verbindungen.', parameters: { type: 'object', properties: {
+    ziel: { type: 'string' }, verkehrsmittel: { type: 'string', enum: ['auto', 'rad', 'fuss', 'oepnv'] }, start: { type: 'string', description: 'leer = Standort' } }, required: ['ziel', 'verkehrsmittel'] } } },
+  { type: 'function', function: { name: 'verkehrslage', description: 'Baustellen, Sperrungen und Stau in der Nähe eines Orts oder des Standorts.', parameters: { type: 'object', properties: {
+    ort: { type: 'string', description: 'leer = Standort' } } } } },
+  { type: 'function', function: { name: 'hinweise', description: 'Hinweise der Redaktion barrierefrAI (häufige Fragen, z. B. Altstadt) und von Nutzerinnen gemeldete Hindernisse.', parameters: { type: 'object', properties: {
+    stichwort: { type: 'string' }, ort: { type: 'string' } } } } }
+];
+// Ort aus Text: Standort, ein gespeichertes Ziel aus dem Kontext, ein Ort von Bethel, sonst HERE
+async function assistOrt(name, ctx) {
+  const n = String(name || '').trim();
+  if (!n || /^(hier|standort|mein standort|in der nähe)$/i.test(n)) return ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
+  const k = hstNorm(n);
+  const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === k || hstNorm(x.name).includes(k) || k.includes(hstNorm(x.name)));
+  if (z && isFinite(z.lat)) return { name: z.name, pos: [z.lat, z.lon] };
+  const o = bf && (bf.orte || []).find((x) => hstNorm(x.n).includes(k));
+  if (o) return { name: o.n, pos: [o.lat, o.lon] };
+  const st = tramStops() && tramStops().get(k);
+  if (st) return { name: st.name, pos: st.pos[0] };
+  if (!HERE_KEY) return null;
+  const r = (await findOrt(n + (/bielefeld/i.test(n) ? '' : ', Bielefeld')).catch(() => []))[0];
+  return r ? { name: r.name, pos: [r.lat, r.lon] } : null;
+}
+// Abfahrten laut Fahrplan (Ortszeit Bielefeld), die nächsten 60 Minuten
+function berlinNow() {
+  const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
+  return { ymd: f.year + f.month + f.day, min: Number(f.hour) * 60 + Number(f.minute) };
+}
+function serverDepartures(name, kind) {
+  const d = fpData();
+  if (!d) return [];
+  const k = hstNorm(name), idx = new Set();
+  d.stops.forEach((st, i) => { if (hstNorm(st[1]) === k) idx.add(i); });
+  const { ymd, min } = berlinNow();
+  const prev = (() => { const t = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)) - 864e5); return t.toISOString().slice(0, 10).replace(/-/g, ''); })();
+  const out = [];
+  for (const t of d.trips) {
+    if (kind != null && d.routes[t[0]][1] !== kind) continue;
+    const pat = d.patterns[t[1]], days = d.services[t[3]] || [];
+    let tm = t[4];
+    for (let j = 0; j < pat.length - 1; j++) {
+      if (idx.has(pat[j])) {
+        for (const [day, off] of [[ymd, 0], [prev, 1440]]) {
+          const at = tm - off;
+          if (at >= min && at <= min + 60 && days.includes(day)) out.push({ in_min: at - min, linie: d.routes[t[0]][0], richtung: String(d.heads[t[2]] || '').replace(/^Bielefeld,\s*/, ''), art: ['Stadtbahn', '', 'Zug', 'Bus'][d.routes[t[0]][1]] || 'Bus' });
+        }
+      }
+      tm += t[5][j] || 0;
+    }
+  }
+  return out.sort((a, b) => a.in_min - b.in_min).slice(0, 6);
+}
+async function assistTool(name, a, ctx, act) {
+  a = a || {};
+  if (name === 'orte_in_der_naehe') {
+    const o = await assistOrt(a.ort, ctx);
+    if (!o) return { fehler: 'Ort unbekannt oder kein Standort' };
+    const near = (list) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(o.pos, x.pos) })).filter((x) => x.entfernung_m <= 2000).sort((p, q) => p.entfernung_m - q.entfernung_m).slice(0, 4).map((x) => { delete x.pos; return x; });
+    let list = [];
+    if (a.art === 'rollstuhl_toilette' || a.art === 'toilette') list = (bf && bf.wc || []).filter((w) => a.art === 'toilette' || w[2] === 1).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', quelle: 'OpenStreetMap', pos: [w[0], w[1]] }));
+    if (a.art === 'behindertenparkplatz') list = (bpp && bpp.plaetze || []).map((p) => ({ name: p[3] || 'Behindertenparkplatz', plaetze: p[2] || null, quelle: p[4] === 's' ? 'Stadt Bielefeld' : 'OpenStreetMap', pos: [p[0], p[1]] }));
+    if (a.art === 'aufzug') list = (bf && bf.lift || []).map((x) => ({ name: 'Aufzug', pos: [x[0], x[1]] })).concat(((fpData() || {}).stationen || []).filter((st) => st[3] > 0).map((st) => ({ name: 'Aufzug an der Station ' + st[0].replace(/^Bielefeld,\s*/, ''), pos: [st[1], st[2]] })));
+    if (a.art === 'park_and_ride') list = (stadt2 && stadt2.pr || []).map((p) => ({ name: 'Park + Ride ' + p[3], adresse: p[4], plaetze: p[2], pos: [p[0], p[1]] }));
+    if (a.art === 'barrierefreier_ort') list = (bf && bf.orte || []).map((x) => ({ name: x.n, adresse: x.adr, stufenlos: x.f && x.f.stufenlos === 1 ? 'ja' : x.f && x.f.stufenlos === 0 ? 'nein' : 'unbekannt', behinderten_wc: x.f && x.f.wc === 1 ? 'ja' : 'unbekannt', quelle: 'Bielefeld barrierefrei erleben', pos: [x.lat, x.lon] }));
+    return { bei: o.name, treffer: near(list) };
+  }
+  if (name === 'haltestelle') {
+    const stops = tramStops(), k = hstNorm(a.name);
+    const d = fpData();
+    const real = d && (d.stops.find((st) => hstNorm(st[1]) === k) || d.stops.find((st) => hstNorm(st[1]).startsWith(k)) || d.stops.find((st) => hstNorm(st[1]).includes(k)));
+    if (!real) return { fehler: 'Haltestelle nicht im Fahrplan' };
+    const nm = real[1].replace(/^Bielefeld,\s*/, ''), kk = hstNorm(real[1]);
+    const e = hst && hst.liste.find((x) => x.k === kk);
+    const lift = (d.stationen || []).some((st) => st[3] > 0 && hstNorm(st[0]) === kk);
+    const kind = a.nur === 'stadtbahn' ? 0 : a.nur === 'bus' ? 3 : a.nur === 'zug' ? 2 : null;
+    return { name: nm, stadtbahn: !!(stops && stops.get(kk)), hochbahnsteig: e ? e.hbs : 'keine Angabe', hinweis: e ? e.hinweis : '', aufzug: lift ? 'ja' : 'keine Angabe', abfahrten: serverDepartures(nm, kind) };
+  }
+  if (name === 'haltestellen_in_der_naehe') {
+    const o = await assistOrt(a.ort, ctx), stops = tramStops();
+    if (!o || !stops) return { fehler: 'Ort unbekannt oder kein Fahrplan' };
+    const list = [];
+    for (const [k, st] of stops) {
+      const e = hst && hst.liste.find((x) => x.k === k);
+      if (a.nur_stufenlos && !(e && e.hbs === 'ja')) continue;
+      list.push({ name: st.name, entfernung_m: Math.min(...st.pos.map((q) => mAbs(o.pos, q))), hochbahnsteig: e ? e.hbs : 'keine Angabe' });
+    }
+    return { bei: o.name, haltestellen: list.sort((p, q) => p.entfernung_m - q.entfernung_m).slice(0, 4) };
+  }
+  if (name === 'weg') {
+    if (!HERE_KEY) return { fehler: 'Wegprüfung braucht den HERE-Schlüssel auf dem Server' };
+    const to = await assistOrt(a.ziel, ctx), from = a.start ? await assistOrt(a.start, ctx) : (ctx.pos ? { name: 'Standort', pos: ctx.pos } : null);
+    if (!to) return { fehler: 'Ziel nicht gefunden' };
+    if (!from) return { fehler: 'Kein Standort; bitte einen Startort nennen' };
+    const mode = ['auto', 'rad', 'fuss', 'oepnv'].includes(a.verkehrsmittel) ? a.verkehrsmittel : 'auto';
+    const f = from.pos.map((x) => Math.round(x * 1000) / 1000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
+    act.ziel = { name: to.name, lat: t[0], lon: t[1], mode };
+    if (mode === 'oepnv') {
+      const v = await checkZielOepnv(f, t);
+      return { ziel: to.name, verbindungen: v.verbindungen.slice(0, 3).map((c) => ({ ab: new Date(c.ab).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), an: new Date(c.an).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), umstiege: c.umstiege,
+        teile: c.teile.filter((x) => x.art !== 'fuss').map((x) => { const e = x.art === 'bahn' && hst && hst.liste; const hb = (n) => { const y = e && e.find((z) => z.k === hstNorm(n)); return y ? y.hbs : 'keine Angabe'; }; return { linie: x.linie, von: x.von, nach: x.nach, richtung: x.ziel, hochbahnsteig_von: x.art === 'bahn' ? hb(x.von) : undefined, hochbahnsteig_nach: x.art === 'bahn' ? hb(x.nach) : undefined }; }) })) };
+    }
+    const v = await checkZiel(f, t, mode);
+    return { ziel: to.name, verkehrsmittel: mode, dauer_min: Math.round(v.dauer / 60), km: Math.round(v.km * 10) / 10, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)),
+      meldungen: (v.items || []).slice(0, 3).map((it) => ({ art: it.art, titel: it.titel || '', hinweis: it.text || '' })),
+      beste_abfahrt: v.abfahrt && v.abfahrt.length > 1 ? v.abfahrt.reduce((b, x) => (x.dauer < b.dauer ? x : b)) : null };
+  }
+  if (name === 'verkehrslage') {
+    const o = await assistOrt(a.ort, ctx);
+    if (!o) return { fehler: 'Ort unbekannt oder kein Standort' };
+    const l = await readLage();
+    const near = l.items.filter((it) => (it.pts || []).some((q) => mAbs(o.pos, q) <= 1000)).slice(0, 5).map((it) => ({ art: it.art, titel: it.titel, abschnitt: it.richtungText || '', hinweis: it.fuss || it.text || '', bis: it.bis || '' }));
+    return { bei: o.name, meldungen: near };
+  }
+  if (name === 'hinweise') {
+    const words = String(a.stichwort || '').toLowerCase().split(/\s+/).filter((w) => w.length > 3);
+    const o = a.ort ? await assistOrt(a.ort, ctx) : null;
+    const faq = (faqData && faqData.eintraege || []).map((e) => ({ e, s: words.filter((w) => (e.frage + ' ' + e.antwort).toLowerCase().includes(w)).length + (a.ort && e.orte.some((x) => hstNorm(x).includes(hstNorm(a.ort))) ? 2 : 0) }))
+      .filter((x) => x.s > 0).sort((p, q) => q.s - p.s).slice(0, 3).map((x) => ({ frage: x.e.frage, antwort: clip(x.e.antwort, 400) }));
+    const pos = o ? o.pos : ctx.pos;
+    const gemeldet = pos ? hinweise.filter((h) => h.bis > Date.now() && h.weg < 2 && mAbs(pos, [h.lat, h.lon]) <= 300).slice(0, 3).map((h) => ({ art: h.art, entfernung_m: mAbs(pos, [h.lat, h.lon]), geprueft: !!h.geprueft })) : [];
+    return { redaktion: faq, gemeldet };
+  }
+  return { fehler: 'unbekanntes Werkzeug' };
+}
+async function mistralChat(messages) {
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 30000);
+  try {
+    const res = await fetch(MISTRAL_URL, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${MISTRAL_KEY}` },
+      body: JSON.stringify({ model: MISTRAL_MODEL, temperature: 0.2, max_tokens: 400, tools: ASSIST_TOOLS, tool_choice: 'auto', messages }) });
+    if (!res.ok) throw Object.assign(new Error('Mistral antwortet mit ' + res.status), { status: 502 });
+    return (await res.json()).choices[0].message;
+  } finally { clearTimeout(timer); }
+}
+async function assist(body) {
+  if (!MISTRAL_KEY) throw Object.assign(new Error('Die Assistenz ist auf dem Server noch nicht eingerichtet.'), { status: 503 });
+  const frage = clip(body.frage, 300);
+  if (!frage) throw Object.assign(new Error('Keine Frage'), { status: 400 });
+  const k = body.kontext || {};
+  const pos = Array.isArray(k.pos) && k.pos.length === 2 && inBox(Number(k.pos[0]), Number(k.pos[1]), 0.3) ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau
+  const ctx = { pos, ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
+  const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }) };
+  const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-4).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
+  const messages = [{ role: 'system', content: ASSIST_SYSTEM + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage }];
+  const act = {}, used = [];
+  for (let round = 0; round < 4; round++) {
+    const m = await mistralChat(messages);
+    const calls = m.tool_calls || [];
+    if (!calls.length) {
+      const antwort = clip(String(m.content || '').replace(/[*#_`]/g, ''), 600) || 'Dazu habe ich gerade keine Antwort.';
+      return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used };
+    }
+    messages.push({ role: 'assistant', content: m.content || '', tool_calls: calls });
+    for (const c of calls.slice(0, 3)) {
+      let args = {};
+      try { args = typeof c.function.arguments === 'string' ? JSON.parse(c.function.arguments) : c.function.arguments || {}; } catch (e) { args = {}; }
+      let out;
+      try { out = await assistTool(c.function.name, args, ctx, act); } catch (e) { out = { fehler: clip(e.message, 120) }; }
+      used.push(c.function.name);
+      messages.push({ role: 'tool', name: c.function.name, tool_call_id: c.id, content: JSON.stringify(out).slice(0, 4000) });
+    }
+  }
+  return { antwort: 'Das konnte ich gerade nicht vollständig nachschlagen. Versuch es bitte etwas genauer.', aktion: null, werkzeuge: used };
+}
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -1769,7 +1955,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -1779,6 +1965,10 @@ const server = http.createServer(async (req, res) => {
       if (!kiAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren KI-Einschätzungen möglich.' }, origin);
       const body = await readBody(req, 48 * 1024);
       return send(res, 200, await askMistral(body.facts || {}), origin);
+    }
+    if (req.method === 'POST' && p === '/api/assist') {
+      if (!assistAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Fragen möglich.' }, origin);
+      return send(res, 200, await assist(await readBody(req, 8 * 1024)), origin);
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
@@ -1937,12 +2127,22 @@ if (cli === 'faq') {
     console.log('Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
     process.exit(0);
   })();
+} else if (cli === 'frage') {
+  // Assistenz von der Kommandozeile testen: node flowtown-server.mjs frage "Wo ist die nächste rollstuhlgerechte Toilette?" 52.0214 8.5339 [Profil]
+  loadFahrplan();
+  (async () => {
+    await refreshHst().catch(() => null);
+    const [q, la, lo, prof] = process.argv.slice(3);
+    try { const r = await assist({ frage: q, kontext: { pos: la && lo ? [Number(la), Number(lo)] : null, profil: prof || '', verkehrsmittel: 'fuss' } }); console.log(r.antwort); console.log('Werkzeuge:', r.werkzeuge.join(', ') || '–', r.aktion ? '| Aktion: ' + JSON.stringify(r.aktion) : ''); }
+    catch (e) { console.error(e.message); }
+    process.exit(0);
+  })();
 } else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, parkplaetze, stadtdaten, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, parkplaetze, stadtdaten, frage, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);

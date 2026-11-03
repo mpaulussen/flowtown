@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.57.0';
+  const VERSION = '0.58.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1184,7 +1184,7 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recog = null, sayAfterZiel = null, micT = null;
   const MIC_HELP = 'Du kannst zum Beispiel sagen: Losfahren. Mit dem Rad los. Zur Uni. Nächste Bahn ab Jahnplatz. '
-    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe.';
+    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe. Und du kannst frei fragen, zum Beispiel: Wo ist die nächste rollstuhlgerechte Toilette?';
   function micStatus(text, keep) {
     const el = $('#mic-status');
     if (!el) return;
@@ -1248,7 +1248,52 @@
   async function handleCommand(alts) {
     micStatus('Verstanden: „' + alts[0] + '“');
     for (const a of alts) if (await runCommand(cmdNorm(a))) return;
+    if (apiBase()) { askAssist(alts[0]); return; }   // kein fester Befehl: freie Frage an die Assistenz
     speak('Das habe ich nicht verstanden. Sag zum Beispiel: Losfahren, Zur Uni, Nächste Bahn ab Jahnplatz, oder Hilfe.', { now: true, force: true });
+  }
+  // ---------- Assistenz (Stufe 3): freie Fragen, Antwort aus den Flowtown-Daten ----------
+  let assistHist = [], assistAct = null, assistBusy = false;
+  async function askAssist(frage) {
+    frage = String(frage || '').trim();
+    if (!frage || assistBusy) return;
+    if (!settings.assist) {
+      const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein ungefährer Standort (auf etwa 100 m gerundet) an den Flowtown-Server und an Mistral (KI-Anbieter, Rechenzentren in der EU). Gespeichert wird nichts. Einverstanden?');
+      if (!ok) { speak('Gut, dann ohne Assistenz.', { now: true, force: true }); return; }
+      settings.assist = true; store.set('settings', settings);
+    }
+    assistBusy = true;
+    showAssist(frage, null);
+    speak('Einen Moment.', { now: true, force: true });
+    try {
+      let pos = rec && rec.last ? [rec.last.lat, rec.last.lon] : await myStart().catch(() => null);
+      if (pos && !Array.isArray(pos)) pos = [pos.lat, pos.lon];
+      const k = stemKey(frage);
+      const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
+      const L = rec && rec.ln;
+      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '',
+        unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele };
+      const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
+      assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-4);
+      assistAct = r.aktion || null;
+      showAssist(frage, r.antwort);
+      speak(r.antwort, { now: true, force: true });
+    } catch (e) {
+      const msg = /eingerichtet/.test(e.message) ? 'Die Assistenz ist auf dem Server noch nicht eingerichtet.' : /keine weiteren/.test(e.message) ? e.message : 'Die Assistenz ist gerade nicht erreichbar.';
+      assistAct = null;
+      showAssist(frage, msg);
+      speak(msg, { now: true, force: true });
+    } finally { assistBusy = false; }
+  }
+  function showAssist(frage, antwort) {
+    const el = $('#assist');
+    const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
+    el.innerHTML = `<div class="assist-head"><b>${ic('mic')}Frag Flowtown</b><button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
+      <p class="assist-q">${esc(frage)}</p>
+      <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
+      <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic('mic')}</button>` : ''}</form>
+      <p class="small muted">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>`;
+    el.hidden = false;
+    micStatus('');
   }
   async function runCommand(c) {
     if (!c) return false;
@@ -4786,6 +4831,21 @@
     applyAccessUI(); updateVoiceBtn();
   }
   ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = !SR; b.addEventListener('click', listen); } });
+  $('#assist').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-assist]');
+    if (!b || b.tagName === 'FORM') return;
+    const a = b.dataset.assist;
+    if (a === 'close') { $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); }
+    else if (a === 'mic') listen();
+    else if (a === 'ziel' && assistAct) {
+      const x = assistAct, near = settings.ziele.find((z) => dist(z, x) < 150);
+      if (x.mode) setModeVoice(x.mode === 'oepnv' ? 'bahn' : x.mode);
+      $('#assist').hidden = true;
+      if (near) openPlan(near.id); else { addZiel({ name: x.name, lat: x.lat, lon: x.lon }); showView('plan'); }
+    }
+  });
+  $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value); });
+  $('#plan-ask').addEventListener('submit', (ev) => { ev.preventDefault(); const i = $('#plan-ask-inp'); if (i.value.trim()) { askAssist(i.value); i.value = ''; } });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
