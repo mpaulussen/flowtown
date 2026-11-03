@@ -859,3 +859,11 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .rad-netz .ic{width:18px;height:18px;flex:none}
 .rad-key i.dash.dark{background:repeating-linear-gradient(90deg,#15191e 0 5px,transparent 5px 10px);height:3px}
 .pr-btns .btn{justify-content:flex-start;text-align:left}
+/* 0.51 Wechsel deutlich zeigen */
+.leg-banner{display:flex;align-items:center;justify-content:center;gap:12px;padding:16px 18px;border-radius:18px;background:#ffffff;color:#10261c;font-size:24px;font-weight:700;line-height:1.2;box-shadow:0 6px 24px rgba(0,0,0,.25)}
+.leg-banner[hidden]{display:none}
+.leg-banner .ic{width:32px;height:32px;flex:none}
+.leg-banner b{font-family:var(--display);font-weight:800}
+.leg-banner.show{animation:legpop .5s ease-out}
+@keyframes legpop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.04);opacity:1}100%{transform:scale(1)}}
+@media (prefers-reduced-motion:reduce){.leg-banner.show{animation:none}}

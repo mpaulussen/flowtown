@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.50.0';
+  const VERSION = '0.51.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -206,11 +206,13 @@
         for (const p of part) alias['c' + p.id] = c.id;
       }
     }
-    // Nummer der Anlage der Stadt: die nächste bis 50 m
+    // Nummer der Anlage der Stadt: die nächste bis 50 m. Zugehörigkeit (lsaG) bis 130 m: an Kreuzungen mit Stadtbahn-Haltestelle
+    // trägt OpenStreetMap die Fußgängerampeln zu den Bahnsteigen einzeln ein, die Stadt zählt sie zur selben Anlage
     if (lsaData && lsaData.anlagen) for (const c of list) {
-      let best = null, bd = 50;
-      for (const a of lsaData.anlagen) { if (Math.abs(a[0] - c.lat) > 0.0006) continue; const d = dist(c, { lat: a[0], lon: a[1] }); if (d < bd) { bd = d; best = a; } }
-      if (best) c.lsa = best;
+      let best = null, bd = 130;
+      for (const a of lsaData.anlagen) { if (Math.abs(a[0] - c.lat) > 0.0013) continue; const d = dist(c, { lat: a[0], lon: a[1] }); if (d < bd) { bd = d; best = a; } }
+      if (best && bd <= 50) c.lsa = best;
+      if (best && best[5]) c.lsaG = best[5];
     }
     return list;
   }
@@ -698,7 +700,7 @@
       }
     }
     if (rec.transfer) {
-      setDriveState(`Umstieg · ${fmtDur(t - rec.transfer.t)}`, 'transfer');
+      setDriveState(`Zu Fuß · ${fmtDur(t - rec.transfer.t)}`, 'transfer');
     } else if (rec.stop) {
       const label = rec.stop.signal ? 'Halt an Ampel' : rec.stop.queueSig ? 'Stau vor Ampel' : rec.stop.atStop ? 'Halt an Haltestelle' : 'Halt';
       setDriveState(`${label} · ${fmtDur(t - rec.stop.t0)}`, 'halt');
@@ -844,9 +846,27 @@
   }
 
   // Fahrt aufräumen: aktuelle Kreuzungs-Einteilung, kein Warten vor der Abfahrt, eine Kreuzung nur einmal
+  // Wegekette aufräumen: Abschnitte ohne Dauer (ein Wechsel, der sofort zurückgenommen wurde) fallen weg,
+  // samt einem Umstieg in genau diesen Abschnitt; gleiche Abschnitte hintereinander werden einer
+  function fixLegs(trip) {
+    if (!Array.isArray(trip.legs) || !trip.legs.length) return false;
+    let changed = false;
+    const legs = [];
+    for (const l of trip.legs) {
+      if (l.t1 - l.t0 <= 0) {
+        if (trip.transfers) { const n = trip.transfers.length; trip.transfers = trip.transfers.filter((r) => !(r.to === l.mode && Math.abs((r.tEnd || r.t) - l.t0) < 5000)); if (trip.transfers.length !== n) changed = true; if (!trip.transfers.length) delete trip.transfers; }
+        changed = true; continue;
+      }
+      const prev = legs[legs.length - 1];
+      if (prev && prev.mode === l.mode) { prev.t1 = Math.max(prev.t1, l.t1); changed = true; continue; }
+      legs.push(Object.assign({}, l));
+    }
+    if (legs.length < 2) delete trip.legs; else trip.legs = legs;
+    return changed;
+  }
   function tidyTrip(trip) {
     const ev = trip.events;
-    let changed = false;
+    let changed = fixLegs(trip);
     // Halte ohne Ampel nachträglich zuordnen, etwa wenn die Ampeldaten während der Fahrt nicht da waren.
     // Durchfahrten ohne Halt lassen sich nicht nachholen: dafür fehlt die Spur.
     for (const e of ev) {
@@ -871,13 +891,21 @@
     const i0 = ev.findIndex((e) => e.type === 'halt' && e.t <= trip.start && e.heading == null);
     if (i0 >= 0) { ev.splice(i0, 1); changed = true; }
     if (assignQueueHalts(trip)) changed = true;
-    // Zwei Ampeln direkt hintereinander, dicht beieinander und kurz nacheinander: dieselbe Kreuzung
+    // Zwei Ampeln direkt hintereinander, dicht beieinander und kurz nacheinander: dieselbe Kreuzung.
+    // Ebenso zwei Ampeln derselben Anlage der Stadt, auch mit einem Halt an der Haltestelle dazwischen.
+    const lsaOf = (e) => (clusterById[e.signal] && clusterById[e.signal].lsaG) || null;
     for (let i = 0; i < ev.length - 1; i++) {
-      const a = ev[i], b = ev[i + 1];
-      if (!a.signal || !b.signal) continue;
-      if (a.signal !== b.signal && dist(a, b) > JUNCTION_M) continue;
-      if (b.t - (a.tEnd || a.t) > JUNCTION_MS) continue;
-      let drop = i + 1;
+      const a = ev[i];
+      if (!a.signal) continue;
+      let j = i + 1;
+      while (j < ev.length && !ev[j].signal && ev[j].atStop) j++;
+      const b = ev[j];
+      if (!b || !b.signal) continue;
+      const sameLsa = lsaOf(a) && lsaOf(a) === lsaOf(b) && b.t - (a.tEnd || a.t) <= 150000;
+      if (!sameLsa && j !== i + 1) continue;
+      if (!sameLsa && a.signal !== b.signal && dist(a, b) > JUNCTION_M) continue;
+      if (!sameLsa && b.t - (a.tEnd || a.t) > JUNCTION_MS) continue;
+      let drop = j;
       if (a.type === 'halt' && b.type === 'halt') {
         a.wait += b.wait; a.halts = (a.halts || 1) + (b.halts || 1); a.tEnd = b.tEnd;
         if (b.queued) a.queued = true;
@@ -886,6 +914,10 @@
       } else if (a.type === 'pass' && b.type === 'halt') {
         drop = i;   // der Halt zählt, die Durchfahrt davor gehört dazu
       }
+      // Kennung der Anlage: die Ampel, die ihr am nächsten liegt, damit dieselbe Kreuzung in allen Fahrten gleich heißt
+      const keep = drop === i ? b : a, other = drop === i ? a : b;
+      const ck = clusterById[keep.signal], co = clusterById[other.signal];
+      if (sameLsa && co && co.lsa && !(ck && ck.lsa)) Object.assign(keep, { signal: other.signal, lat: other.lat, lon: other.lon });
       ev.splice(drop, 1); i = Math.max(-1, i - 2); changed = true;
     }
     return changed;
@@ -999,10 +1031,13 @@
   // ---------- Umsteigen (Bus und Bahn) ----------
   const isTransit = (m) => m === 'bus' || m === 'bahn' || m === 'zug';
   const nowT = () => (rec.samples.length ? rec.samples[rec.samples.length - 1].t : Date.now());
+  // Abschnitt abschließen; ein Wechsel, der zeitlich vor dem Beginn des Abschnitts läge, beginnt mit ihm
+  const legT = (t) => Math.max(t, (rec.legStart != null ? rec.legStart : rec.trip.start || t) + 1000);
   function closeLeg(t) {
     const legs = rec.trip.legs || (rec.trip.legs = []);
-    legs.push({ mode: rec.curMode, t0: rec.legStart != null ? rec.legStart : (rec.trip.start || t), t1: t });
-    rec.legStart = t;
+    const t0 = rec.legStart != null ? rec.legStart : (rec.trip.start || t);
+    legs.push({ mode: rec.curMode, t0, t1: Math.max(t, t0) });
+    rec.legStart = Math.max(t, t0);
   }
   function switchMode(mode) {
     rec.curMode = mode; rec.cfg = MODES[mode];
@@ -1010,14 +1045,15 @@
   }
   function startTransfer(at) {
     if (!rec || rec.transfer || !isTransit(rec.curMode)) return;
-    const t = at || nowT();
+    const t = legT(at || nowT());
     if (rec.stop) endStop(t);   // die Bahn stand an der Haltestelle: dieser Halt endet mit dem Aussteigen
     const p = rec.samples[rec.samples.length - 1] || rec.last || {};
     closeLeg(t);
     rec.transfer = { t, from: rec.curMode, lat: p.lat, lon: p.lon };
     switchMode('fuss');
     updateTransferUI();
-    setDriveState('Umstieg · 0:00', 'transfer');
+    setDriveState('Zu Fuß · 0:00', 'transfer');
+    legBanner('fuss');
   }
   function endTransfer(mode) {
     if (!rec || !rec.transfer) return;
@@ -1031,6 +1067,19 @@
     rec.transfer = null;
     switchMode(mode);
     updateTransferUI();
+    legBanner(mode);
+  }
+  // Deutlich zeigen, dass gewechselt wurde: großes Band oben, Vibration
+  let legBannerT = null;
+  function legBanner(mode) {
+    const el = $('#leg-banner');
+    if (!el || !MODES[mode]) return;
+    el.innerHTML = `${ic(MODE_ICON[mode])}<span>Jetzt: <b>${esc(MODES[mode].label)}</b></span>`;
+    el.hidden = false;
+    el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
+    try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* ohne Vibration */ }
+    clearTimeout(legBannerT);
+    legBannerT = setTimeout(() => { el.hidden = true; }, 6000);
   }
   // ---------- Wechsel erkennen: aussteigen, parken, einsteigen ----------
   // Vorschlag mit großem Knopf und Vibration; ohne Antwort gilt er nach 30 Sekunden. „Nein“ hält ihn 3 Minuten fern.
@@ -1046,7 +1095,13 @@
     $('#leg-suggest').hidden = false;
     try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) { /* ohne Vibration */ }
     clearTimeout(legTimer);
-    legTimer = setTimeout(() => { if (legSuggest && legSuggest.mode === mode) changeMode(mode, t); }, 30000);
+    // ohne Antwort nach 30 s: Aussteigen und Parken gelten; Einsteigen nur, wenn man inzwischen wirklich 400 m schnell unterwegs ist
+    legTimer = setTimeout(() => {
+      if (!legSuggest || legSuggest.mode !== mode || !rec) return;
+      const d = rec.det || {}, last = rec.samples[rec.samples.length - 1];
+      if (mode === 'fuss' || (d.fast && last && dist(d.fast.from, last) >= 400)) changeMode(mode, t);
+      else hideLegSuggest();
+    }, 30000);
   }
   const WALK_MIN = 0.4, WALK_MAX = 2.3, FAST = 5;   // m/s: Gehen 1,5 bis 8 km/h, Fahrzeug ab 18 km/h
   function detectLeg(p, vs, t) {
@@ -1064,8 +1119,9 @@
     if (isTransit(cur) && d.walk && t - d.walk.t >= 40000 && walked >= 50) showLegSuggest('fuss', d.walk.t, 'Ausgestiegen? Flowtown zeichnet dann zu Fuß weiter auf.');
     // 2. Auto, Rad: erst länger gestanden, dann 30 s Gehtempo und 40 m → geparkt
     else if ((cur === 'auto' || cur === 'rad') && d.parkedAt && d.walk && t - d.walk.t >= 30000 && walked >= 40) showLegSuggest('fuss', d.walk.t, cur === 'auto' ? 'Geparkt? Flowtown zeichnet dann zu Fuß weiter auf.' : 'Rad abgestellt? Flowtown zeichnet dann zu Fuß weiter auf.');
-    // 3. zu Fuß: 25 s schnell → eingestiegen; an einer Haltestelle Stadtbahn, Bus oder Zug, sonst Rad oder Auto
-    else if (cur === 'fuss' && d.fast && t - d.fast.t >= 25000) {
+    // 3. zu Fuß: 25 s schnell und dabei mindestens 150 m weiter (nicht nur ein GPS-Sprung zwischen Häusern) → eingestiegen;
+    //    an einer Haltestelle Stadtbahn, Bus oder Zug, sonst Rad oder Auto
+    else if (cur === 'fuss' && d.fast && t - d.fast.t >= 25000 && dist(d.fast.from, p) >= 150 && dist(d.fast.from, p) / ((t - d.fast.t) / 1000) >= 3.5) {
       const at = d.fast.from;
       let mode = null;
       if (fpStopsNear(at, 70, 0).length) mode = 'bahn';
@@ -1085,20 +1141,21 @@
       if (mode === 'fuss') return;
       if (isTransit(mode)) { endTransfer(mode); return; }
     } else if (isTransit(rec.curMode) && mode === 'fuss') { startTransfer(at); return; }
-    const t = at || nowT();
+    const t = legT(at || nowT());
     if (rec.stop) endStop(t);
     if (rec.transfer) { rec.transfer = null; }
     closeLeg(t);
     switchMode(mode);
     updateTransferUI();
+    legBanner(mode);
   }
   function updateTransferUI() {
     const cur = rec ? (rec.transfer ? 'fuss' : rec.curMode) : null;
     $$('#mode-row .leg-chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.leg === cur)));
-    $('#mode-q').textContent = rec && rec.transfer ? 'Umstieg zu Fuß. Weiter mit …' : 'Unterwegs mit';
+    $('#mode-q').textContent = rec && rec.transfer ? 'Zu Fuß. Steigst du um? Weiter mit …' : 'Unterwegs mit';
     const n = rec && rec.trip.legs ? rec.trip.legs.length + 1 : 1;
     $('#drive-leg').hidden = !rec || n < 2;
-    if (rec) $('#drive-leg').textContent = rec.transfer ? `Abschnitt ${n} · Umstieg zu Fuß` : `Abschnitt ${n} · ${MODES[rec.curMode].label}`;
+    if (rec) $('#drive-leg').textContent = `Abschnitt ${n} · ${rec.transfer ? 'Zu Fuß' : MODES[rec.curMode].label}`;
   }
 
   function finishTrip() {
