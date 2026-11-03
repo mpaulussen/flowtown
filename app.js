@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.58.1';
+  const VERSION = '0.58.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1107,6 +1107,13 @@
     .replace(/(\d)\s?m\b/g, '$1 Meter').replace(/\bggü\.?\s?/g, 'gegenüber ').replace(/\bz\.\s?B\.\s?/g, 'zum Beispiel ').replace(/\bu\.\s?a\.\s?/g, 'unter anderem ').replace(/\bbzw\.\s?/g, 'beziehungsweise ').replace(/\bHbf\b/g, 'Hauptbahnhof').replace(/\bvsl\.\s?/g, 'voraussichtlich ').replace(/\bca\.\s?/g, 'etwa ').replace(/\bNr\.\s?/g, 'Nummer ').replace(/\bStr\.\s*$/, 'Straße.').replace(/\bStr\.(\s+)(?=[A-ZÄÖÜ])/g, 'Straße.$1').replace(/\bStr\./g, 'Straße').replace(/\bStr\b/g, 'Straße').replace(/-v-/g, ' von ').replace(/\bØ\s?/g, 'im Schnitt ')
     .replace(/\s?[·|]\s?/g, ', ').replace(/→/g, ' bis ').replace(/[✓✗]/g, '').replace(/\+(\d)/g, 'plus $1').replace(/−(\d)/g, 'minus $1').replace(/\s+([.,])/g, '$1').replace(/([.,]){2,}/g, '$1').trim();
   const sayLast = {};
+  // iPhone: Sprachausgabe erst nach einer Ansage, die direkt ein Antippen auslöst. Beim Tippen auf Mikrofon oder „Fragen“
+  // deshalb einmal stumm sprechen; danach darf die App auch später antworten (etwa wenn die Antwort vom Server kommt).
+  let speechUnlocked = false;
+  function unlockSpeech() {
+    if (!canSpeak || speechUnlocked) return;
+    try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'de-DE'; speechSynthesis.speak(u); speechUnlocked = true; } catch (e) { /* ohne */ }
+  }
   function speak(text, opts) {
     opts = opts || {};
     if (!canSpeak || !text || (!opts.force && !voiceOn())) return;
@@ -1204,6 +1211,7 @@
       settings.voiceIn = true; store.set('settings', settings);
     }
     if (canSpeak) speechSynthesis.cancel();
+    unlockSpeech();
     recog = new SR();
     recog.lang = 'de-DE'; recog.interimResults = false; recog.maxAlternatives = 3; recog.continuous = false;
     recog.onresult = (e) => {
@@ -1248,12 +1256,14 @@
   async function handleCommand(alts) {
     micStatus('Verstanden: „' + alts[0] + '“');
     for (const a of alts) if (await runCommand(cmdNorm(a))) return;
-    if (apiBase()) { askAssist(alts[0]); return; }   // kein fester Befehl: freie Frage an die Assistenz
+    if (apiBase()) { askAssist(alts[0], true); return; }   // kein fester Befehl: freie Frage an die Assistenz
     speak('Das habe ich nicht verstanden. Sag zum Beispiel: Losfahren, Zur Uni, Nächste Bahn ab Jahnplatz, oder Hilfe.', { now: true, force: true });
   }
   // ---------- Assistenz (Stufe 3): freie Fragen, Antwort aus den Flowtown-Daten ----------
-  let assistHist = [], assistAct = null, assistBusy = false;
-  async function askAssist(frage) {
+  let assistHist = [], assistAct = null, assistBusy = false, assistLast = '';
+  // gesprochene Fragen werden immer laut beantwortet, getippte, wenn die Ansagen an sind
+  async function askAssist(frage, spoken) {
+    const say = (t, o) => { if (spoken || voiceOn()) speak(t, Object.assign({ now: true, force: true }, o || {})); };
     frage = String(frage || '').trim();
     if (!frage || assistBusy) return;
     if (!settings.assist) {
@@ -1263,7 +1273,8 @@
     }
     assistBusy = true;
     showAssist(frage, null);
-    speak('Einen Moment.', { now: true, force: true });
+    if (spoken) setTimeout(() => { if (assistBusy) say('Einen Moment.'); }, 500);   // erst, wenn das Mikrofon frei ist
+    else say('Einen Moment.');
     try {
       let pos = rec && rec.last ? [rec.last.lat, rec.last.lon] : await myStart().catch(() => null);
       if (pos && !Array.isArray(pos)) pos = [pos.lat, pos.lon];
@@ -1276,18 +1287,20 @@
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-4);
       assistAct = r.aktion || null;
       showAssist(frage, r.antwort);
-      speak(r.antwort, { now: true, force: true });
+      assistLast = r.antwort;
+      say(r.antwort);
     } catch (e) {
       const msg = /eingerichtet/.test(e.message) ? 'Die Assistenz ist auf dem Server noch nicht eingerichtet.' : /keine weiteren/.test(e.message) ? e.message : 'Die Assistenz ist gerade nicht erreichbar.';
       assistAct = null;
       showAssist(frage, msg);
-      speak(msg, { now: true, force: true });
+      assistLast = msg;
+      say(msg);
     } finally { assistBusy = false; }
   }
   function showAssist(frage, antwort) {
     const el = $('#assist');
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
-    el.innerHTML = `<div class="assist-head"><b>${ic('mic')}Frag Flowtown</b><button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
+    el.innerHTML = `<div class="assist-head"><b>${ic('mic')}Frag Flowtown</b>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
       <p class="assist-q">${esc(frage)}</p>
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
       <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic('mic')}</button>` : ''}</form>
@@ -4839,6 +4852,7 @@
     const a = b.dataset.assist;
     if (a === 'close') { $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); }
     else if (a === 'mic') listen();
+    else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (a === 'ziel' && assistAct) {
       const x = assistAct, near = settings.ziele.find((z) => dist(z, x) < 150);
       if (x.mode) setModeVoice(x.mode === 'oepnv' ? 'bahn' : x.mode);
@@ -4846,8 +4860,9 @@
       if (near) openPlan(near.id); else { addZiel({ name: x.name, lat: x.lat, lon: x.lon }); showView('plan'); }
     }
   });
-  $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value); });
-  $('#plan-ask').addEventListener('submit', (ev) => { ev.preventDefault(); const i = $('#plan-ask-inp'); if (i.value.trim()) { askAssist(i.value); i.value = ''; } });
+  $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
+  $('#plan-ask').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#plan-ask-inp'); if (i.value.trim()) { askAssist(i.value, false); i.value = ''; } });
+  document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
