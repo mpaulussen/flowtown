@@ -887,3 +887,9 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .w-voice[aria-pressed="true"]{background:var(--accent);color:#fff}
 .w-access .acc-q{margin:4px 0 0}
 .w-voice span{text-align:left}
+/* 0.54 Haltestellen unterwegs */
+.stop-line{margin:0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:18px;line-height:1.35;text-align:center;color:var(--drive-fg)}
+.stop-line[hidden]{display:none}
+.stop-line .ic{width:22px;height:22px;flex:none}
+.stop-line .small{color:var(--drive-muted)}
+.fp-est td{color:var(--muted);font-style:italic}

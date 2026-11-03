@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.53.0';
+  const VERSION = '0.54.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -159,7 +159,7 @@
     if (!lsaData || !Array.isArray(lsaData.anlagen) || !signalCache.areas.length) return nodes;
     const out = Object.assign({}, nodes), pts = Object.values(nodes);
     for (const a of lsaData.anlagen) {
-      if (!a[5]) continue;
+      if (!a[5] || (a[3] !== 'kp' && a[3] !== 'fu')) continue;   // Signale der Stadtbahn, Bahnübergänge und Sondersignale sind keine Straßenampeln
       const p = { lat: a[0], lon: a[1] };
       if (!areaCovers(p) || pts.some((q) => Math.abs(q[0] - a[0]) < 0.001 && dist(p, { lat: q[0], lon: q[1] }) <= 80)) continue;
       out[String(9e12 + a[5])] = [a[0], a[1]];
@@ -216,7 +216,18 @@
     }
     return list;
   }
+  // Abstand zur nächsten Haltestelle (OpenStreetMap oder Fahrplan), höchstens bis r Meter, sonst Infinity
+  function stopDist(p, r) {
+    let best = Infinity;
+    for (const id in signalCache.stops) {
+      const [lat, lon] = signalCache.stops[id];
+      if (Math.abs(lat - p.lat) < 0.001) { const d = dist({ lat, lon }, p); if (d <= r && d < best) best = d; }
+    }
+    if (typeof fp !== 'undefined' && fp) for (const i of fpStopsNear(p, r)) { const d = dist({ lat: fp.stops[i][2], lon: fp.stops[i][3] }, p); if (d < best) best = d; }
+    return best;
+  }
   function nearStop(p) {
+    if (typeof fp !== 'undefined' && fp && fpStopsNear(p, STOP_M).length) return true;
     for (const id in signalCache.stops) {
       const [lat, lon] = signalCache.stops[id];
       if (Math.abs(lat - p.lat) < 0.001 && dist({ lat, lon }, p) <= STOP_M) return true;
@@ -676,7 +687,10 @@
           // Zug: keine Straßenampeln, Bahnhöfe sind lang (Fahrplan-Halte bis 250 m)
           const train = rec.curMode === 'zug';
           const near = train ? null : findSignal(s, s.heading, cfg.haltRadius);
-          const atStop = rec.transfer ? !near && nearStop(s) : train ? nearStop(s) || fpStopsNear(s, 250, 2).length > 0 : isTransit(rec.curMode) && nearStop(s);
+          // zu Fuß (auch beim Umsteigen): am Bahnsteig warten, wenn die Haltestelle näher ist als die Ampel
+          const onFoot = rec.transfer || rec.curMode === 'fuss';
+          const footStop = onFoot && stopDist(s, 30) < (near ? dist(s, near) : Infinity);
+          const atStop = onFoot ? footStop : train ? nearStop(s) || fpStopsNear(s, 250, 2).length > 0 : isTransit(rec.curMode) && nearStop(s);
           const sig = atStop ? null : near;
           // keine Ampel in der Nähe, aber eine voraus: vermutlich Stau davor (endgültig zugeordnet wird am Ende der Fahrt)
           const queueSig = !sig && !atStop && !train ? findSignal(s, s.heading, QUEUE_M) : null;
@@ -702,13 +716,14 @@
     if (rec.transfer) {
       setDriveState(`Zu Fuß · ${fmtDur(t - rec.transfer.t)}`, 'transfer');
     } else if (rec.stop) {
-      const label = rec.stop.signal ? 'Halt an Ampel' : rec.stop.queueSig ? 'Stau vor Ampel' : rec.stop.atStop ? 'Halt an Haltestelle' : 'Halt';
+      const label = rec.stop.signal ? 'Halt an Ampel' : rec.stop.queueSig ? 'Stau vor Ampel' : rec.stop.atStop ? (rec.transfer || rec.curMode === 'fuss' ? 'Warten an der Haltestelle' : 'Halt an Haltestelle') : 'Halt';
       setDriveState(`${label} · ${fmtDur(t - rec.stop.t0)}`, 'halt');
     } else {
       setDriveState(vs < cfg.stopV ? 'Langsam …' : 'Unterwegs', 'moving');
     }
     if (rec.samples.length >= 3) detectLeg(p, vs, t);
     voiceAhead(p, t);
+    lineOnFix(p, t);
     maybeFetchSignals(p, false);
     updateCounters();
   }
@@ -868,6 +883,16 @@
   function tidyTrip(trip) {
     const ev = trip.events;
     let changed = fixLegs(trip);
+    // Signale aus der Ampelliste der Stadt, die keine Straßenampeln sind (bis 0.53.0 als Lücke ergänzt)
+    if (lsaData && lsaData.anlagen) {
+      const drop = new Set(lsaData.anlagen.filter((a) => a[5] && a[3] !== 'kp' && a[3] !== 'fu').map((a) => 'c' + (9e12 + a[5])));
+      for (let i = ev.length - 1; i >= 0; i--) {
+        const e = ev[i];
+        if (!e.signal || !drop.has(e.signal)) continue;
+        if (e.type === 'pass') ev.splice(i, 1); else { e.signal = null; delete e.distToSignal; }
+        changed = true;
+      }
+    }
     // Halte ohne Ampel nachträglich zuordnen, etwa wenn die Ampeldaten während der Fahrt nicht da waren.
     // Durchfahrten ohne Halt lassen sich nicht nachholen: dafür fehlt die Spur.
     for (const e of ev) {
@@ -1018,7 +1043,10 @@
       const now = rec.trip.demo ? (rec.samples.length ? rec.samples[rec.samples.length - 1].t : rec.startedAt) : Date.now();
       const from = rec.trip.start || rec.startedAt;
       $('#drive-time').textContent = fmtDur(now - from);
-      if (!rec.trip.demo && rec.lastFixAt && Date.now() - rec.lastFixAt > GAP_MS) setDriveState('Kein GPS-Empfang, etwa im Tunnel. Die Lücke wird überbrückt.', '');
+      if (!rec.trip.demo && rec.lastFixAt && Date.now() - rec.lastFixAt > GAP_MS) {
+        setDriveState('Kein GPS-Empfang, etwa im Tunnel. Die Lücke wird überbrückt.', '');
+        if (rec.ln) { lineEstimate(Date.now()); showStopLine(); }
+      }
       updateCounters();
     }, 1000);
   }
@@ -1045,7 +1073,7 @@
   // Text zum Sprechen: Abkürzungen ausschreiben, Zeichen weglassen
   const sayText = (x) => String(x || '').replace(/\s+/g, ' ')
     .replace(/(\d)\s?min\b/g, '$1 Minuten').replace(/(\d)\s?km\/h/g, '$1 Kilometer pro Stunde').replace(/(\d),(\d)\s?km\b/g, '$1 Komma $2 Kilometer').replace(/(\d)\s?km\b/g, '$1 Kilometer')
-    .replace(/(\d)\s?m\b/g, '$1 Meter').replace(/\bggü\.?\s?/g, 'gegenüber ').replace(/\bz\.\s?B\.\s?/g, 'zum Beispiel ').replace(/\bu\.\s?a\.\s?/g, 'unter anderem ').replace(/\bbzw\.\s?/g, 'beziehungsweise ').replace(/\bHbf\b/g, 'Hauptbahnhof').replace(/\bvsl\.\s?/g, 'voraussichtlich ').replace(/\bca\.\s?/g, 'etwa ').replace(/\bNr\.\s?/g, 'Nummer ').replace(/\bStr\./g, 'Straße').replace(/\bØ\s?/g, 'im Schnitt ')
+    .replace(/(\d)\s?m\b/g, '$1 Meter').replace(/\bggü\.?\s?/g, 'gegenüber ').replace(/\bz\.\s?B\.\s?/g, 'zum Beispiel ').replace(/\bu\.\s?a\.\s?/g, 'unter anderem ').replace(/\bbzw\.\s?/g, 'beziehungsweise ').replace(/\bHbf\b/g, 'Hauptbahnhof').replace(/\bvsl\.\s?/g, 'voraussichtlich ').replace(/\bca\.\s?/g, 'etwa ').replace(/\bNr\.\s?/g, 'Nummer ').replace(/\bStr\.\s*$/, 'Straße.').replace(/\bStr\.(\s+)(?=[A-ZÄÖÜ])/g, 'Straße.$1').replace(/\bStr\./g, 'Straße').replace(/\bStr\b/g, 'Straße').replace(/-v-/g, ' von ').replace(/\bØ\s?/g, 'im Schnitt ')
     .replace(/\s?[·|]\s?/g, ', ').replace(/→/g, ' bis ').replace(/[✓✗]/g, '').replace(/\+(\d)/g, 'plus $1').replace(/−(\d)/g, 'minus $1').replace(/\s+([.,])/g, '$1').replace(/([.,]){2,}/g, '$1').trim();
   const sayLast = {};
   function speak(text, opts) {
@@ -1119,6 +1147,102 @@
     speak(c.textContent.replace(/\s+/g, ' ').replace(/([?!:])\s*\./g, '$1').replace(/(\.\s*){2,}/g, '. '), { now: true, force: true });
   }
 
+  // ---------- Unterwegs mit Bus und Bahn: Haltestelle und nächste Haltestelle ----------
+  // Erkannt am Bahnsteig (bis 60 m), die Richtung aus den Haltefolgen des Fahrplans. Ohne GPS (Tunnel) geht es nach den
+  // Fahrzeiten des Fahrplans weiter, als Schätzung gekennzeichnet.
+  function lineState() { return rec.ln || (rec.ln = { seq: [], pat: null, j: -1, t: 0, est: null }); }
+  function lineOnFix(p, t) {
+    if (!rec || rec.transfer || !isTransit(rec.curMode) || !fp) { if (rec) rec.ln = null; showStopLine(); return; }
+    const L = lineState(), k = KIND_OF_MODE[rec.curMode];
+    L.est = null;
+    const near = fpStopsNear(p, 60, k);
+    if (near.length) {
+      let best = near[0], bd = Infinity;
+      for (const i of near) { const d = dist(p, { lat: fp.stops[i][2], lon: fp.stops[i][3] }); if (d < bd) { bd = d; best = i; } }
+      const name = fpName(best);
+      if (L.seq[L.seq.length - 1] !== name) {
+        L.seq.push(name); L.t = t; L.pos = { lat: fp.stops[best][2], lon: fp.stops[best][3] };
+        if (L.seq.length > 1) linePattern(L, k); else { L.pat = null; L.j = -1; L.next = null; }
+        speak(L.next ? `${name}. Nächster Halt: ${L.next}.` : `${name}.`);
+      } else L.t = t;
+    } else if (L.seq.length === 1 && !L.next && L.pos && dist(L.pos, p) > 80) {
+      lineDirection(L, k, p);
+      if (L.next) speak(`Nächster Halt: ${L.next}.`);
+    }
+    showStopLine();
+  }
+  // nur eine Haltestelle bekannt: die Haltefolge, deren nächster Halt in der Richtung liegt, in die die Bahn fährt
+  function lineDirection(L, k, p) {
+    const name = L.seq[0], go = bearing(L.pos, p);
+    let best = null;
+    const seenPat = new Set();
+    for (const t of fp.trips) {
+      if (fp.routes[t[0]][1] !== k || seenPat.has(t[1])) continue;
+      seenPat.add(t[1]);
+      const pat = fp.patterns[t[1]];
+      const j = pat.findIndex((si) => fpName(si) === name);
+      if (j < 0 || j >= pat.length - 1) continue;
+      const nx = fp.stops[pat[j + 1]], diff = angDiff(bearing(L.pos, { lat: nx[2], lon: nx[3] }), go);
+      if (diff <= 60 && (!best || diff < best.diff)) best = { t, j, diff };
+    }
+    if (!best) return;
+    L.pat = best.t; L.j = best.j;
+    L.next = fpName(fp.patterns[best.t[1]][best.j + 1]);
+  }
+  // passende Haltefolge: enthält die letzten Halte in dieser Reihenfolge; die nächste Haltestelle ist die danach
+  function linePattern(L, k) {
+    const names = L.seq.slice(-3);
+    let best = null;
+    const seenPat = new Set();
+    for (const t of fp.trips) {
+      if (fp.routes[t[0]][1] !== k || seenPat.has(t[1])) continue;
+      seenPat.add(t[1]);
+      const pat = fp.patterns[t[1]];
+      let j = -1, ok = true;
+      for (const n of names) {
+        const jj = pat.findIndex((si, x) => x > j && fpName(si) === n);
+        if (jj < 0) { ok = false; break; }
+        j = jj;
+      }
+      if (!ok && names.length > 1) {   // nur die letzte Haltestelle sicher: das reicht für einen Vorschlag
+        j = pat.findIndex((si) => fpName(si) === names[names.length - 1]);
+        if (j < 0) continue;
+        if (!best || best.score < 1) best = { t, j, score: 0.5 };
+        continue;
+      }
+      if (j < 0) continue;
+      const score = names.length + (j < pat.length - 1 ? 0.1 : 0);
+      if (!best || score > best.score) best = { t, j, score };
+    }
+    L.pat = best ? best.t : null;
+    L.j = best ? best.j : -1;
+    const pat = best && fp.patterns[best.t[1]];
+    L.next = pat && L.j < pat.length - 1 ? fpName(pat[L.j + 1]) : null;
+  }
+  // ohne GPS: so viele Halte weiter, wie die Fahrzeiten des Fahrplans seit der letzten Haltestelle hergeben
+  function lineEstimate(now) {
+    const L = rec && rec.ln;
+    if (!L || !L.pat || L.j < 0) return;
+    const pat = fp.patterns[L.pat[1]], hops = L.pat[5];
+    let j = L.j, m = (now - L.t) / 60000;
+    while (j < pat.length - 1 && m >= hops[j] + 0.4) { m -= hops[j] + 0.4; j++; }   // 0,4 min Halt je Haltestelle
+    if (j === L.j) { L.est = null; return; }
+    const name = fpName(pat[j]);
+    if (!L.est || L.est.name !== name) {
+      L.est = { name, next: j < pat.length - 1 ? fpName(pat[j + 1]) : null };
+      if (voiceOn()) speak(`Etwa ${name}, laut Fahrplan.${L.est.next ? ' Nächster Halt: ' + L.est.next + '.' : ''}`);
+    }
+  }
+  function showStopLine() {
+    const el = $('#drive-stop');
+    if (!el) return;
+    const L = rec && rec.ln;
+    if (!L || !L.seq.length) { el.hidden = true; return; }
+    const cur = L.est ? L.est.name : L.seq[L.seq.length - 1], next = L.est ? L.est.next : L.next;
+    el.innerHTML = `${ic(MODE_ICON[rec.curMode] || 'tram')}<span>${L.est ? 'etwa ' : ''}<b>${esc(cur)}</b>${next ? ` · nächster Halt: <b>${esc(next)}</b>` : ''}${L.est ? ' <span class="small">(laut Fahrplan)</span>' : ''}</span>`;
+    el.hidden = false;
+  }
+
   // ---------- Umsteigen (Bus und Bahn) ----------
   const isTransit = (m) => m === 'bus' || m === 'bahn' || m === 'zug';
   const nowT = () => (rec.samples.length ? rec.samples[rec.samples.length - 1].t : Date.now());
@@ -1132,6 +1256,7 @@
   }
   function switchMode(mode) {
     rec.curMode = mode; rec.cfg = MODES[mode];
+    rec.ln = null; showStopLine();
     rec.slowSince = null; rec.fastSince = null;
     rec.det = {};   // Erkennung neu beginnen: ein Gehen vor dem Wechsel zählt nicht als Aussteigen danach
   }
@@ -1355,7 +1480,7 @@
     const a = halts[m[0].hi].tEnd, b = halts[m[m.length - 1].hi].t;
     const amps = t.events.filter((e) => e.type === 'halt' && e.signal && e.t >= a && e.t <= b);
     return { mode, linie: fpLine(tr[0], tr[6]), ziel: fp.heads[tr[2]].replace(/^Bielefeld,\s*/, ''),
-      halte: m.map(({ hi, j }) => [fpName(pat[j]), base + times[j] * 60000, halts[hi].tEnd]),
+      halte: (() => { const by = {}; m.forEach(({ hi, j }) => { by[j] = halts[hi].tEnd; }); const out = []; for (let j = m[0].j; j <= m[m.length - 1].j; j++) out.push([fpName(pat[j]), base + times[j] * 60000, by[j] != null ? by[j] : null]); return out; })(),
       amp: amps.reduce((x, e) => x + e.wait, 0), ampN: amps.length };
   }
   function matchFahrplan(t) {
@@ -1364,27 +1489,29 @@
   }
   // einmal je Fahrt abgleichen, solange der Fahrplan die Fahrt abdeckt; das Ergebnis bleibt an der Fahrt
   function ensureFahrplan(t) {
-    if (t.demo || 'fahrplan' in t || !(isTransit(t.mode) || (t.legs || []).some((l) => isTransit(l.mode)))) return false;
+    if (t.demo || ('fahrplan' in t && t.fpV === 2) || !(isTransit(t.mode) || (t.legs || []).some((l) => isTransit(l.mode)))) return false;
     if (!fp) { loadFahrplan().then((ok) => { if (ok && reviewTrip === t && ensureFahrplan(t)) openReview(t); }); return false; }
     const day = ymd(new Date(t.start));
     if (day < fp.gilt[0] || day > fp.gilt[1]) return false;
     t.fahrplan = matchFahrplan(t);
+    t.fpV = 2;   // ab 0.54: auch Halte ohne Messung (Tunnel) aus dem Fahrplan
     saveTrips();
     return true;
   }
   function fahrplanHtml(t) {
     if (!t.fahrplan || !t.fahrplan.length) return '';
     return t.fahrplan.map((l) => {
-      const f = l.halte[0], z = l.halte[l.halte.length - 1];
+      const seen = l.halte.filter((h) => h[2] != null), f = seen[0], z = seen[seen.length - 1];
+      const unseen = l.halte.filter((h) => h[2] == null).map((h) => h[0]);
       const late = (h) => Math.round((h[2] - h[1]) / 60000), sign = (x) => (x > 0 ? `+${x}` : x < 0 ? `−${-x}` : '±0');
       const gain = late(z) - late(f);
       const verdict = gain >= 1 ? `${gain} min Verspätung unterwegs aufgebaut` : gain <= -1 ? `${-gain} min unterwegs aufgeholt` : 'Unterwegs im Plan geblieben';
       const who = l.mode === 'bus' ? 'der Bus' : l.mode === 'zug' ? 'der Zug' : 'die Bahn';
       const amp = l.mode === 'zug' ? '' : l.amp ? ` Dazwischen stand ${who} ${durText(l.amp)} an Ampeln (${l.ampN} Halt${l.ampN === 1 ? '' : 'e'}).` : ` Dazwischen musste ${who} an keiner Ampel halten.`;
-      const rows = l.halte.map((h) => `<tr><td>${esc(h[0])}</td><td>${clock(h[1])}</td><td>${clock(h[2])}</td><td>${sign(late(h))}</td></tr>`).join('');
+      const rows = l.halte.map((h) => (h[2] == null ? `<tr class="fp-est"><td>${esc(h[0])}</td><td>${clock(h[1])}</td><td>–</td><td></td></tr>` : `<tr><td>${esc(h[0])}</td><td>${clock(h[1])}</td><td>${clock(h[2])}</td><td>${sign(late(h))}</td></tr>`)).join('');
       return `<div class="fp-leg"><p class="fp-head"><span class="dep-line${l.mode === 'bahn' ? ' tram' : l.mode === 'zug' ? ' rail' : ''}">${esc(l.linie)}</span><span>→ ${esc(l.ziel)}</span></p>
         <p class="small muted">Laut Fahrplan ${esc(f[0])} ${clock(f[1])} bis ${esc(z[0])} ${clock(z[1])} · Abfahrt ${sign(late(f))} min, zuletzt ${sign(late(z))} min</p>
-        <p class="fp-verdict"><b>${verdict}.</b>${amp}</p>
+        <p class="fp-verdict"><b>${verdict}.</b>${amp}</p>${unseen.length ? `<p class="small muted">Nicht gemessen (etwa im Tunnel), laut Fahrplan über: ${esc(unseen.join(', '))}.</p>` : ''}
         <details class="fp-more"><summary>Halt für Halt</summary><table class="fp-table"><thead><tr><th>Halt</th><th>Plan</th><th>Ist</th><th>min</th></tr></thead><tbody>${rows}</tbody></table></details></div>`;
     }).join('') + `<p class="small muted lg-src">Fahrplan: DELFI (CC BY 4.0). Ist ist die Abfahrt, wie Flowtown sie gemessen hat.</p>`;
   }
@@ -4571,5 +4698,5 @@
   });
 
   // Für Tests von außen erreichbar
-  window.__ww = { onPosition: (p) => onPosition(p), state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)) };
+  window.__ww = { onPosition: (p) => onPosition(p), lineEst: (t) => { lineEstimate(t); showStopLine(); }, state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)) };
 })();
