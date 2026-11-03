@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.58.2';
+  const VERSION = '0.59.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1125,7 +1125,17 @@
     u.lang = 'de-DE';
     if (voiceDe) u.voice = voiceDe;
     u.rate = (settings.voice && settings.voice.rate) || 1;
+    if (opts.onend) {
+      // onend kommt nicht auf jedem Gerät zuverlässig: dann nach der geschätzten Dauer, sobald nichts mehr gesprochen wird
+      let done = false, poll = null;
+      const fin = () => { if (done) return; done = true; clearTimeout(poll); opts.onend(); };
+      u.onend = fin; u.onerror = fin;
+      const until = Date.now() + 60000;
+      const check = () => { if (done) return; if (!speechSynthesis.speaking || Date.now() > until) fin(); else poll = setTimeout(check, 400); };
+      poll = setTimeout(check, Math.min(30000, 1500 + t.length * 75 / ((settings.voice && settings.voice.rate) || 1)));
+    }
     speechSynthesis.speak(u);
+    return true;
   }
   const roundM = (m) => (m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50);
   // Unterwegs: Baustellen, Sperrungen, Stau und gemeldete Hindernisse voraus, je einmal pro Fahrt
@@ -1191,7 +1201,7 @@
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recog = null, sayAfterZiel = null, micT = null;
   const MIC_HELP = 'Du kannst zum Beispiel sagen: Losfahren. Mit dem Rad los. Zur Uni. Nächste Bahn ab Jahnplatz. '
-    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe. Und du kannst frei fragen, zum Beispiel: Wo ist die nächste rollstuhlgerechte Toilette?';
+    + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe. Und du kannst frei fragen, zum Beispiel: Wo ist die nächste rollstuhlgerechte Toilette? Nach meiner Antwort höre ich weiter zu, Danke beendet das Gespräch.';
   function micStatus(text, keep) {
     const el = $('#mic-status');
     if (!el) return;
@@ -1200,31 +1210,54 @@
     if (text && !keep) micT = setTimeout(() => { el.hidden = true; }, 6000);
   }
   function micUI(on) {
-    ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
+    ['#btn-mic', '#btn-mic-drive', '.assist-mic'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
   }
-  function listen() {
+  // Gesprächsmodus: nach einer gesprochenen Antwort oder Rückfrage geht das Mikrofon von selbst wieder an.
+  // Kommt nichts, endet es still; „Danke“, „Das war's“ oder „Tschüss“ beenden das Gespräch.
+  function listenAfter(prompt) {
+    if (!SR || !settings.voiceIn) return;
+    setTimeout(() => { if (!recog && !(canSpeak && speechSynthesis.speaking)) listen({ auto: true, prompt }); }, 300);
+  }
+  function listen(opts) {
     if (!SR) return;
-    if (recog) { recog.abort(); return; }
+    const auto = !!(opts && opts.auto);
+    if (recog) { if (auto) return; recog.abort(); return; }
+    if (auto && !settings.voiceIn) return;
     if (!settings.voiceIn) {
       const ok = window.confirm('Sprachbefehle nutzen die Spracherkennung deines Handys. Dabei geht die Aufnahme an den Anbieter des Betriebssystems (Apple oder Google). Flowtown speichert davon nichts. Einverstanden?');
       if (!ok) return;
       settings.voiceIn = true; store.set('settings', settings);
     }
-    if (canSpeak) speechSynthesis.cancel();
-    unlockSpeech();
+    if (canSpeak && !auto) speechSynthesis.cancel();
+    if (!auto) unlockSpeech();
+    const prompt = (opts && opts.prompt) || 'Ich höre zu …';
     recog = new SR();
+    recog.auto = auto;
     recog.lang = 'de-DE'; recog.interimResults = false; recog.maxAlternatives = 3; recog.continuous = false;
     recog.onresult = (e) => {
       const alts = Array.from(e.results[0] || []).map((a) => a.transcript).filter(Boolean);
       if (alts.length) handleCommand(alts);
     };
+    const r0 = recog;
+    let autoT = null;
     recog.onerror = (e) => {
+      if (auto) {
+        // im Gespräch: Schweigen beendet es still; verweigert das Gerät den Start ohne Antippen, ein Hinweis
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') micStatus('Zum Antworten aufs Mikrofon tippen.');
+        else if (e.error === 'no-speech' || e.error === 'aborted') micStatus($('#assist').hidden ? '' : 'Zum Weiterfragen aufs Mikrofon tippen.');
+        else micStatus('Die Spracherkennung ist gerade nicht erreichbar.');
+        return;
+      }
       const msg = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Das Mikrofon ist für Flowtown nicht freigegeben. Erlaube es in den Einstellungen des Browsers.' : e.error === 'no-speech' ? 'Ich habe nichts gehört.' : e.error === 'aborted' ? '' : 'Die Spracherkennung ist gerade nicht erreichbar.';
       if (msg) { micStatus(msg); speak(msg, { now: true, force: true }); }
     };
-    recog.onend = () => { recog = null; micUI(false); if ($('#mic-status').textContent === 'Ich höre zu …') micStatus(''); };
-    try { recog.start(); micUI(true); micStatus('Ich höre zu …', true); try { if (navigator.vibrate) navigator.vibrate(60); } catch (e) { /* ohne */ } }
-    catch (e) { recog = null; micStatus('Die Spracherkennung konnte nicht starten.'); }
+    recog.onend = () => { clearTimeout(autoT); if (recog === r0) recog = null; micUI(false); if ($('#mic-status').textContent === prompt) micStatus(''); };
+    try {
+      recog.start(); micUI(true); micStatus(prompt, true);
+      try { if (navigator.vibrate) navigator.vibrate(auto ? [40, 60, 40] : 60); } catch (e) { /* ohne */ }
+      // Sicherheitsnetz: im Gespräch höchstens 10 Sekunden zuhören
+      if (auto) autoT = setTimeout(() => { if (recog === r0) r0.abort(); }, 10000);
+    } catch (e) { recog = null; micUI(false); micStatus(auto ? 'Zum Antworten aufs Mikrofon tippen.' : 'Die Spracherkennung konnte nicht starten.'); }
   }
   const cmdNorm = (x) => String(x || '').toLowerCase().replace(/[.,!?;:„“"']/g, ' ').replace(/\s+/g, ' ').trim();
   const MODE_WORDS = [['fuss', /\bzu ?fu(ß|ss)|\blaufen\b|\bgehen\b|\bausgestiegen\b/], ['bahn', /stadtbahn|straßenbahn|strassenbahn|\btram\b|\bbahn\b|\blinie \d/], ['bus', /\bbus\b/], ['zug', /\bzug\b|regionalbahn|\bre ?\d/], ['rad', /\brad\b|fahrrad/], ['auto', /\bauto\b|\bwagen\b/]];
@@ -1288,7 +1321,7 @@
       assistAct = r.aktion || null;
       showAssist(frage, r.antwort);
       assistLast = r.antwort;
-      say(r.antwort);
+      say(r.antwort, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : null);
     } catch (e) {
       const msg = /eingerichtet/.test(e.message) ? 'Die Assistenz ist auf dem Server noch nicht eingerichtet.' : /keine weiteren/.test(e.message) ? e.message : 'Die Assistenz ist gerade nicht erreichbar.';
       assistAct = null;
@@ -1310,6 +1343,9 @@
   }
   async function runCommand(c) {
     if (!c) return false;
+    if (!$('#assist').hidden && /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b/.test(c)) {
+      $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
+    }
     if (/\bhilfe\b|was kann ich sagen|welche befehle/.test(c)) { speak(MIC_HELP, { now: true, force: true }); return true; }
     if (/ansagen (aus|stopp|stop)|sei (still|leise)|ruhe bitte/.test(c)) { setVoice(false); if (canSpeak) speechSynthesis.cancel(); micStatus('Ansagen aus'); return true; }
     if (/ansagen (an|ein)/.test(c)) { setVoice(true); speak('Ansagen an.', { now: true }); return true; }
@@ -1556,7 +1592,7 @@
   // Vorschlag mit großem Knopf und Vibration; ohne Antwort gilt er nach 30 Sekunden. „Nein“ hält ihn 3 Minuten fern.
   let legSuggest = null, legNo = null, legTimer = null;
   const LEG_TEXT = { fuss: 'Jetzt zu Fuß', bahn: 'Weiter mit Stadtbahn', bus: 'Weiter mit Bus', zug: 'Weiter mit Zug', auto: 'Weiter mit Auto', rad: 'Weiter mit Rad' };
-  function hideLegSuggest() { legSuggest = null; clearTimeout(legTimer); $('#leg-suggest').hidden = true; }
+  function hideLegSuggest() { legSuggest = null; clearTimeout(legTimer); $('#leg-suggest').hidden = true; if (recog && recog.auto) recog.abort(); }
   function showLegSuggest(mode, t, frage) {
     if (legSuggest && legSuggest.mode === mode) return;
     if (legNo && legNo.mode === mode && Date.now() - legNo.t < 180000) return;
@@ -1565,7 +1601,9 @@
     $('#btn-leg-yes').textContent = LEG_TEXT[mode];
     $('#leg-suggest').hidden = false;
     try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) { /* ohne Vibration */ }
-    speak(frage + (mode === 'fuss' ? ' Wenn das stimmt, musst du nichts tun.' : ` Wenn das stimmt, tippe auf ${LEG_TEXT[mode]}.`), { now: true });
+    const hear = !!(SR && settings.voiceIn && voiceOn());
+    speak(frage + (hear ? ' Sag Ja oder Nein.' : mode === 'fuss' ? ' Wenn das stimmt, musst du nichts tun.' : ` Wenn das stimmt, tippe auf ${LEG_TEXT[mode]}.`),
+      { now: true, onend: hear ? () => { if (legSuggest && legSuggest.mode === mode) listenAfter('Ja oder Nein? Ich höre zu …'); } : null });
     clearTimeout(legTimer);
     // ohne Antwort nach 30 s: Aussteigen und Parken gelten; Einsteigen nur, wenn man inzwischen wirklich 400 m schnell unterwegs ist
     legTimer = setTimeout(() => {
@@ -4850,7 +4888,7 @@
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;
     const a = b.dataset.assist;
-    if (a === 'close') { $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); }
+    if (a === 'close') { $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); if (recog && recog.auto) recog.abort(); micStatus(''); }
     else if (a === 'mic') listen();
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (a === 'ziel' && assistAct) {
@@ -4970,5 +5008,5 @@
   });
 
   // Für Tests von außen erreichbar
-  window.__ww = { onPosition: (p) => onPosition(p), lineEst: (t) => { lineEstimate(t); showStopLine(); }, state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)) };
+  window.__ww = { onPosition: (p) => onPosition(p), lineEst: (t) => { lineEstimate(t); showStopLine(); }, state: () => ({ rec, trips, clusters }), demoRun, review: (id) => openReview(trips.find((t) => t.id === id)), legAsk: (m, f) => showLegSuggest(m, Date.now(), f) };
 })();
