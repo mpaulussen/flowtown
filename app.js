@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.67.0';
+  const VERSION = '0.68.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1065,6 +1065,86 @@
   const NAV_SAY = { auto: [400, 150], rad: [150, 50], fuss: [60, 25] };
   const NAV_NOW = { auto: 30, rad: 15, fuss: 8 };
   const navGroup = () => { const m = rec && (rec.transfer ? 'fuss' : rec.curMode); return m === 'auto' || m === 'rad' || m === 'fuss' ? m : null; };
+  // ---------- Begleitmodus zu Fuß (für blinde und sehbehinderte Menschen) ----------
+  // Ampeln an der Strecke als Ankerpunkte, Richtungen als Uhrzeit, Schritte, Warnung bei falscher Richtung, Vibrationsmuster.
+  // Die App sagt nie, ob man gehen kann: das entscheidet die Person am Signal.
+  const begleitOn = () => settings.begleit === true || (settings.begleit == null && settings.access.on && settings.access.type === 'sehen');
+  const vib = (pat) => { try { if (navigator.vibrate) navigator.vibrate(pat); } catch (e) { /* ohne */ } };
+  function navClock(x) {
+    if (!x) return null;
+    if (x.art === 'uTurn') return 6;
+    const light = x.sev === 'light' || /^(keep|exit|ramp)$/.test(x.art);
+    return x.dir === 'right' ? (light ? 2 : 3) : x.dir === 'left' ? (light ? 10 : 9) : null;
+  }
+  function sigFeat(c) {
+    const y = (v) => v === 'yes';
+    const has = [y(c.sound) && 'Tonsignal', y(c.vib) && 'Vibration', y(c.btn) && 'Taster', y(c.tact) && 'Bodenleitstreifen'].filter(Boolean);
+    if (has.length) return 'mit ' + has.join(', ').replace(/, ([^,]+)$/, ' und $1');
+    if (c.sound === 'no') return 'ohne Tonsignal';
+    return 'ohne erfasste Ausstattung';
+  }
+  // Ampeln bis 15 m neben der Strecke, einmal je Strecke berechnet
+  function begleitAnchors(N) {
+    // neu berechnen, sobald weitere Ampeln geladen sind
+    const all = allClusters();
+    if (N.anchors && N.anchorsN === all.length) return N.anchors;
+    N.anchorsN = all.length;
+    const lat = N.pts.map((q) => q.lat), lon = N.pts.map((q) => q.lon);
+    const box = [Math.min(...lat) - 0.0005, Math.max(...lat) + 0.0005, Math.min(...lon) - 0.0008, Math.max(...lon) + 0.0008];
+    N.anchors = [];
+    for (const c of all) {
+      if (c.lat < box[0] || c.lat > box[1] || c.lon < box[2] || c.lon > box[3]) continue;
+      const r = navProject(N, c, 0, N.pts.length - 1);
+      if (r.d <= 15) N.anchors.push({ at: r.along, c });
+    }
+    N.anchors.sort((a, b) => a.at - b.at);
+    return N.anchors;
+  }
+  function begleitStepSig(N, x) {
+    const a = begleitAnchors(N).find((y) => Math.abs(y.at - x.at) <= 25);
+    return a ? a.c : null;
+  }
+  // bei jedem Standort: Ampeln voraus, Ampel erreicht, falsche Richtung; ohne Ziel nach der Laufrichtung
+  function begleitFree(p, t, heading, N) {
+    const B = rec.begleit || (rec.begleit = { said: {}, wrongSince: null, wrongAt: 0 });
+    const moving = (rec.st.lastVs || 0) > 0.5;
+    let h = moving ? heading : null;
+    if (h == null && compass && Date.now() - compass.t < 3000) h = compass.h;
+    let ahead = null;
+    if (N && N.joined && !N.arrived) {
+      // nächste Ampel an der Strecke voraus, die nicht schon zu einer Abbiegung gehört
+      const a = begleitAnchors(N).find((y) => y.at > N.along - 8 && y.at - N.along < 45);
+      if (a) ahead = { c: a.c, d: Math.max(0, a.at - N.along), onTurn: N.steps.some((x) => x.at > N.along && Math.abs(x.at - a.at) <= 25) };
+      // falsche Richtung: Laufrichtung gegen die Richtung der Strecke
+      const k = Math.min(N.k, N.pts.length - 2), rb = bearing(N.pts[k], N.pts[k + 1]);
+      if (h != null && moving && angDiff(h, rb) > 120) {
+        if (B.wrongSince == null) B.wrongSince = t;
+        if (t - B.wrongSince > 6000 && t - B.wrongAt > 30000) {
+          B.wrongAt = t;
+          vib([80, 60, 80, 60, 80]);
+          speak(`Du gehst in die falsche Richtung. Dreh dich um, die Strecke führt Richtung ${DIRS[Math.round(rb / 45) % 8]}.`, { now: true });
+        }
+      } else B.wrongSince = null;
+    } else if (h != null) {
+      // ohne Ziel: Ampel in Laufrichtung
+      let bd = 45;
+      for (const c of allClusters()) {
+        const d = dist(p, c);
+        if (d < bd && angDiff(bearing(p, c), h) <= 30) { bd = d; ahead = { c, d, onTurn: false }; }
+      }
+    }
+    if (!ahead) return;
+    const id = ahead.c.id;
+    if (ahead.d > 12 && ahead.d <= 40 && !B.said[id + 'v'] && !ahead.onTurn) {
+      B.said[id + 'v'] = true;
+      speak(`In etwa ${roundM(ahead.d)} Metern kommt eine Ampel, ${sigFeat(ahead.c)}.`);
+    }
+    if (ahead.d <= 12 && !B.said[id + 'e']) {
+      B.said[id + 'e'] = B.said[id + 'v'] = true;
+      vib([200, 100, 200]);
+      speak(`Ampel erreicht, ${sigFeat(ahead.c)}. Wann du gehst, entscheidest du am Signal.`, { now: true });
+    }
+  }
   function navBuild(nav, dauer) {
     if (!nav || !Array.isArray(nav.pts) || nav.pts.length < 2) return null;
     const pts = nav.pts.map((q) => ({ lat: q[0], lon: q[1] }));
@@ -1124,6 +1204,7 @@
   function navUpdate(p, t, acc, heading) {
     driveMapMove(p, heading);
     const N = rec && rec.nav, g = navGroup();
+    if (g === 'fuss' && begleitOn()) begleitFree(p, t, heading, N);
     if (!N || N.arrived) return;
     if (!g) { $('#nav-box').hidden = true; return; }   // in Bus und Bahn pausiert
     const tol = Math.max(NAV_TOL[g], Math.min(50, acc || 0));
@@ -1138,6 +1219,7 @@
     const rest = `Noch ${navM(left)}${eta}`;
     if (N.joined && left < 25) {
       N.arrived = true;
+      if (g === 'fuss' && begleitOn()) vib([300, 100, 300, 100, 600]);
       navShow(navArrow({ art: 'arrive' }), 'Ziel erreicht', rec.trip.plan ? rec.trip.plan.name : '', '', false);
       speak(`Du hast dein Ziel erreicht${rec.trip.plan ? ': ' + rec.trip.plan.name : ''}.`, { now: true });
       return;
@@ -1156,17 +1238,24 @@
     const next = N.steps.find((x) => x.at > N.along + 3);
     if (!next) { navShow(navArrow(null), navM(left), 'Der Strecke folgen', rest, false); return; }
     const d = next.at - N.along, txt = next.art === 'arrive' ? `Ziel: ${rec.trip.plan ? rec.trip.plan.name : 'erreicht'}` : navText(next);
-    const low = next.art === 'arrive' ? 'erreichst du dein Ziel' : txt.charAt(0).toLowerCase() + txt.slice(1);
+    const bg = g === 'fuss' && begleitOn();
+    let low = next.art === 'arrive' ? 'erreichst du dein Ziel' : txt.charAt(0).toLowerCase() + txt.slice(1);
+    if (bg && next.art !== 'arrive') {
+      const ck = navClock(next), sg = begleitStepSig(N, next);
+      low += (ck ? `, auf ${ck} Uhr` : '') + (sg ? `, an der Ampel ${sigFeat(sg)}` : '');
+    }
+    const steps = (m) => { const r = m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50; return bg && m < 150 ? `, etwa ${Math.max(5, Math.round(r / 0.7 / 5) * 5)} Schritten,` : ''; };
     navShow(navArrow(next), d <= NAV_NOW[g] ? 'Jetzt' : `In ${navM(d)}`, txt, rest, false);
     // Ansagen: zweimal vorher, dann „Jetzt“
     const key = next.i;
     if (d <= NAV_NOW[g] + 5) {
-      if (!N.said[key + 'n']) { N.said[key + 'n'] = true; if (next.art !== 'arrive') speak(`Jetzt ${low}.`, { now: true }); }
+      if (!N.said[key + 'n']) { N.said[key + 'n'] = true; if (next.art !== 'arrive') { speak(`Jetzt ${low}.`, { now: true }); if (bg) vib(next.dir === 'left' ? [500] : next.dir === 'right' ? [120, 80, 120] : [600]); } }
     } else {
       const th = NAV_SAY[g].find((x, i) => d <= x && (i === NAV_SAY[g].length - 1 || d > NAV_SAY[g][i + 1]));
       if (th && !N.said[key + '_' + th] && d > NAV_NOW[g] + 15) {
         NAV_SAY[g].forEach((x) => { if (x >= th) N.said[key + '_' + x] = true; });
-        speak(`In ${navSayM(d)} ${low}.`, { now: true });
+        speak(`In ${navSayM(d)}${steps(d)} ${low}.`, { now: true });
+        if (bg && th === NAV_SAY[g][NAV_SAY[g].length - 1]) vib([80]);
       }
     }
   }
@@ -5323,6 +5412,8 @@
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
   $('#set-compass').checked = compassWanted();
+  $('#set-begleit').checked = begleitOn();
+  $('#set-begleit').addEventListener('change', (ev) => { settings.begleit = ev.target.checked; store.set('settings', settings); if (ev.target.checked && !compassOn) compassStart(true); });
   $('#set-compass').addEventListener('change', (ev) => { settings.compass = ev.target.checked; store.set('settings', settings); if (ev.target.checked) compassStart(true).then((ok) => { if (!ok) { $('#set-compass').checked = false; micStatus('Der Kompass ist auf diesem Gerät nicht verfügbar oder nicht freigegeben.'); } }); });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
