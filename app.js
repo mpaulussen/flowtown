@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.68.0';
+  const VERSION = '0.69.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1076,8 +1076,8 @@
     const light = x.sev === 'light' || /^(keep|exit|ramp)$/.test(x.art);
     return x.dir === 'right' ? (light ? 2 : 3) : x.dir === 'left' ? (light ? 10 : 9) : null;
   }
-  function sigFeat(c) {
-    const y = (v) => v === 'yes';
+  function sigFeat(c0) {
+    const y = (v) => v === 'yes', c = accOf(c0);
     const has = [y(c.sound) && 'Tonsignal', y(c.vib) && 'Vibration', y(c.btn) && 'Taster', y(c.tact) && 'Bodenleitstreifen'].filter(Boolean);
     if (has.length) return 'mit ' + has.join(', ').replace(/, ([^,]+)$/, ' und $1');
     if (c.sound === 'no') return 'ohne Tonsignal';
@@ -1597,14 +1597,14 @@
       if (score < bd) { bd = score; best = c; }
     }
     if (!best) return '';
-    const yes = (v) => v === 'yes', no = (v) => v === 'no';
-    const has = [yes(best.sound) && 'Tonsignal', yes(best.vib) && 'Vibration', yes(best.btn) && 'Taster', yes(best.tact) && 'Bodenleitstreifen'].filter(Boolean);
-    const not = [no(best.sound) && 'Tonsignal', no(best.tact) && 'Bodenleitstreifen'].filter(Boolean);
+    const yes = (v) => v === 'yes', no = (v) => v === 'no', A = accOf(best);
+    const has = [yes(A.sound) && 'Tonsignal', yes(A.vib) && 'Vibration', yes(A.btn) && 'Taster', yes(A.tact) && 'Bodenleitstreifen'].filter(Boolean);
+    const not = [no(A.sound) && 'Tonsignal', no(A.tact) && 'Bodenleitstreifen'].filter(Boolean);
     const n = nameOf(best.id);
     let t = `${cap(woDir(p, best, heading))}, ${woM(dist(p, best))} entfernt, ist eine Ampel${n ? ` an ${n}` : ''}`;
     t += has.length ? `, mit ${has.join(', ').replace(/, ([^,]+)$/, ' und $1')}` : '';
     t += not.length ? `, ohne ${not.join(' und ')}` : '';
-    if (best.sound == null && best.vib == null) t += '. Ob sie ein Tonsignal hat, ist nicht erfasst';
+    if (A.sound == null && A.vib == null) t += '. Ob sie ein Tonsignal hat, ist nicht erfasst';
     return t + '.';
   }
   function woStop(p, heading) {
@@ -1754,6 +1754,7 @@
   }
   async function runCommand(c) {
     if (!c) return false;
+    if (merkVoice(c)) return true;
     if (!$('#assist').hidden && /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b/.test(c)) {
       $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
     }
@@ -2222,6 +2223,70 @@
 
   // ---------- Bewertung ----------
   let reviewTrip = null;
+  // ---------- Rückfragen nach der Fahrt: fehlende Angaben zu Ampeln (Tonsignal, Bodenleitstreifen) ----------
+  // Nie an der Ampel selbst: dort braucht man die Ohren für den Verkehr. Erst in der Fahrtbilanz, höchstens drei Ampeln.
+  let merkLokal = store.get('merkmaleLokal', {}), datQ = null;
+  const accOf = (c) => Object.assign({ sound: c.sound, tact: c.tact, vib: c.vib, btn: c.btn }, merkLokal[c.id] || {});
+  function merkFragen(trip) {
+    const walked = trip.mode === 'fuss' || (trip.legs || []).some((l) => l.mode === 'fuss');
+    if (!walked) return [];
+    const seen = new Set(), out = [];
+    for (const e of trip.events) {
+      const c = e.signal && clusterById[e.signal];
+      if (!c || seen.has(c.id)) continue;
+      seen.add(c.id);
+      const a = accOf(c), q = [];
+      if (a.sound == null) q.push('ton');
+      if (a.tact == null) q.push('leit');
+      const lb = labelFor(e);
+      if (q.length) out.push({ c, q, name: /\d+[.,]\d{3}/.test(lb) ? `Ampel ${out.length + 1} auf deinem Weg` : lb });
+      if (out.length >= 3) break;
+    }
+    return out;
+  }
+  const MERK_TEXT = { ton: 'Gab es ein Tonsignal?', leit: 'Gab es Bodenleitstreifen?' };
+  function merkHtml(trip) {
+    const list = merkFragen(trip);
+    if (!list.length) return '';
+    return `<section class="merk" aria-labelledby="merk-h"><h3 id="merk-h">${ic('access')}Hilf mit: Ampeln für alle</h3>
+      <p class="small">Für blinde und sehbehinderte Menschen fehlen an diesen Ampeln Angaben. Weißt du es noch?</p>
+      ${list.map((x) => x.q.map((m) => `<div class="merk-q" data-merk="${x.c.id}" data-m="${m}"><span><b>${esc(x.name)}</b> · ${MERK_TEXT[m]}</span><span class="merk-btns" role="group" aria-label="${esc(x.name)}: ${MERK_TEXT[m]}"><button type="button" class="btn" data-v="1">Ja</button><button type="button" class="btn" data-v="0">Nein</button><button type="button" class="btn quiet" data-v="-1">Weiß nicht</button></span></div>`).join('')).join('')}
+      <p class="small muted">Nur der Ort der Ampel und deine Antwort gehen an Flowtown, ohne Fahrt und ohne Person. Die Redaktion prüft die Antworten und trägt sie in OpenStreetMap ein.</p></section>`;
+  }
+  function merkAnswer(cid, m, v) {
+    const c = clusterById[cid];
+    if (!c) return;
+    if (v >= 0) {
+      const o = merkLokal[cid] || (merkLokal[cid] = {});
+      o[m === 'ton' ? 'sound' : 'tact'] = v ? 'yes' : 'no';
+      store.set('merkmaleLokal', merkLokal);
+      if (apiBase()) postJson('/api/merkmal', { items: [{ lat: c.lat, lon: c.lon, m, v }] }).catch(() => { /* ohne Netz: lokal bleibt es */ });
+    }
+    const row = document.querySelector(`.merk-q[data-merk="${cid}"][data-m="${m}"]`);
+    if (row) { row.classList.add('done'); row.querySelector('.merk-btns').innerHTML = `<span class="small">${v === 1 ? 'Ja' : v === 0 ? 'Nein' : 'Weiß nicht'} · danke</span>`; }
+  }
+  // per Sprache: eine Frage nach der anderen, im Gesprächsmodus
+  function merkAsk(trip) {
+    const list = merkFragen(trip), qs = [];
+    list.forEach((x) => x.q.forEach((m) => qs.push({ cid: x.c.id, m, name: x.name })));
+    if (!qs.length) return;
+    datQ = { qs, i: 0 };
+    const q = qs[0];
+    speak(`Darf ich kurz zu den Ampeln fragen? Sag Ja, Nein, Weiß nicht, oder Später. ${q.name}: ${MERK_TEXT[q.m]}`, { now: true, force: true, onend: () => listenAfter('Ja, Nein oder Weiß nicht? Ich höre zu …') });
+  }
+  function merkVoice(c) {
+    if (!datQ) return false;
+    if (/^(später|spaeter|keine zeit|überspringen|abbrechen|stopp|nicht jetzt)/.test(c)) { datQ = null; speak('Gut, dann ein andermal.', { now: true, force: true }); return true; }
+    const v = /^(ja|jawohl|genau|stimmt)\b/.test(c) ? 1 : /^(nein|nee|gab es nicht)\b/.test(c) ? 0 : /^(weiß nicht|weiss nicht|keine ahnung|unsicher|nicht sicher)/.test(c) ? -1 : null;
+    if (v == null) return false;
+    const q = datQ.qs[datQ.i];
+    merkAnswer(q.cid, q.m, v);
+    datQ.i++;
+    const n = datQ.qs[datQ.i];
+    if (!n) { datQ = null; speak('Danke, das hilft allen, die nach dir dort gehen.', { now: true, force: true }); return true; }
+    speak(`${n.name === q.name ? 'Und' : n.name + ':'} ${MERK_TEXT[n.m]}`, { now: true, force: true, onend: () => listenAfter('Ja, Nein oder Weiß nicht? Ich höre zu …') });
+    return true;
+  }
   function openReview(trip) {
     reviewTrip = trip;
     const halts = trip.events.filter((e) => e.type === 'halt' && e.signal);
@@ -2250,6 +2315,8 @@
     renderReview();
     showView('review');
     requestNames(halts, renderReview);
+    // fehlende Angaben zu Ampeln: in der Bilanz, per Sprache nur mit Begleitmodus und Sprachbefehlen
+    if (!trip.demo && begleitOn() && SR && settings.voiceIn && voiceOn() && merkFragen(trip).length) setTimeout(() => { if (reviewTrip === trip) merkAsk(trip); }, 2500);
   }
   const fmtNum = (x, d) => x.toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
   // Zeit in Feldern, in denen es im Schnitt unter 20 km/h (Rad: 8 km/h) voranging; eine Schätzung, Ampeln werden abgezogen
@@ -2426,8 +2493,14 @@
     }).join('') + (reviewTrip.transfers || []).map((tr, i) => `<article class="rev transfer" data-tidx="${i}">
         <div class="rev-head"><span class="chip sm amber">${ic('walk')}</span><div class="rev-title"><strong>Umstieg${tr.stop ? ' ' + esc(tr.stop) : ''}</strong><span class="small muted">${esc(MODES[tr.from].label)} → ${esc(MODES[tr.to].label)} · ${new Date(tr.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' })} Uhr</span></div><span class="rev-wait">${ic('hourglass')}${durText(tr.wait)}</span></div>
         <button type="button" class="btn miss" data-missed aria-pressed="${!!tr.missed}">${ic('alert')}Anschluss verpasst</button>
-      </article>`).join('');
+      </article>`).join('') + merkHtml(reviewTrip);
   }
+  $('#review-list').addEventListener('click', (ev) => {
+    const b = ev.target.closest('.merk-q [data-v]');
+    if (!b) return;
+    const row = b.closest('.merk-q');
+    merkAnswer(row.dataset.merk, row.dataset.m, Number(b.dataset.v));
+  });
   $('#review-list').addEventListener('toggle', (ev) => {
     const d = ev.target;
     if (!d.classList || !d.classList.contains('tag-box')) return;

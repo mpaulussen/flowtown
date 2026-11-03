@@ -1064,3 +1064,14 @@ body[data-view="plan"] .ask-bar{--ask:#1f5c99}
 .rad-rate.acc-block{background:var(--acc-bg);border-radius:14px;padding:10px 12px}
 .rad-rate.acc-block .vf-h4{color:var(--acc-ink)}
 .acc-chip:not([aria-pressed="true"]),.go-card .acc-chip:not([aria-pressed="true"]),#view-plan .acc-chip:not([aria-pressed="true"]){color:var(--acc-ink);border-color:var(--acc-line);box-shadow:0 0 0 1.5px var(--acc-line) inset;background:#fff}
+/* 0.69 Rückfragen zu Ampeln in der Fahrtbilanz (Orange: Barrierefreiheit) */
+.merk{background:var(--acc-bg);color:var(--acc-ink);border-radius:20px;padding:14px 16px;display:flex;flex-direction:column;gap:10px}
+.merk h3{display:flex;align-items:center;gap:8px;margin:0;font-family:var(--display);font-size:19px;color:var(--acc-ink)}
+.merk h3 .ic{color:var(--acc)}
+.merk p{margin:0;color:var(--fg)}
+.merk .small.muted{color:#5b4a3d}
+.merk-q{display:flex;flex-direction:column;gap:6px;background:#fff;border-radius:14px;padding:10px 12px;color:var(--fg)}
+.merk-btns{display:flex;flex-wrap:wrap;gap:6px}
+.merk-btns .btn{min-height:44px;padding:0 16px;border-color:var(--acc-line);color:var(--acc-ink);background:#fff}
+.merk-btns .btn:not(.quiet){font-weight:700}
+.merk-q.done{opacity:.8}

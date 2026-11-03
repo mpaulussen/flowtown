@@ -1228,6 +1228,25 @@ function saveHinweise() {
   fs.writeFileSync(HINWEIS_FILE + '.tmp', JSON.stringify(hinweise));
   fs.renameSync(HINWEIS_FILE + '.tmp', HINWEIS_FILE);
 }
+// Merkmale von Ampeln aus Rückfragen nach der Fahrt (Tonsignal, Bodenleitstreifen): nur Ort der Ampel, Merkmal, Antwort, Tag
+const MERKMAL_FILE = path.join(DATA_DIR, 'merkmale.json');
+let merkmale = [];
+try { merkmale = JSON.parse(fs.readFileSync(MERKMAL_FILE, 'utf8')); } catch (e) { merkmale = []; }
+function addMerkmale(b) {
+  const items = (Array.isArray(b.items) ? b.items : []).slice(0, 12);
+  const day = new Date().toISOString().slice(0, 10);
+  let n = 0;
+  for (const it of items) {
+    const lat = Number(it.lat), lon = Number(it.lon);
+    if (!inBox(lat, lon, 0.2) || !['ton', 'leit'].includes(it.m) || ![0, 1].includes(it.v)) continue;
+    merkmale.push({ lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5, m: it.m, v: it.v, tag: day });
+    n++;
+  }
+  if (merkmale.length > 50000) merkmale = merkmale.slice(-50000);
+  fs.writeFileSync(MERKMAL_FILE + '.tmp', JSON.stringify(merkmale));
+  fs.renameSync(MERKMAL_FILE + '.tmp', MERKMAL_FILE);
+  return n;
+}
 function addHinweis(b) {
   const lat = Number(b.lat), lon = Number(b.lon), art = String(b.art || '');
   if (!HINWEIS_ART[art]) throw Object.assign(new Error('Unbekannte Art.'), { status: 400 });
@@ -2024,6 +2043,10 @@ const server = http.createServer(async (req, res) => {
       if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
       return send(res, 200, { ok: true, hinweis: addHinweis(await readBody(req, 2048)) }, origin);
     }
+    if (req.method === 'POST' && p === '/api/merkmal') {
+      if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
+      return send(res, 200, { ok: true, n: addMerkmale(await readBody(req, 4096)) }, origin);
+    }
     if (req.method === 'POST' && p === '/api/hinweis/stimme') {
       if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
       const b = await readBody(req, 1024);
@@ -2100,6 +2123,19 @@ const cli = process.argv[2];
 if (cli === 'neue-codes') {
   for (const c of newCodes(Math.max(1, Math.min(100, Number(process.argv[3]) || 1)))) console.log(`${c.code}   (Pseudonym im Export: ${c.pseudonym})`);
   console.log('Liste der Codes nur bei dir aufbewahren. Der Server speichert nur einen Hash.');
+  process.exit(0);
+}
+if (cli === 'merkmale') {
+  // Antworten je Ampel zusammengefasst, mit Vorschlag für OpenStreetMap (erst ab 2 übereinstimmenden Antworten)
+  const by = {};
+  for (const x of merkmale) { const k = `${x.lat.toFixed(4)},${x.lon.toFixed(4)},${x.m}`; const e = by[k] || (by[k] = { ja: 0, nein: 0, tage: new Set() }); if (x.v) e.ja++; else e.nein++; e.tage.add(x.tag); }
+  console.log('lat,lon,merkmal,ja,nein,tage,vorschlag_osm');
+  for (const [k, e] of Object.entries(by).sort((a, b) => (b[1].ja + b[1].nein) - (a[1].ja + a[1].nein))) {
+    const tag = k.endsWith(',ton') ? 'traffic_signals:sound' : 'tactile_paving';
+    const v = e.ja >= 2 && e.ja >= 3 * e.nein ? `${tag}=yes` : e.nein >= 2 && e.nein >= 3 * e.ja ? `${tag}=no` : 'prüfen';
+    console.log(`${k},${e.ja},${e.nein},${e.tage.size},${v}`);
+  }
+  console.log(`# ${merkmale.length} Antworten. Vorschläge vor Ort oder per Luftbild prüfen, dann in OpenStreetMap eintragen.`);
   process.exit(0);
 }
 if (cli === 'export') { process.stdout.write(JSON.stringify(exportPilot(), null, 1) + '\n'); process.exit(0); }
