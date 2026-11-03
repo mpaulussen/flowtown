@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.52.0';
+  const VERSION = '0.53.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4273,12 +4273,42 @@
   let introOnly = false;
   function welcomeStep(n) {
     $('#w-step1').hidden = n !== 1; $('#w-step2').hidden = n !== 2;
+    renderWelcomeAccess();
+    if (n === 2) speak('Schritt 2 von 2: Was darf Flowtown? Verkehrslage laden ist an. Fahrten anonym beitragen und KI-Einschätzung sind aus. Alles lässt sich später ändern. Ganz unten: Los geht es.', { now: true });
     $('#btn-intro-next').textContent = introOnly ? 'Zurück zur App' : 'Weiter';
     $('#w-steps1').hidden = introOnly;
     const h = $(n === 1 ? '#h-welcome' : '#h-welcome2');
     h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
+  // Begrüßung: Vorlesen, Profil und große Schrift gleich hier einstellen
+  function renderWelcomeAccess() {
+    const v = $('#w-voice');
+    v.hidden = !canSpeak;
+    v.setAttribute('aria-pressed', String(voiceOn()));
+    v.querySelector('span').textContent = voiceOn() ? 'Vorlesen und Ansagen sind an' : 'Vorlesen und Ansagen einschalten';
+    $$('#w-acc .acc-chip').forEach((b) => b.setAttribute('aria-pressed', String(settings.access.on && settings.access.type === b.dataset.wacc)));
+    $('#w-big').checked = !!settings.big;
+  }
+  const WELCOME_SAY = 'Willkommen bei Flowtown. Die grüne Welle beginnt bei dir. Weniger warten, besser ankommen, mit Auto, Bus und Bahn, Rad oder zu Fuß. '
+    + 'Vor der Fahrt zeigt Flowtown Stau und Baustellen und die beste Verbindung. Unterwegs erkennt die App jeden Halt an der Ampel selbst und sagt dir Wechsel und Hindernisse an. Danach siehst du, wo die Zeit geblieben ist. '
+    + 'Deine Fahrten bleiben auf deinem Handy. Unter diesem Knopf kannst du dein Profil wählen: Rollstuhl, Rollator, Ich sehe schlecht, Ich höre schlecht, Einfache Sprache oder Ruhe und Pausen. Dann tippe auf Weiter.';
+  $('#w-voice').addEventListener('click', () => {
+    setVoice(!voiceOn());
+    renderWelcomeAccess();
+    if (voiceOn()) speak(WELCOME_SAY, { now: true }); else if (canSpeak) speechSynthesis.cancel();
+  });
+  $('#w-acc').addEventListener('click', (ev) => {
+    const b = ev.target.closest('.acc-chip');
+    if (!b) return;
+    const on = !(settings.access.on && settings.access.type === b.dataset.wacc);
+    settings.access = { on, type: b.dataset.wacc };
+    if (on && b.dataset.wacc === 'sehen' && !settings.voice && canSpeak) settings.voice = { on: true, rate: 1 };
+    store.set('settings', settings);
+    applyAccessUI(); renderWelcomeAccess();
+    speak(on ? `Profil ${ACCESS_LABEL[b.dataset.wacc]} gewählt.` : 'Kein Profil.', { now: true });
+  });
+  $('#w-big').addEventListener('change', (ev) => { settings.big = ev.target.checked; store.set('settings', settings); applyAccessUI(); });
   $('#btn-intro-next').addEventListener('click', () => { if (introOnly) showView('more'); else welcomeStep(2); });
   $('#btn-intro-back').addEventListener('click', () => welcomeStep(1));
   $('#btn-intro').addEventListener('click', () => { introOnly = true; showView('welcome'); welcomeStep(1); });
@@ -4297,6 +4327,7 @@
     settings.onboarded = VERSION;
     store.set('settings', settings);
     showView('start');
+    speak('Flowtown ist bereit. Oben wählst du, womit du unterwegs bist, und tippst auf Losfahren. Darunter planst du deinen Weg.', { now: true });
   });
 
   // ---------- Hinweis: zum Home-Bildschirm hinzufügen ----------

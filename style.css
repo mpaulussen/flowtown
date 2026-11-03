@@ -879,3 +879,11 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .vf-title-row{display:flex;align-items:center;gap:8px}
 .vf-title-row .vf-say{margin-left:auto}
 .vf-phead .vf-say{margin:-8px 0;color:inherit}.world-vor .vf-say{color:var(--w-vor-ink)}
+/* 0.53 Begrüßung: Barrierefreiheit gleich einstellen */
+.w-access{display:flex;flex-direction:column;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px 16px}
+.w-voice{width:100%;justify-content:flex-start;gap:12px;border:2px solid var(--accent);color:var(--accent);background:var(--surface)}
+.w-voice[hidden]{display:none}
+.w-voice .ic{width:26px;height:26px;flex:none}
+.w-voice[aria-pressed="true"]{background:var(--accent);color:#fff}
+.w-access .acc-q{margin:4px 0 0}
+.w-voice span{text-align:left}
