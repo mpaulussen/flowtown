@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.61.0';
+  const VERSION = '0.62.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3142,10 +3142,18 @@
   function moreMsg(t) { $('#more-msg').textContent = t; if (!$('#view-more').hidden) { renderMoreSubs(); updateSignalsInfo(); } }
 
   // ---------- Navigation ----------
+  // Frag Flowtown oben auf den Hauptseiten, mit einem kurzen Beispiel, das zur Seite passt
+  const ASK_EX = { start: 'z. B. nächste Bahn?', plan: 'z. B. Rollstuhl-WC?', tips: 'z. B. Park + Ride?', stats: 'z. B. Baustellen?' };
+  function askBar(name) {
+    $('#ask-wrap').hidden = !(ASK_EX[name] && apiBase());
+    if (ASK_EX[name]) $('#ask-inp').placeholder = 'Frag Flowtown … ' + ASK_EX[name];
+  }
   function showView(name) {
     if (name !== 'map') stopMyLocation();
     $$('.view').forEach((v) => { v.hidden = v.id !== 'view-' + name; });
     document.body.dataset.view = name;   // Farbe und Ruhe je Ansicht (Aufzeichnung ohne Menü)
+    // Frag Flowtown oben auf den Hauptseiten, mit einem Beispiel, das zur Seite passt
+    askBar(name);
     const tabFor = { drive: 'start', review: 'stats', plan: 'start' };
     // Womit? und das Profil gehören zu beiden Seiten: Heute (Losfahren) und Planen
     if (name === 'start' || name === 'plan') { const slot = $('#mode-slot-' + name), box = $('#mode-box'); if (box.parentNode !== slot) slot.appendChild(box); }
@@ -4944,7 +4952,7 @@
     }
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
-  $('#plan-ask').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#plan-ask-inp'); if (i.value.trim()) { askAssist(i.value, false); i.value = ''; } });
+  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
@@ -5025,6 +5033,7 @@
   if (trips.map((t) => tidyTrip(t)).some(Boolean)) saveTrips();
   updateSignalsInfo();
   if (!document.body.dataset.view) document.body.dataset.view = 'start';   // Farbe des Kopfs schon beim ersten Öffnen
+  askBar(document.body.dataset.view);
   renderToday();
   renderLastTrip();
   renderA2hs();

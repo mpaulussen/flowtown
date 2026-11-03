@@ -76,6 +76,8 @@
 
 <main id="main">
   <p id="app-error" class="msg warn app-error" role="alert" hidden></p>
+  <!-- Frag Flowtown: auf Heute, Wohin?, Tipps und Verlauf immer ganz oben -->
+  <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
   <!-- Einstieg beim ersten Start -->
   <section id="view-welcome" class="view welcome" hidden aria-labelledby="h-welcome">
     <div id="w-step1" class="w-step">
@@ -197,7 +199,6 @@
   <section id="view-plan" class="view" hidden aria-labelledby="h-plan-page">
     <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>Heute</button>
     <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
-    <form class="plan-ask" id="plan-ask" role="search"><label class="sr-only" for="plan-ask-inp">Frag Flowtown</label><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><input id="plan-ask-inp" type="text" placeholder="Frag Flowtown, z. B. Wo ist die nächste Behindertentoilette?" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form>
     <div class="entry plan-mode"><div id="mode-slot-plan"></div></div>
     <p id="plan-off" class="msg" hidden>Zum Planen braucht Flowtown den Server. Trag ihn unter Mehr → Verbindung ein.</p>
     <div id="wohin" class="wohin"></div>
