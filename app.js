@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.51.0';
+  const VERSION = '0.52.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -708,6 +708,7 @@
       setDriveState(vs < cfg.stopV ? 'Langsam …' : 'Unterwegs', 'moving');
     }
     if (rec.samples.length >= 3) detectLeg(p, vs, t);
+    voiceAhead(p, t);
     maybeFetchSignals(p, false);
     updateCounters();
   }
@@ -995,6 +996,8 @@
     );
     requestWakeLock();
     enterDriveView();
+    speak(`Aufzeichnung läuft, ${MODES[mode].label}.${rec.trip.plan ? ' Ziel ' + rec.trip.plan.name + '.' : ''}`, { now: true });   // im Tippen: gibt die Sprachausgabe auf dem iPhone frei
+    updateVoiceBtn();
   }
 
   function enterDriveView() {
@@ -1028,6 +1031,94 @@
     $$('.tabs button').forEach((b) => { b.disabled = false; });
   }
 
+  // ---------- Ansagen: Sprachausgabe des Handys (Stufe 1 der Sprachsteuerung) ----------
+  // Läuft ganz auf dem Gerät; Flowtown schickt dafür nichts an einen Server. Auf dem iPhone erst nach einem Tippen möglich (Start-Knopf).
+  const canSpeak = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
+  const voiceOn = () => canSpeak && !!(settings.voice && settings.voice.on);
+  let voiceDe = null;
+  function pickVoice() {
+    if (!canSpeak) return;
+    const vs = speechSynthesis.getVoices();
+    voiceDe = vs.find((v) => /^de[-_]DE/i.test(v.lang) && v.localService) || vs.find((v) => /^de/i.test(v.lang) && v.localService) || vs.find((v) => /^de/i.test(v.lang)) || null;
+  }
+  if (canSpeak) { pickVoice(); speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', pickVoice); }
+  // Text zum Sprechen: Abkürzungen ausschreiben, Zeichen weglassen
+  const sayText = (x) => String(x || '').replace(/\s+/g, ' ')
+    .replace(/(\d)\s?min\b/g, '$1 Minuten').replace(/(\d)\s?km\/h/g, '$1 Kilometer pro Stunde').replace(/(\d),(\d)\s?km\b/g, '$1 Komma $2 Kilometer').replace(/(\d)\s?km\b/g, '$1 Kilometer')
+    .replace(/(\d)\s?m\b/g, '$1 Meter').replace(/\bggü\.?\s?/g, 'gegenüber ').replace(/\bz\.\s?B\.\s?/g, 'zum Beispiel ').replace(/\bu\.\s?a\.\s?/g, 'unter anderem ').replace(/\bbzw\.\s?/g, 'beziehungsweise ').replace(/\bHbf\b/g, 'Hauptbahnhof').replace(/\bvsl\.\s?/g, 'voraussichtlich ').replace(/\bca\.\s?/g, 'etwa ').replace(/\bNr\.\s?/g, 'Nummer ').replace(/\bStr\./g, 'Straße').replace(/\bØ\s?/g, 'im Schnitt ')
+    .replace(/\s?[·|]\s?/g, ', ').replace(/→/g, ' bis ').replace(/[✓✗]/g, '').replace(/\+(\d)/g, 'plus $1').replace(/−(\d)/g, 'minus $1').replace(/\s+([.,])/g, '$1').replace(/([.,]){2,}/g, '$1').trim();
+  const sayLast = {};
+  function speak(text, opts) {
+    opts = opts || {};
+    if (!canSpeak || !text || (!opts.force && !voiceOn())) return;
+    const t = sayText(text), now = Date.now();
+    if (!opts.force && sayLast[t] && now - sayLast[t] < 20000) return;   // nichts doppelt hintereinander
+    sayLast[t] = now;
+    if (opts.now) speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = 'de-DE';
+    if (voiceDe) u.voice = voiceDe;
+    u.rate = (settings.voice && settings.voice.rate) || 1;
+    speechSynthesis.speak(u);
+  }
+  const roundM = (m) => (m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50);
+  // Unterwegs: Baustellen, Sperrungen, Stau und gemeldete Hindernisse voraus, je einmal pro Fahrt
+  const AHEAD = { fuss: { r: 120, art: ['baustelle', 'sperrung'] }, rad: { r: 200, art: ['baustelle', 'sperrung', 'unfall'] }, auto: { r: 500, art: ['baustelle', 'sperrung', 'stau', 'unfall'] } };
+  function voiceAhead(p, t) {
+    if (!voiceOn() || !rec || t - (rec.vAt || 0) < 5000) return;
+    rec.vAt = t;
+    const mode = rec.transfer ? 'fuss' : rec.curMode, cfg = AHEAD[mode];
+    const h = currentHeading(p);
+    if (!cfg || h == null) return;
+    const said = rec.vSaid || (rec.vSaid = {});
+    const ahead = (q, r) => { const d = dist(p, q); return d <= r && (d < 25 || angDiff(bearing(p, q), h) <= 40) ? d : null; };
+    for (const it of (lageCache && lageCache.items) || []) {
+      if (!it || said[it.id] || !cfg.art.includes(it.art) || !Array.isArray(it.pts)) continue;
+      let best = null;
+      for (const q of it.pts) { const d = ahead({ lat: q[0], lon: q[1] }, it.art === 'stau' ? cfg.r : Math.min(cfg.r, 300)); if (d != null && (best == null || d < best)) best = d; }
+      if (best == null) continue;
+      said[it.id] = 1;
+      const wo = best < 40 ? 'Hier' : `In ${roundM(best)} Metern`;
+      const was = it.art === 'sperrung' ? 'Sperrung' : it.art === 'stau' ? (it.fluss ? 'stockender Verkehr' : 'Stau') : it.art === 'unfall' ? 'Unfall' : 'Baustelle';
+      speak(`${wo} ${was}${it.titel ? ', ' + it.titel : ''}.${mode === 'fuss' && it.fuss ? ' ' + it.fuss : ''}`);
+      return;
+    }
+    if (mode === 'fuss' && hinw) for (const x of hinw) {
+      if (said['h' + x.id] || x.art === 'gut') continue;
+      const d = ahead(x, 70);
+      if (d == null) continue;
+      said['h' + x.id] = 1;
+      speak(`${d < 25 ? 'Hier' : `In ${roundM(d)} Metern`} gemeldet: ${HINW[x.art] || 'Hindernis'}.`);
+      return;
+    }
+  }
+  // Bilanz am Ende der Fahrt, kurz
+  function voiceSummary(trip) {
+    if (!voiceOn()) return;
+    const mins = Math.max(1, Math.round(((trip.end || trip.start) - trip.start) / 60000));
+    const halts = trip.events.filter((e) => e.type === 'halt' && e.signal), wait = halts.reduce((a, e) => a + e.wait, 0);
+    const passes = trip.events.filter((e) => e.type === 'pass').length;
+    const stops = trip.events.filter((e) => e.type === 'halt' && e.atStop).reduce((a, e) => a + e.wait, 0);
+    const sec = (ms) => { const s0 = Math.round(ms / 1000); return s0 < 60 ? `${s0} Sekunden` : `${Math.floor(s0 / 60)} Minute${Math.floor(s0 / 60) === 1 ? '' : 'n'}${s0 % 60 >= 10 ? ` ${s0 % 60} Sekunden` : ''}`; };
+    let x = `Angekommen. ${mins} Minute${mins === 1 ? '' : 'n'} unterwegs, ${fmtNum(trip.distance / 1000, 1)} Kilometer. `;
+    x += halts.length ? `${halts.length} Halt${halts.length === 1 ? '' : 'e'} an Ampeln, zusammen ${sec(wait)}. ` : 'Kein Halt an einer Ampel. ';
+    if (passes) x += `${passes} Ampel${passes === 1 ? '' : 'n'} ohne Halt. `;
+    if (stops) x += `An Haltestellen ${sec(stops)}. `;
+    speak(x + 'Du kannst die Ampeln jetzt bewerten.', { now: true });
+  }
+  // Vorlesen eines Bereichs (Ziel, Verbindung): sichtbarer Text ohne Knöpfe, Quellen und Diagramme
+  function sayPanel(el) {
+    if (!el) return;
+    const c = el.cloneNode(true);
+    c.querySelectorAll('[role="img"][aria-label]').forEach((n) => n.replaceWith(n.getAttribute('aria-label') + '. '));   // Diagramme mit ihrer Beschreibung
+    c.querySelectorAll('.btn, .btn-link, .vf-x, .lg-src, .vf-bars, .vf-chips, form, svg, [aria-hidden="true"], .rad-bar, .rad-legend, .con-lines, [data-say]').forEach((n) => n.remove());
+    c.querySelectorAll('.con-list > li').forEach((li) => { if (!li.querySelector('.con.on')) li.remove(); });
+    c.querySelectorAll('.dep-line').forEach((n) => n.prepend('Linie '));
+    c.querySelectorAll('*').forEach((n) => n.append(' '));   // zwischen allen Teilen eine Pause
+    c.querySelectorAll('li, p, h4, .vf-sum, .vf-phead, .con-t, br').forEach((n) => n.append('. '));
+    speak(c.textContent.replace(/\s+/g, ' ').replace(/([?!:])\s*\./g, '$1').replace(/(\.\s*){2,}/g, '. '), { now: true, force: true });
+  }
+
   // ---------- Umsteigen (Bus und Bahn) ----------
   const isTransit = (m) => m === 'bus' || m === 'bahn' || m === 'zug';
   const nowT = () => (rec.samples.length ? rec.samples[rec.samples.length - 1].t : Date.now());
@@ -1042,6 +1133,7 @@
   function switchMode(mode) {
     rec.curMode = mode; rec.cfg = MODES[mode];
     rec.slowSince = null; rec.fastSince = null;
+    rec.det = {};   // Erkennung neu beginnen: ein Gehen vor dem Wechsel zählt nicht als Aussteigen danach
   }
   function startTransfer(at) {
     if (!rec || rec.transfer || !isTransit(rec.curMode)) return;
@@ -1078,6 +1170,7 @@
     el.hidden = false;
     el.classList.remove('show'); void el.offsetWidth; el.classList.add('show');
     try { if (navigator.vibrate) navigator.vibrate(200); } catch (e) { /* ohne Vibration */ }
+    speak(`Jetzt ${MODES[mode].label}.`, { now: true });
     clearTimeout(legBannerT);
     legBannerT = setTimeout(() => { el.hidden = true; }, 6000);
   }
@@ -1094,6 +1187,7 @@
     $('#btn-leg-yes').textContent = LEG_TEXT[mode];
     $('#leg-suggest').hidden = false;
     try { if (navigator.vibrate) navigator.vibrate([150, 80, 150]); } catch (e) { /* ohne Vibration */ }
+    speak(frage + (mode === 'fuss' ? ' Wenn das stimmt, musst du nichts tun.' : ` Wenn das stimmt, tippe auf ${LEG_TEXT[mode]}.`), { now: true });
     clearTimeout(legTimer);
     // ohne Antwort nach 30 s: Aussteigen und Parken gelten; Einsteigen nur, wenn man inzwischen wirklich 400 m schnell unterwegs ist
     legTimer = setTimeout(() => {
@@ -1208,6 +1302,7 @@
     flushWir(trip);
     syncPilot();
     openReview(trip);
+    voiceSummary(trip);
   }
 
   function resetEndButtons() {
@@ -3065,7 +3160,7 @@
       body = rows ? `<ul class="dep-list" aria-label="Abfahrten ${esc(open)}">${rows}</ul>` : '<p class="small">In den nächsten drei Stunden fährt hier laut Fahrplan nichts.</p>';
       body += `<p class="small muted lg-src">Laut Fahrplan, ohne Verspätungen · <button type="button" class="btn-link" data-hs-del="${esc(open)}">${esc(open)} entfernen</button> · Fahrplan: DELFI (CC BY 4.0), Stand ${esc((fp.stand || '').slice(8, 10) + '.' + (fp.stand || '').slice(5, 7) + '.')}</p>`;
     }
-    return `<section class="vf world-vor" aria-labelledby="hs-h"><h3 class="vf-title" id="hs-h">Nächste Abfahrten</h3>
+    return `<section class="vf world-vor" aria-labelledby="hs-h"><h3 class="vf-title vf-title-row" id="hs-h">Nächste Abfahrten${canSpeak && open && fp ? `<button type="button" class="vf-x vf-say" data-say-dep="${esc(open)}" aria-label="Abfahrten vorlesen">${ic('sound')}</button>` : ''}</h3>
       <div class="vf-chips" role="group" aria-label="Deine Haltestellen">${chips}</div>${form}${body}</section>`;
   }
   function addHaltestelle(n) {
@@ -3238,7 +3333,7 @@
   }
   function zielPanel(z, group) {
     if (!z) return '';
-    const head = `<div class="vf-phead"><b>${esc(z.name)}</b><button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
+    const head = `<div class="vf-phead"><b>${esc(z.name)}</b>${canSpeak ? `<button type="button" class="vf-x vf-say" data-vf="say" aria-label="Vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
     if (zielEdit) return `<div class="vf-panel">${head}<form class="vf-form" data-vf="rename"><label class="sr-only" for="inp-zielname">Name des Ziels</label><input id="inp-zielname" type="text" maxlength="30" value="${esc(z.name)}"><button class="btn" type="submit">Speichern</button></form><button type="button" class="btn quiet danger-text" data-vf="del">${ic('trash')}Ziel löschen</button></div>`;
     const r = zielRes[zKey(z, group)];
     if (!r || r.loading) return `<div class="vf-panel">${head}<p class="small muted" role="status">Strecke wird geprüft …</p></div>`;
@@ -3447,7 +3542,7 @@
   function zielPanelOepnv(z, group) {
     if (!z) return '';
     if (zielEdit) return zielPanel(z, group);
-    const head = `<div class="vf-phead"><b>${esc(z.name)}</b><button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
+    const head = `<div class="vf-phead"><b>${esc(z.name)}</b>${canSpeak ? `<button type="button" class="vf-x vf-say" data-vf="say" aria-label="Vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
     const abList = settings.haltestellen.concat(zielAb && !settings.haltestellen.includes(zielAb) ? [zielAb] : []);
     const abs = abList.length && fp ? `<div class="vf-chips" role="group" aria-label="Start"><span class="small muted">Ab</span>${abList.map((n) => `<button type="button" class="vf-chip${zielAb === n ? ' on' : ''}" data-zab="${esc(n)}" aria-pressed="${zielAb === n}">${esc(n)}</button>`).join('')}<button type="button" class="vf-chip${zielAb ? '' : ' on'}" data-zab="" aria-pressed="${!zielAb}">${ic('pin')}Standort</button></div>` : '';
     const r = zielRes[zKey(z, group)];
@@ -3610,6 +3705,13 @@
   ['pointerup', 'pointercancel', 'pointerleave'].forEach((t) => onVf(t, () => clearTimeout(pressTimer)));
   onVf('click', (ev) => {
     if (pressed) { pressed = false; ev.preventDefault(); return; }
+    const sd = ev.target.closest('[data-say-dep]');
+    if (sd && fp) {
+      const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes(), name = sd.dataset.sayDep;
+      const list = departures(name, now, 60).slice(0, 5);
+      speak(list.length ? `Nächste Abfahrten ${name}: ` + list.map((d) => { const m = d.t - nowMin; return `${d.kind === 0 ? 'Stadtbahn' : d.kind === 2 ? '' : 'Bus'} ${d.line} nach ${d.head}, ${m <= 0 ? 'jetzt' : `in ${m} Minute${m === 1 ? '' : 'n'}`}`; }).join('. ') + '.' : `${name}: in der nächsten Stunde keine Abfahrt.`, { now: true, force: true });
+      return;
+    }
     const hs = ev.target.closest('[data-hs],[data-hs-add],[data-hs-pick],[data-hs-near],[data-hs-del]');
     if (hs) {
       const d = hs.dataset;
@@ -3666,6 +3768,7 @@
     if (!b) return;
     const z = settings.ziele.find((x) => x.id === zielOpen);
     const act = b.dataset.vf;
+    if (act === 'say') { sayPanel(b.closest('.vf-panel')); return; }
     if (act === 'close') { zielOpen = null; zielEdit = false; }
     else if (act === 'edit') zielEdit = !zielEdit;
     else if (act === 'again' && z) { checkZiel(z, true); return; }
@@ -4281,6 +4384,7 @@
     if (!b) return;
     const on = !(settings.access.on && settings.access.type === b.dataset.acc);
     settings.access = { on, type: b.dataset.acc };
+    if (on && b.dataset.acc === 'sehen' && !settings.voice && canSpeak) settings.voice = { on: true, rate: 1 };
     store.set('settings', settings);
     applyAccessUI();
     renderToday();
@@ -4297,7 +4401,10 @@
     $('#inp-access-type').hidden = !a.on;
     $('#set-access').value = a.on ? a.type : 'aus';
     $('#set-big').checked = !!settings.big;
-    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '');
+    $('#set-voice').checked = voiceOn();
+    $('#set-voice-rate').value = String((settings.voice && settings.voice.rate) || 1);
+    $('#box-voice').hidden = !canSpeak;
+    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '') + (voiceOn() ? ' · Ansagen' : '');
     document.documentElement.classList.toggle('gross', !!settings.big);
   }
   const saveAccess = () => {
@@ -4308,11 +4415,28 @@
   };
   $('#set-access').addEventListener('change', (ev) => {
     const v = ev.target.value;
+    if (v === 'sehen' && !settings.voice && canSpeak) settings.voice = { on: true, rate: 1 };
     settings.access = { on: v !== 'aus', type: v === 'aus' ? settings.access.type : v };
     store.set('settings', settings);
     applyAccessUI();
   });
   $('#set-big').addEventListener('change', (ev) => { settings.big = ev.target.checked; store.set('settings', settings); applyAccessUI(); });
+  function updateVoiceBtn() {
+    const b = $('#btn-voice');
+    if (!b) return;
+    b.hidden = !canSpeak;
+    b.setAttribute('aria-pressed', String(voiceOn()));
+    b.querySelector('span').textContent = voiceOn() ? 'Ansagen an' : 'Ansagen aus';
+  }
+  function setVoice(on) {
+    settings.voice = Object.assign({ rate: 1 }, settings.voice || {}, { on });
+    store.set('settings', settings);
+    applyAccessUI(); updateVoiceBtn();
+  }
+  $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
+  $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
+  $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
+  $('#btn-voice-test').addEventListener('click', () => speak('In 200 Metern Baustelle, Ravensberger Straße. Fußgänger können die Baustelle auf dem gegenüberliegenden Gehweg passieren.', { now: true, force: true }));
   $('#inp-access').addEventListener('change', saveAccess);
   $('#inp-access-type').addEventListener('change', saveAccess);
   $('#btn-end').addEventListener('click', () => { $('#btn-end').hidden = true; $('#btn-end-confirm').hidden = false; $('#btn-end-cancel').hidden = false; $('#btn-end-confirm').focus(); });

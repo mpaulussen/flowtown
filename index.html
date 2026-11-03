@@ -217,6 +217,7 @@
       <p class="mode-q" id="mode-q">Unterwegs mit</p>
       <div class="leg-chips" role="group" aria-label="Verkehrsmittel wechseln"><button type="button" class="leg-chip" data-leg="fuss" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg><span>Zu Fuß</span></button><button type="button" class="leg-chip" data-leg="bahn" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg><span>Stadtbahn</span></button><button type="button" class="leg-chip" data-leg="bus" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg><span>Bus</span></button><button type="button" class="leg-chip" data-leg="zug" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg><span>Zug</span></button><button type="button" class="leg-chip" data-leg="auto" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg><span>Auto</span></button><button type="button" class="leg-chip" data-leg="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg><span>Rad</span></button></div>
     </div>
+    <button id="btn-voice" class="voice-toggle" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Ansagen aus</span></button>
     <div class="end-row">
       <button id="btn-end" class="btn danger big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg><span id="btn-end-label">Fahrt beenden</span></button>
       <button id="btn-end-confirm" class="btn danger big" type="button" hidden>Ja, beenden</button>
@@ -332,6 +333,14 @@
         </label>
         <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
         <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
+        <div class="voice-set" id="box-voice">
+          <label class="check"><input type="checkbox" id="set-voice"><span>Ansagen vorlesen: Wechsel, Baustellen und Hindernisse voraus, Bilanz am Ende</span></label>
+          <label class="field" for="set-voice-rate">Sprechtempo
+            <select id="set-voice-rate"><option value="0.85">langsam</option><option value="1">normal</option><option value="1.2">schnell</option></select>
+          </label>
+          <button id="btn-voice-test" class="btn quiet" type="button"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg>Probe hören</button>
+          <p class="small muted">Die Ansagen kommen aus der Sprachausgabe deines Handys. Flowtown schickt dafür nichts an seinen Server. Mit VoiceOver oder TalkBack kannst du sie auch ausgeschaltet lassen.</p>
+        </div>
       </div>
     </details>
     <details class="tipcard setbox" id="box-price">

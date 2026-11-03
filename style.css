@@ -867,3 +867,15 @@ details.faq-mini>summary{font-family:inherit;font-size:14px;line-height:1.35;col
 .leg-banner.show{animation:legpop .5s ease-out}
 @keyframes legpop{0%{transform:scale(.85);opacity:0}60%{transform:scale(1.04);opacity:1}100%{transform:scale(1)}}
 @media (prefers-reduced-motion:reduce){.leg-banner.show{animation:none}}
+/* 0.52 Ansagen */
+.voice-set{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:10px;border-top:1px solid var(--line)}
+.voice-set[hidden]{display:none}
+.voice-toggle{font:inherit;font-size:17px;font-weight:700;align-self:center;display:inline-flex;align-items:center;gap:10px;min-height:52px;padding:8px 20px;border-radius:999px;border:2px solid var(--drive-muted);background:transparent;color:var(--drive-fg);cursor:pointer}
+.voice-toggle[hidden]{display:none}
+.voice-toggle .ic{width:24px;height:24px}
+.voice-toggle[aria-pressed="true"]{background:var(--drive-fg);color:var(--drive-bg);border-color:var(--drive-fg)}
+.voice-toggle:focus-visible{outline:3px solid #6fd3a0;outline-offset:3px}
+.vf-say .ic{width:22px;height:22px}
+.vf-title-row{display:flex;align-items:center;gap:8px}
+.vf-title-row .vf-say{margin-left:auto}
+.vf-phead .vf-say{margin:-8px 0;color:inherit}.world-vor .vf-say{color:var(--w-vor-ink)}
