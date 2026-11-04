@@ -1203,3 +1203,37 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 .tip-pick .acc-chip:focus-visible{outline-color:var(--acc)}
 .ki-for{display:inline-flex;align-items:center;gap:6px;margin:0 0 6px;padding:3px 10px;border-radius:999px;background:var(--tint);color:var(--w-plan-ink,#173F66);font-weight:700}
 .ki-for .ic{width:15px;height:15px}
+/* 0.82 Einstieg: Vorlesen und große Schrift zuerst, Profil aufklappbar */
+.w-first{display:flex;flex-direction:column;gap:6px}
+.acc-toggle{font:inherit;font-weight:700;font-size:16px;width:100%;min-height:48px;padding:4px 0;background:none;border:0;cursor:pointer;color:var(--acc-ink);text-align:left}
+.acc-toggle span{flex:1}
+.acc-toggle .acc-chev{transform:rotate(90deg);transition:transform .15s}
+.acc-toggle[aria-expanded="true"] .acc-chev{transform:rotate(-90deg)}
+#w-acc-body{display:flex;flex-direction:column;gap:10px}
+#w-acc-body[hidden]{display:none}
+/* Heute: Gruß statt Claim, Profil als eine Zeile */
+.greet{font-family:var(--display);font-weight:800;font-size:30px;line-height:1.1;letter-spacing:-.02em;margin:0;color:var(--fg)}
+.prof-line{font:inherit;font-size:15px;display:flex;align-items:center;gap:8px;width:100%;min-height:48px;padding:6px 12px;border-radius:14px;border:1.5px solid var(--acc-line);background:var(--surface);color:var(--acc-ink);cursor:pointer;text-align:left}
+.prof-line span{flex:1}
+.prof-line .ic{width:20px;height:20px;color:var(--acc)}
+/* Gewählt ist nicht nur eine Farbe: Häkchen vor gewählten Chips */
+.acc-chip[aria-pressed="true"]::before,.goal-chip[aria-pressed="true"]::before,.layer-chip[aria-pressed="true"]::before,.leg-chip[aria-pressed="true"]::before{content:"✓";content:"✓" / "";font-weight:800;margin-right:6px}
+.leg-chip{position:relative}
+.leg-chip[aria-pressed="true"]::before{position:absolute;top:4px;right:8px;margin:0}
+/* Mehr Kontrast, wenn das Handy es wünscht */
+@media (prefers-contrast: more){
+  :root{--muted:#3b4248;--line:#8a948c;--acc-line:#B04E00}
+  .card,.entry,.tipcard,.w-goals,.w-access,.prof-line{outline:1.5px solid var(--fg);outline-offset:-1.5px}
+}
+/* Kontrastmodus (Windows, manche Browser): Systemfarben, gewählte Knöpfe mit Rahmen und Häkchen */
+@media (forced-colors: active){
+  .acc-chip,.goal-chip,.layer-chip,.leg-chip,.btn,.prof-line,.tabs button,.seg button,.switch span{border:2px solid ButtonText}
+  .acc-chip[aria-pressed="true"],.goal-chip[aria-pressed="true"],.layer-chip[aria-pressed="true"],.leg-chip[aria-pressed="true"],.seg button[aria-pressed="true"],.switch input:checked+span{border-width:4px;outline:2px solid Highlight}
+  .tabs button[aria-current="page"]{outline:3px solid Highlight}
+  .rh-bar span{forced-color-adjust:none}
+  :focus-visible{outline:3px solid Highlight!important}
+}
+#view-start .claim{gap:2px}
+#view-start .greet{font-size:24px}
+/* kleine Bildschirme: Gruß nur für Screenreader, damit Womit?, Losfahren und Wohin? ohne Scrollen zu sehen sind */
+@media (max-height:740px){#view-start .claim{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}

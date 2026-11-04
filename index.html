@@ -84,23 +84,28 @@
       <h2 id="h-welcome" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
       <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
     </header>
+    <div class="w-first">
+      <button id="w-voice" class="btn big w-voice" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Vorlesen und Ansagen einschalten</span></button>
+      <label class="check"><input type="checkbox" id="w-big"><span>Große Schrift</span></label>
+    </div>
     <section class="w-goals" aria-labelledby="w-goal-h">
       <h3 id="w-goal-h">Was ist dir wichtig?</h3>
       <p class="small muted">Mehrere möglich. Flowtown zeigt dir das zuerst.</p>
       <div class="goal-chips" id="w-goals" role="group" aria-labelledby="w-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
     </section>
     <section class="w-access" aria-labelledby="w-acc-h">
-      <button id="w-voice" class="btn big w-voice" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Vorlesen und Ansagen einschalten</span></button>
-      <p class="acc-q" id="w-acc-h"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei unterwegs? Wähle dein Profil:</p>
-      <div class="acc-chips" id="w-acc" role="group" aria-labelledby="w-acc-h"><button type="button" class="acc-chip" data-wacc="rollstuhl" aria-pressed="false">Rollstuhl</button><button type="button" class="acc-chip" data-wacc="rollator" aria-pressed="false">Rollator</button><button type="button" class="acc-chip" data-wacc="sehen" aria-pressed="false">Ich sehe schlecht</button><button type="button" class="acc-chip" data-wacc="hoeren" aria-pressed="false">Ich höre schlecht</button><button type="button" class="acc-chip" data-wacc="lernen" aria-pressed="false">Einfache Sprache</button><button type="button" class="acc-chip" data-wacc="ruhe" aria-pressed="false">Ruhe und Pausen</button></div>
-      <label class="check"><input type="checkbox" id="w-big"><span>Große Schrift</span></label>
+      <button type="button" class="acc-q acc-toggle" id="w-acc-h" aria-expanded="false" aria-controls="w-acc-body"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg><span>Barrierefrei unterwegs? Profil wählen</span><svg class="ic acc-chev" aria-hidden="true"><use href="#i-chevron"/></svg></button>
+      <div id="w-acc-body" hidden>
+      <div class="acc-chips" id="w-acc" role="group" aria-labelledby="w-acc-h"><button type="button" class="acc-chip" data-wacc="rollstuhl" aria-pressed="false">Rollstuhl</button><button type="button" class="acc-chip" data-wacc="rollator" aria-pressed="false">Rollator oder Gehhilfe</button><button type="button" class="acc-chip" data-wacc="sehen" aria-pressed="false">Ich sehe schlecht oder nichts</button><button type="button" class="acc-chip" data-wacc="hoeren" aria-pressed="false">Ich höre schlecht oder nichts</button><button type="button" class="acc-chip" data-wacc="lernen" aria-pressed="false">Einfache Sprache</button><button type="button" class="acc-chip" data-wacc="ruhe" aria-pressed="false">Ruhe und Pausen</button></div>
+      <p class="small muted">Ändern kannst du das jederzeit unter Mehr → Barrierefrei unterwegs.</p>
+      </div>
     </section>
-    <ul class="tip-list intro-list">
+    <ul class="tip-list intro-list" id="w-intro" hidden>
       <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg></span><span class="tip-main"><b>Vor der Fahrt</b><span>Stau und Baustellen auf deinen Wegen, die beste Abfahrt, Bus und Bahn zu jedem Ziel.</span></span></div></li>
       <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></span><span class="tip-main"><b>Unterwegs</b><span>Ein Knopf: Losfahren. Flowtown erkennt jeden Ampelhalt selbst, du tippst nichts an.</span></span></div></li>
       <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg></span><span class="tip-main"><b>Danach</b><span>Wo die Zeit geblieben ist, ob Bus und Bahn pünktlich waren, und Tipps für deine Wege.</span></span></div></li>
     </ul>
-    <p class="intro-note"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Deine Fahrten bleiben auf deinem Handy. Keine Anmeldung, keine Werbung. Mit Auto, Rad, Bus, Bahn oder zu Fuß.</span></p>
+    <p class="intro-note" id="w-intro-note" hidden><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Deine Fahrten bleiben auf deinem Handy. Keine Anmeldung, keine Werbung. Mit Auto, Rad, Bus, Bahn oder zu Fuß.</span></p>
     <button id="btn-intro-next" class="btn primary big go" type="button">Weiter</button>
     <p class="small muted w-steps" id="w-steps1">Schritt 1 von 2</p>
     </div>
@@ -138,14 +143,12 @@
   <section id="view-start" class="view" aria-labelledby="h-start">
     <header class="claim">
       <p class="eyebrow" id="today-date"></p>
-      <h2 id="h-start" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
-      <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
+      <h2 id="h-start" class="greet">Hallo!</h2>
     </header>
     <div class="ask-slot" id="ask-slot-start">
       <!-- Frag Flowtown: ein Feld, wandert unter den ersten Absatz von Heute, Wohin?, Tipps und Verlauf -->
       <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><button type="button" class="ask-mic" id="ask-mic" aria-label="Sprechen statt tippen" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
     </div>
-    <div class="fuer-dich" id="fuer-dich" hidden></div>
     <section class="entry go-card" aria-labelledby="h-go">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
     <div id="mode-box" class="mode-box">
@@ -163,10 +166,7 @@
         <label><input type="radio" name="pt" value="zug"><span><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Zug</span></label>
       </div>
     </fieldset>
-    <div class="acc-row" id="acc-row" hidden>
-      <p class="acc-q"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei unterwegs?</p>
-      <div class="acc-chips" role="group" aria-label="Profil barrierefrei"><button type="button" class="acc-chip" data-acc="rollstuhl" aria-pressed="false">Rollstuhl</button><button type="button" class="acc-chip" data-acc="rollator" aria-pressed="false">Rollator</button><button type="button" class="acc-chip" data-acc="sehen" aria-pressed="false">Sehen</button><button type="button" class="acc-chip" data-acc="hoeren" aria-pressed="false">Hören</button><button type="button" class="acc-chip" data-acc="lernen" aria-pressed="false">Einfach</button><button type="button" class="acc-chip" data-acc="ruhe" aria-pressed="false">Ruhe</button></div>
-    </div>
+    <button type="button" class="prof-line" id="prof-line"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg><span id="prof-line-text">Barrierefrei? Profil wählen</span><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg></button>
     </div>
     <div id="mode-slot-start"></div>
     <button id="btn-start" class="btn primary big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Losfahren</span></button>
@@ -177,22 +177,11 @@
       <button id="btn-plan" class="btn big plan-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>
     </section>
     <div id="acc-tips" class="acc-tips" hidden></div>
+    <div class="fuer-dich" id="fuer-dich" hidden></div>
     <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="a2hs" class="a2hs" hidden></div>
     <section class="today-list" aria-labelledby="h-weg"><h3 class="eyebrow" id="h-weg">Dein Weg heute</h3><div id="weg"></div><div id="st-detail"></div></section>
     <div id="tip-strip"></div>
-    <div class="access-row">
-      <label class="check"><input type="checkbox" id="inp-access"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg> Profil barrierefrei</label>
-      <select id="inp-access-type" aria-label="Art der Einschränkung" hidden>
-        <option value="rollstuhl">Rollstuhl</option>
-        <option value="rollator">Rollator, Gehhilfe oder langsamer zu Fuß</option>
-        <option value="sehen">Ich sehe schlecht oder bin blind</option>
-        <option value="hoeren">Ich höre schlecht oder bin gehörlos</option>
-        <option value="lernen">Einfache Sprache und klare Wege</option>
-        <option value="ruhe">Ruhe und Pausen (z. B. chronisch krank, Autismus, Angst)</option>
-        <option value="andere">andere Einschränkung</option>
-      </select>
-    </div>
     <details class="card hints" id="hints">
       <summary class="card-head"><span class="chip"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></span><h3>So klappt die Aufzeichnung</h3></summary>
       <ul class="ilist">
@@ -366,14 +355,15 @@
           <select id="set-access">
             <option value="aus">kein Profil</option>
             <option value="rollstuhl">Rollstuhl</option>
-        <option value="rollator">Rollator, Gehhilfe oder langsamer zu Fuß</option>
-        <option value="sehen">Ich sehe schlecht oder bin blind</option>
-        <option value="hoeren">Ich höre schlecht oder bin gehörlos</option>
-        <option value="lernen">Einfache Sprache und klare Wege</option>
-        <option value="ruhe">Ruhe und Pausen (z. B. chronisch krank, Autismus, Angst)</option>
-        <option value="andere">andere Einschränkung</option>
+            <option value="rollator">Rollator oder Gehhilfe</option>
+            <option value="sehen">Ich sehe schlecht oder nichts</option>
+            <option value="hoeren">Ich höre schlecht oder nichts</option>
+            <option value="lernen">Einfache Sprache</option>
+            <option value="ruhe">Ruhe und Pausen</option>
+            <option value="andere">Andere Einschränkung</option>
           </select>
         </label>
+        <p class="small muted">Ruhe und Pausen passt zum Beispiel bei chronischer Krankheit, Autismus oder Angst. Rollator oder Gehhilfe auch, wenn du langsamer zu Fuß bist.</p>
         <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
         <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
         <label class="check"><input type="checkbox" id="set-begleit"><span>Begleitmodus zu Fuß: Ampeln an der Strecke mit Ausstattung, Richtungen als Uhrzeit, Schritte, Warnung bei falscher Richtung</span></label>

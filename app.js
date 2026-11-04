@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.81.1';
+  const VERSION = '0.82.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -31,7 +31,8 @@
   const AREA_RADIUS = 5000;       // Umkreis für das Laden der Ampeln
   const TAGS = ['zu lange gewartet', 'Grün zu kurz', 'unübersichtlich', 'Anschluss verpasst', 'alles gut'];
   const ACC_TAGS = ['Grün zu kurz zum Queren', 'kein Tonsignal', 'Taster schlecht erreichbar', 'Bordstein zu hoch'];   // Profil barrierefrei
-  const ACCESS_LABEL = { rollstuhl: 'Rollstuhl', rollator: 'Rollator, Gehhilfe oder langsamer zu Fuß', sehen: 'Sehbehinderung', hoeren: 'Hörbehinderung', lernen: 'Einfache Sprache und klare Wege', ruhe: 'Ruhe und Pausen', andere: 'andere Einschränkung' };
+  // Eine Bezeichnung je Profil, gleich im Einstieg, in den Einstellungen, auf Heute und bei den Tipps
+  const ACCESS_LABEL = { rollstuhl: 'Rollstuhl', rollator: 'Rollator oder Gehhilfe', sehen: 'Ich sehe schlecht oder nichts', hoeren: 'Ich höre schlecht oder nichts', lernen: 'Einfache Sprache', ruhe: 'Ruhe und Pausen', andere: 'Andere Einschränkung' };
   // Zu Fuß ist man einen Weg gegangen, nicht gefahren
   const DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   const WORDS = {
@@ -3361,7 +3362,7 @@
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}${stadt2 ? '<span class="rad-key"><i class="dash dark"></i>Radverkehrsnetz der Stadt</span>' : ''}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig${stadt2 ? '; Radverkehrsnetz: Stadt Bielefeld (Open Data)' : ''}.</p>`);
     }
-    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' für ' + esc(ACCESS_LABEL[settings.access.type]) : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
+    if (mapLayers.acc) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' (Profil: ' + esc(ACCESS_LABEL[settings.access.type]) + ')' : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
     if (mapLayers.tram) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}${stadt2 && stadt2.pr.length ? '<p class="muted">Blaues P+R: Park + Ride mit Anzahl der Plätze (Stadt Bielefeld).</p>' : ''}`);
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayers.lage) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
@@ -5221,9 +5222,9 @@
   // ohne Profil: auf der Tipps-Seite gleich wählen können
   function profPicker() {
     const want = goals().some((g) => g === 'stufenlos' || g === 'blick');
-    return `<section class="tip-prof tip-pick" aria-labelledby="tip-pick-h"><h3 id="tip-pick-h">${ic('access')}Tipps für Menschen mit Behinderung</h3><p>${want ? 'Du hast gesagt, dass dir Barrierefreiheit wichtig ist. ' : ''}Wähle dein Profil, dann zeigt Flowtown dir hier Haltestellen ohne Stufen, Ampeln mit Tonsignal, Toiletten und Hinweise an deinen Zielen.</p><div class="acc-chips" role="group" aria-label="Profil wählen">${Object.keys(ACCESS_LABEL).filter((k) => k !== 'andere').map((k) => `<button type="button" class="acc-chip" data-tipacc="${k}">${esc(ACC_SHORT[k] || ACCESS_LABEL[k])}</button>`).join('')}</div></section>`;
+    return `<section class="tip-prof tip-pick" aria-labelledby="tip-pick-h"><h3 id="tip-pick-h">${ic('access')}Tipps für Menschen mit Behinderung</h3><p>${want ? 'Du hast gesagt, dass dir Barrierefreiheit wichtig ist. ' : ''}Wähle dein Profil, dann zeigt Flowtown dir hier Haltestellen ohne Stufen, Ampeln mit Tonsignal, Toiletten und Hinweise an deinen Zielen.</p><button type="button" class="btn" data-profset="1">${ic('access')}Profil wählen</button></section>`;
   }
-  const ACC_SHORT = { rollstuhl: 'Rollstuhl', rollator: 'Rollator', sehen: 'Ich sehe schlecht', hoeren: 'Ich höre schlecht', lernen: 'Einfache Sprache', ruhe: 'Ruhe und Pausen' };
+  const ACC_SHORT = ACCESS_LABEL;
   // ohne Fahrten: schon jetzt etwas zu den Zielen, aus der Verkehrslage
   function zielTips() {
     if (!settings.ziele.length || !lageCache) return [];
@@ -5443,6 +5444,8 @@
 
   function renderLastTrip() {
     $('#today-date').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+    const hr = new Date().getHours();
+    $('#h-start').textContent = hr < 5 ? 'Gute Nacht' : hr < 11 ? 'Guten Morgen' : hr < 18 ? 'Guten Tag' : 'Guten Abend';
     $('#hints').open = !trips.some((x) => !x.demo);   // Hinweise nur offen, solange es noch keine Fahrt gibt
   }
 
@@ -5584,6 +5587,7 @@
     if (n === 2) speak('Schritt 2 von 2: Was darf Flowtown? Verkehrslage laden ist an. Fahrten anonym beitragen und KI-Einschätzung sind aus. Alles lässt sich später ändern. Ganz unten: Los geht es.', { now: true });
     $('#btn-intro-next').textContent = introOnly ? 'Zurück zur App' : 'Weiter';
     $('#w-steps1').hidden = introOnly;
+    $('#w-intro').hidden = !introOnly; $('#w-intro-note').hidden = !introOnly;   // beim ersten Start kurz halten, zum Erklären alles zeigen
     const h = $(n === 1 ? '#h-welcome' : '#h-welcome2');
     h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true });
     window.scrollTo(0, 0);
@@ -5622,7 +5626,7 @@
     store.set('settings', settings);
     renderGoals();
     if (fromWelcome) renderWelcomeAccess();
-    speak(on ? `${GOALS[k].label}: gewählt.${k === 'stufenlos' && !settings.access.on ? ' Wähle darunter dein Profil.' : ''}` : `${GOALS[k].label}: abgewählt.`, { now: true });
+    speak(on ? `${GOALS[k].label}: gewählt.${k === 'stufenlos' && !settings.access.on ? ' Wähle weiter unten dein Profil.' : ''}` : `${GOALS[k].label}: abgewählt.`, { now: true });
   }
   $('#w-goals').addEventListener('click', (ev) => { const b = ev.target.closest('.goal-chip'); if (b) toggleGoal(b.dataset.goal, true); });
   $('#set-goals').addEventListener('click', (ev) => { const b = ev.target.closest('.goal-chip'); if (b) toggleGoal(b.dataset.goal, false); });
@@ -5655,10 +5659,18 @@
     v.querySelector('span').textContent = voiceOn() ? 'Vorlesen und Ansagen sind an' : 'Vorlesen und Ansagen einschalten';
     $$('#w-acc .acc-chip').forEach((b) => b.setAttribute('aria-pressed', String(settings.access.on && settings.access.type === b.dataset.wacc)));
     $('#w-big').checked = !!settings.big;
+    // Profil aufgeklappt, wenn schon eins gewählt ist oder „Ohne Stufen“ bzw. „Ohne Blick aufs Display“ wichtig ist
+    if (settings.access.on || goals().some((g) => g === 'stufenlos' || g === 'blick')) setWelcomeAcc(true);
+    $('#w-acc-h span').textContent = settings.access.on ? `Profil: ${ACCESS_LABEL[settings.access.type]}` : 'Barrierefrei unterwegs? Profil wählen';
   }
+  function setWelcomeAcc(open) {
+    $('#w-acc-body').hidden = !open;
+    $('#w-acc-h').setAttribute('aria-expanded', String(open));
+  }
+  $('#w-acc-h').addEventListener('click', () => setWelcomeAcc($('#w-acc-body').hidden));
   const WELCOME_SAY = 'Willkommen bei Flowtown. Die grüne Welle beginnt bei dir. Weniger warten, besser ankommen, mit Auto, Bus und Bahn, Rad oder zu Fuß. '
     + 'Vor der Fahrt zeigt Flowtown Stau und Baustellen und die beste Verbindung. Unterwegs erkennt die App jeden Halt an der Ampel selbst und sagt dir Wechsel und Hindernisse an. Danach siehst du, wo die Zeit geblieben ist. '
-    + 'Deine Fahrten bleiben auf deinem Handy. Unter diesem Knopf kannst du dein Profil wählen: Rollstuhl, Rollator, Ich sehe schlecht, Ich höre schlecht, Einfache Sprache oder Ruhe und Pausen. Dann tippe auf Weiter.';
+    + 'Deine Fahrten bleiben auf deinem Handy. Darunter wählst du, was dir wichtig ist. Weiter unten kannst du dein Profil wählen: Rollstuhl, Rollator oder Gehhilfe, Ich sehe schlecht oder nichts, Ich höre schlecht oder nichts, Einfache Sprache oder Ruhe und Pausen. Dann tippe auf Weiter.';
   $('#w-voice').addEventListener('click', () => {
     setVoice(!voiceOn());
     renderWelcomeAccess();
@@ -5724,6 +5736,7 @@
   $('#btn-plan-back').addEventListener('click', () => showView('start'));
   $('#tips-body').addEventListener('click', (ev) => {
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
+    if (ev.target.closest('[data-profset]')) { openProfileSettings(); return; }
     const pa = ev.target.closest('[data-tipacc]');
     if (pa) {
       const k = pa.dataset.tipacc;
@@ -5783,14 +5796,13 @@
     applyModeWords(settings.mode);
     renderToday();
   }));
-  // Heute, bei Bus & Bahn und zu Fuß: Profil mit einem Tipp wählen, dazu passende Hinweise
+  // Heute und Planen: eine Zeile zeigt das Profil; gewählt wird es an einer Stelle, unter Mehr → Barrierefrei unterwegs
   let accTipOpen = null;
   function renderAccRow() {
     const group = MODE_GROUP[selectedMode()];
     const show = group === 'oepnv' || group === 'fuss';
-    $('#acc-row').hidden = !show;
-    $$('#acc-row .acc-chip').forEach((b) => b.setAttribute('aria-pressed', String(settings.access.on && settings.access.type === b.dataset.acc)));
-    $('.access-row').hidden = show;   // die alte Zeile unten nur noch bei Auto und Rad
+    const a = settings.access;
+    $('#prof-line-text').innerHTML = a.on ? `Profil: <b>${esc(ACCESS_LABEL[a.type])}</b> · ändern` : 'Barrierefrei? Profil wählen';
     const box = $('#acc-tips');
     if (!show || !settings.access.on) { box.hidden = true; box.innerHTML = ''; return; }
     if (!faq) { loadFaq().then(() => { if (faq) renderAccRow(); }); return; }
@@ -5802,16 +5814,14 @@
       + list.map((e) => `<div class="tipcard" data-world="tip"><button type="button" class="tip-row" data-acctip="${e.id}" aria-expanded="${accTipOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${accTipOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`).join('');
     box.hidden = false;
   }
-  $('#acc-row').addEventListener('click', (ev) => {
-    const b = ev.target.closest('.acc-chip');
-    if (!b) return;
-    const on = !(settings.access.on && settings.access.type === b.dataset.acc);
-    settings.access = { on, type: b.dataset.acc };
-    if (on && b.dataset.acc === 'sehen' && !settings.voice && canSpeak) settings.voice = { on: true, rate: 1 };
-    store.set('settings', settings);
-    applyAccessUI();
-    renderToday();
-  });
+  // springt zur einen Stelle, an der das Profil gewählt wird
+  function openProfileSettings() {
+    showView('more');
+    const d = $('#box-access'); if (!d) return;
+    d.open = true;
+    setTimeout(() => { d.scrollIntoView({ block: 'start' }); $('#set-access').focus({ preventScroll: true }); }, 50);
+  }
+  $('#prof-line').addEventListener('click', openProfileSettings);
   $('#acc-tips').addEventListener('click', (ev) => {
     const t = ev.target.closest('[data-acctip]');
     if (t) { accTipOpen = accTipOpen === t.dataset.acctip ? null : t.dataset.acctip; renderAccRow(); }
@@ -5819,9 +5829,6 @@
   // Profil barrierefrei: auf „Heute“ und in den Einstellungen, beide zeigen immer dasselbe
   function applyAccessUI() {
     const a = settings.access;
-    $('#inp-access').checked = !!a.on;
-    $('#inp-access-type').value = a.type;
-    $('#inp-access-type').hidden = !a.on;
     $('#set-access').value = a.on ? a.type : 'aus';
     $('#set-big').checked = !!settings.big;
     $('#set-voice').checked = voiceOn();
@@ -5830,12 +5837,6 @@
     $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '') + (voiceOn() ? ' · Ansagen' : '');
     document.documentElement.classList.toggle('gross', !!settings.big);
   }
-  const saveAccess = () => {
-    settings.access = { on: $('#inp-access').checked, type: $('#inp-access-type').value };
-    store.set('settings', settings);
-    applyAccessUI();
-    renderToday();
-  };
   $('#set-access').addEventListener('change', (ev) => {
     const v = ev.target.value;
     if (v === 'sehen' && !settings.voice && canSpeak) settings.voice = { on: true, rate: 1 };
@@ -5902,8 +5903,6 @@
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
   $('#btn-voice-test').addEventListener('click', () => speak('In 200 Metern Baustelle, Ravensberger Straße. Fußgänger können die Baustelle auf dem gegenüberliegenden Gehweg passieren.', { now: true, force: true }));
-  $('#inp-access').addEventListener('change', saveAccess);
-  $('#inp-access-type').addEventListener('change', saveAccess);
   $('#btn-end').addEventListener('click', () => { $('#btn-end').hidden = true; $('#btn-end-confirm').hidden = false; $('#btn-end-cancel').hidden = false; $('#btn-end-confirm').focus(); });
   $('#btn-end-cancel').addEventListener('click', () => { resetEndButtons(); $('#btn-end').focus(); });
   $('#btn-end-confirm').addEventListener('click', finishTrip);
