@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.87.0';
+  const VERSION = '0.87.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1381,6 +1381,7 @@
     const sel = document.getElementById('set-voice-name');
     if (!sel) return;
     const want = (settings.voice && settings.voice.name) || '';
+    const lbl = $('#set-voice-label'); if (lbl) lbl.textContent = voicesDe.length ? `Stimme (${voicesDe.length} deutsche auf diesem Gerät)` : 'Stimme';
     sel.innerHTML = `<option value="">Automatisch: ${voiceDe && !want ? esc(voiceLabel(voiceDe)) : 'die beste Stimme'}</option>` + voicesDe.map((v) => `<option value="${esc(v.voiceURI || v.name)}">${esc(voiceLabel(v))}</option>`).join('');
     sel.value = voicesDe.some((v) => (v.voiceURI || v.name) === want) ? want : '';
     // nur Standardstimmen da: zeigen, wie man eine bessere lädt
@@ -1395,7 +1396,12 @@
     hint.hidden = best >= 2;
     hint.innerHTML = `<p><b>Klingt die Stimme blechern?</b> Dein Handy hat bessere, natürlichere Stimmen. Lade einmal eine:</p><p>${esc(how)}</p>`;
   }
-  if (canSpeak) { pickVoice(); speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', pickVoice); }
+  if (canSpeak) {
+    pickVoice();
+    speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', pickVoice);
+    // iPhone: Safari meldet oft erst nur ein, zwei Stimmen und den Rest später, ohne „voiceschanged“. Deshalb einige Male nachfragen.
+    [400, 1200, 3000, 8000].forEach((ms) => setTimeout(() => { if (speechSynthesis.getVoices().filter((v) => /^de/i.test(v.lang)).length !== voicesDe.length) pickVoice(); }, ms));
+  }
   // Text zum Sprechen: Abkürzungen ausschreiben, Zeichen weglassen
   const sayText = (x) => String(x || '').replace(/\s+/g, ' ')
     .replace(/(\d)\s?min\b/g, '$1 Minuten').replace(/(\d)\s?km\/h/g, '$1 Kilometer pro Stunde').replace(/(\d),(\d)\s?km\b/g, '$1 Komma $2 Kilometer').replace(/(\d)\s?km\b/g, '$1 Kilometer')
@@ -6031,6 +6037,9 @@
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
+  // beim Öffnen der Einstellung und vor dem Aufklappen der Liste frisch nachsehen
+  $('#box-access').addEventListener('toggle', () => { if ($('#box-access').open && canSpeak) pickVoice(); });
+  ['focus', 'pointerdown'].forEach((t) => $('#set-voice-name').addEventListener(t, () => { if (canSpeak && speechSynthesis.getVoices().filter((v) => /^de/i.test(v.lang)).length !== voicesDe.length) pickVoice(); }));
   $('#set-voice-name').addEventListener('change', (ev) => {
     settings.voice = Object.assign({ on: voiceOn(), rate: 1 }, settings.voice || {}, { name: ev.target.value || null });
     store.set('settings', settings);
