@@ -1143,3 +1143,20 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 .lw-nums>span,.wk-t{box-shadow:0 1px 3px rgba(21,25,30,.08),0 4px 10px rgba(21,25,30,.06)}
 .wk-t{background:#FFFFFF}
 .tabs{box-shadow:0 6px 14px rgba(21,25,30,.12),0 18px 44px rgba(21,25,30,.20)}
+/* 0.74 mehr Abstand zwischen den Boxen, wie bei aufgeräumten App-Startseiten */
+.view{gap:32px}
+#weg{gap:22px}
+.today-list{gap:12px}
+.tip-list{gap:20px}
+.tip-list .eyebrow{margin-top:14px;margin-bottom:-4px}
+.fd-list{gap:16px}
+.fuer-dich{gap:14px}
+.wk{gap:16px}
+.wk-tiles{gap:12px}
+.lw{gap:18px}
+.lw-nums{gap:12px}
+.tip-help,.tip-acc{gap:16px;padding:20px}
+.entry{gap:20px}
+.card{gap:16px}
+.merk{gap:14px}
+.vf-panel{gap:14px}
