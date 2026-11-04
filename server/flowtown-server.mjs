@@ -1827,7 +1827,7 @@ Regeln:
 - Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
 - Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
-- Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.`;
+- Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Fragen zu einer bestimmten Fahrt (letzte Fahrt, heute früh, gestern) beantwortest du aus „letzte_fahrten“ (die neueste zuerst): Dauer, Gestanden und die Aufteilung übernimmst du wörtlich, ohne zu runden, zu addieren oder umzurechnen; „gestanden_gesamt“ ist die ganze Standzeit, „an_ampeln“ nur der Teil an Ampeln. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
@@ -2013,6 +2013,12 @@ function assistStatsClean(a) {
     woche: { fahrten: n(w.fahrten), ampeln_mit_halt_prozent: n(w.ampeln_mit_halt_prozent), gewartet_min: n(w.gewartet_min) },
     letzte_30_tage: { fahrten: n(l.fahrten), nach_verkehrsmittel: by, gewartet_min: n(l.gewartet_min) },
     haeufigster_weg: h && typeof h === 'object' ? { name: nm(h.name, 80), fahrten: n(h.fahrten), fahrzeit_min: n(h.fahrzeit_min), ampel_warten_min: n(h.ampel_warten_min) } : null,
+    letzte_fahrten: (Array.isArray(a.letzte_fahrten) ? a.letzte_fahrten : []).slice(0, 3).filter((f) => f && typeof f === 'object').map((f) => {
+      const o = {};
+      for (const k of ['tag', 'start_uhr', 'ende_uhr', 'verkehrsmittel', 'dauer', 'gestanden_gesamt', 'an_ampeln', 'an_haltestellen', 'ohne_ampel_stau', 'umstiege', 'laengster_ampelhalt', 'in_bewegung']) if (f[k] != null) o[k] = nm(f[k], 90);
+      o.strecke_km = n(f.strecke_km); o.ampeln_ohne_halt = n(f.ampeln_ohne_halt);
+      return o;
+    }),
     zeitfresser: (Array.isArray(a.zeitfresser) ? a.zeitfresser : []).slice(0, 3).map((z) => ({ ampel: nm(z && z.ampel, 60), halte: n(z && z.halte), vorbei_ohne_halt: n(z && z.vorbei_ohne_halt), warten_s_schnitt: n(z && z.warten_s_schnitt) })),
     tipps: (Array.isArray(a.tipps) ? a.tipps : []).slice(0, 5).map((t) => clip(t, 200).replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen'))
   };

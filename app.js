@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.80.0';
+  const VERSION = '0.81.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1688,10 +1688,72 @@
   // ---------- Assistenz (Stufe 3): freie Fragen, Antwort aus den Flowtown-Daten ----------
   let assistHist = [], assistAct = null, assistBusy = false, assistLast = '';
   // gesprochene Fragen werden immer laut beantwortet, getippte, wenn die Ansagen an sind
+  // ---------- Eine Fahrt genau beschreiben: für „Wie lange habe ich bei der letzten Fahrt gestanden?“ ----------
+  // Dieselben Zahlen wie in der Fahrtbilanz; Zeiten in Worten, damit nichts umgerechnet oder gerundet werden muss
+  function durWords(ms) {
+    const sec = Math.max(0, Math.round(ms / 1000)), h = Math.floor(sec / 3600), m = Math.floor(sec / 60) % 60, x = sec % 60;
+    const w = (n, one, many) => `${n === 1 ? 'eine' : n} ${n === 1 ? one : many}`;
+    if (h) return `${w(h, 'Stunde', 'Stunden')}${m ? ' ' + w(m, 'Minute', 'Minuten') : ''}`;
+    if (m) return `${w(m, 'Minute', 'Minuten')}${x ? ' ' + w(x, 'Sekunde', 'Sekunden') : ''}`;
+    return w(x, 'Sekunde', 'Sekunden');
+  }
+  function tripFacts(t) {
+    const halts = t.events.filter((e) => e.type === 'halt');
+    const sum = (l) => l.reduce((a, e) => a + (e.wait || 0), 0);
+    const amp = halts.filter((e) => e.signal), hst = halts.filter((e) => !e.signal && e.atStop), sonst = halts.filter((e) => !e.signal && !e.atStop);
+    const trs = t.transfers || [];
+    const dauer = (t.end || t.start) - t.start, stand = sum(halts);
+    const longest = amp.slice().sort((a, b) => b.wait - a.wait)[0];
+    const d = new Date(t.start), diff = Math.round((dayStart(Date.now()) - dayStart(t.start)) / 864e5);
+    const tag = diff === 0 ? 'heute' : diff === 1 ? 'gestern' : d.toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+    return {
+      tag, start_uhr: clock(t.start), ende_uhr: clock(t.end || t.start), verkehrsmittel: legChain(t),
+      dauer: durWords(dauer), strecke_km: Math.round(t.distance / 100) / 10,
+      gestanden_gesamt: durWords(stand),
+      an_ampeln: amp.length ? `${durWords(sum(amp))} bei ${amp.length === 1 ? 'einem Halt' : amp.length + ' Halten'}` : 'kein Halt an einer Ampel',
+      ampeln_ohne_halt: t.events.filter((e) => e.type === 'pass').length,
+      an_haltestellen: hst.length ? `${durWords(sum(hst))} bei ${hst.length === 1 ? 'einem Halt' : hst.length + ' Halten'}` : null,
+      ohne_ampel_stau: sonst.length ? `${durWords(sum(sonst))} bei ${sonst.length === 1 ? 'einem Halt' : sonst.length + ' Halten'}` : null,
+      umstiege: trs.length ? `${trs.length}, zusammen ${durWords(sum(trs.map((r) => ({ wait: r.wait }))))}` : null,
+      laengster_ampelhalt: longest ? `${durWords(longest.wait)} an ${/\d+[.,]\d{2,}/.test(labelFor(longest)) ? 'einer Ampel ohne Namen' : labelFor(longest)}` : null,
+      in_bewegung: t.stats && t.stats.movingMs ? durWords(t.stats.movingMs) : null
+    };
+  }
+  const trs1 = (t) => { const r = t.transfers || []; return `${r.length === 1 ? 'ein Umstieg' : r.length + ' Umstiege'} mit zusammen ${durWords(r.reduce((a, x) => a + x.wait, 0))} zu Fuß und Warten`; };
+  function lastTripText(t, frage) {
+    const f = tripFacts(t), standQ = /(gestanden|gewartet|warte|stand|halt|ampel|stau)/.test(cmdNorm(frage || ''));
+    const when = `${f.tag} von ${f.start_uhr} bis ${f.ende_uhr} Uhr, ${f.verkehrsmittel}, ${fmtNum(f.strecke_km, 1)} Kilometer`;
+    const ampQ = /ampel/.test(cmdNorm(frage || ''));
+    const parts = ampQ ? [`An Ampeln hast du bei deiner letzten Fahrt ${f.an_ampeln === 'kein Halt an einer Ampel' ? 'nicht gewartet' : f.an_ampeln.replace(/ bei /, ' gewartet, bei ')}. Gestanden insgesamt ${f.gestanden_gesamt}. Die Fahrt war ${when}, insgesamt ${f.dauer}.`]
+      : standQ ? [`Bei deiner letzten Fahrt hast du ${f.gestanden_gesamt} gestanden. Die Fahrt war ${when}, insgesamt ${f.dauer}.`]
+      : [`Deine letzte Fahrt war ${when}. Insgesamt ${f.dauer}, gestanden hast du ${f.gestanden_gesamt}.`];
+    const det = [f.an_ampeln !== 'kein Halt an einer Ampel' ? `an Ampeln ${f.an_ampeln}` : 'an keiner Ampel', f.an_haltestellen && `an Haltestellen ${f.an_haltestellen}`, f.ohne_ampel_stau && `ohne Ampel, etwa im Stau, ${f.ohne_ampel_stau}`].filter(Boolean);
+    parts.push(`Davon ${det.join(', ')}.`);
+    if (f.umstiege) parts.push(`Dazu ${trs1(t)}.`);
+    if (f.laengster_ampelhalt && t.events.filter((e) => e.type === 'halt' && e.signal).length > 1) parts.push(`Am längsten: ${f.laengster_ampelhalt}.`);
+    if (f.ampeln_ohne_halt) parts.push(`${f.ampeln_ohne_halt} Ampel${f.ampeln_ohne_halt === 1 ? '' : 'n'} ohne Halt.`);
+    return parts.join(' ');
+  }
+  // Fragen zur letzten Fahrt beantwortet die App selbst, genau und ohne KI
+  const LAST_RE = /\b(letzte[nrms]?|vorige[nrms]?|zuletzt|eben|gerade eben)\b/;
+  const LAST_TOPIC = /\b(fahrt|weg|tour|strecke|unterwegs|gefahren|gestanden|gewartet|gestoppt)\b/;
+  const LAST_WHAT = /(gestanden|gewartet|stand|halt|ampel|lange|dauer|zeit|minuten|wie war|unterwegs|gefahren|stau)/;
+  const isLastTripQ = (q) => { const c = cmdNorm(q); return LAST_RE.test(c) && LAST_TOPIC.test(c) && LAST_WHAT.test(c) && !/\b(woche|monat|tage|immer|meistens|schnitt)\b/.test(c); };
+  function answerLastTrip(frage, spoken) {
+    const t = trips.filter((x) => !x.demo).sort((a, b) => b.start - a.start)[0];
+    const msg = t ? lastTripText(t, frage) : 'Ich habe noch keine Fahrt von dir. Tippe auf Losfahren, dann zeichnet Flowtown deine erste Fahrt auf.';
+    assistAct = null; assistLast = msg;
+    showAssist(frage, msg);
+    $('#assist').querySelector('.small.muted:last-child').textContent = 'Aus deinen Fahrten, auf deinem Gerät berechnet. Dieselben Zahlen wie in der Fahrtbilanz.';
+    assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: msg }]).slice(-6);
+    if (spoken || voiceOn()) speak(msg, Object.assign({ now: true, force: true }, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : {}));
+    return true;
+  }
   async function askAssist(frage, spoken) {
     const say = (t, o) => { if (spoken || voiceOn()) speak(t, Object.assign({ now: true, force: true }, o || {})); };
     frage = String(frage || '').trim();
     if (!frage || assistBusy) return;
+    if (isLastTripQ(frage)) { answerLastTrip(frage, spoken); return; }
     if (!settings.assist) {
       const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein ungefährer Standort (auf etwa 100 m gerundet) an den Flowtown-Server und an Mistral (KI-Anbieter, Rechenzentren in der EU). Gespeichert wird nichts. Einverstanden?');
       if (!ok) { speak('Gut, dann ohne Assistenz.', { now: true, force: true }); return; }
@@ -1742,6 +1804,7 @@
       woche: { fahrten: week.length, ampeln_mit_halt_prozent: wag.halts + wag.passes ? Math.round(wag.halts / (wag.halts + wag.passes) * 100) : null, gewartet_min: Math.round(wag.wait / 60000) },
       letzte_30_tage: { fahrten: month.length, nach_verkehrsmittel: by, gewartet_min: Math.round(mag.wait / 60000) },
       haeufigster_weg: weg,
+      letzte_fahrten: real.slice().sort((a, b) => b.start - a.start).slice(0, 3).map(tripFacts).map((f) => Object.assign(f, { laengster_ampelhalt: f.laengster_ampelhalt && f.laengster_ampelhalt.replace(/-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen') })),
       zeitfresser: fresser,
       tipps: computeTips().slice(0, 5).map((t) => `${plain(t.head || t.title)}: ${plain(t.short)}`.replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen').slice(0, 200))
     };
