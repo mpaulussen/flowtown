@@ -1243,3 +1243,5 @@ body[data-view="drive"] .mode-q{color:var(--drive-muted)}
 .pill.red{color:#a32b1f}
 .leaflet-control-attribution a{text-decoration:underline}
 
+/* 0.83.4 iPhone: Doppeltippen vergrößert die Seite nicht mehr (sonst wandert die Menüleiste mit). Mit zwei Fingern zoomen geht weiter. */
+html,body{touch-action:manipulation}
