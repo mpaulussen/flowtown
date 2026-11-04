@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.76.0';
+  const VERSION = '0.77.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4811,7 +4811,7 @@
     const out = anomalyList(list);
     if (!out.length) return null;
     const first = out[0];
-    return { prio: 0, icon: 'alert', cls: 'amber', title: 'Auffällig auf deinen Wegen', cat: 'Ampel', num: durText(first.e.wait),
+    return { prio: 0, icon: 'alert', cls: 'amber', title: 'Auffällig auf deinen Wegen', cat: 'Ampel', num: durText(first.e.wait), act: `<button type="button" class="btn quiet tip-go" data-peek="p" data-name="${esc(labelFor(first.e))}" data-lat="${first.e.lat}" data-lon="${first.e.lon}">${ic('map')}Auf der Karte</button>`,
       short: `${esc(labelFor(first.e))}: ${durText(first.e.wait)} gewartet, sonst Ø ${durText(first.usual)}.`,
       html: `<ul class="facts">${out.slice(0, 3).map((x) => `<li>${ic('light')}<span>${dayLabel(x.e.t)} · ${placeFor(x.e)}</span><b>${durText(x.e.wait)}</b></li>`).join('')}</ul>
         <p class="small muted">Sonst Ø ${out.slice(0, 3).map((x) => durText(x.usual)).join(' bzw. ')}. Baustelle, Sperrung oder Stau?</p>` };
@@ -4865,7 +4865,10 @@
         short = `Mit dem Rad wärst du auf diesem Weg etwa gleich schnell wie ${carMs ? 'mit dem Auto' : 'mit Bus und Bahn'} (geschätzt).`;
         prio = 1;
       }
-      return { prio, icon: prio === 1 ? 'bike' : 'route', title: routeName(g), meta: `Dein Weg · ${g.trips.length}× unterwegs`, short: short || `${g.trips.length}× unterwegs auf diesem Weg.`,
+      const zEnd = settings.ziele.find((z) => dist(z, g.last) <= 300);
+      const act = zEnd ? `<button type="button" class="btn quiet tip-go" data-tipgo="plan" data-z="${zEnd.id}">${ic('route')}${prio === 1 ? 'Mit dem Rad prüfen' : 'Weg zu ' + esc(zEnd.name) + ' prüfen'}</button>`
+        : `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="${esc(routeName(g))}" data-pts="${g.sig.map((id) => { const c = clusterById[id]; return c ? `${c.lat},${c.lon}` : ''; }).filter(Boolean).join(';')}">${ic('map')}Auf der Karte</button>`;
+      return { prio, act, icon: prio === 1 ? 'bike' : 'route', title: routeName(g), meta: `Dein Weg · ${g.trips.length}× unterwegs`, short: short || `${g.trips.length}× unterwegs auf diesem Weg.`,
         head: prio === 1 ? 'Rad ist gleich schnell' : bh.text ? 'Beste Abfahrtszeit' : 'Dein Weg', cat: prio === 1 ? 'Rad' : 'Weg', num: prio === 1 ? `${Math.max(1, Math.round(bikeMs / 60000))} min` : bh.text ? `${bh.best}–${bh.best + 1} Uhr` : `${g.trips.length}×`,
         html: `${bh.text ? `<p class="tip">${ic('bulb')}<span>${bh.text}</span></p>` : ''}${prio === 1 ? `<p class="tip">${ic('bike')}<span>${short}</span></p>` : ''}<div class="alt">${rows.join('')}</div>` };
     });
@@ -4876,7 +4879,9 @@
     const top = ag.approaches.filter((x) => x.halts).sort((x, y) => y.wait - x.wait).slice(0, 3);
     const share = top.reduce((x, y) => x + y.wait, 0) / ag.wait;
     const what = top.length === 1 ? 'eine Ampel' : `${top.length} Ampeln`;
+    const tpts = top.map((x) => `${x.sample.lat},${x.sample.lon}`).join(';');
     return { prio: 2, icon: 'hourglass', cls: 'bad', title: 'Deine größten Zeitfresser', cat: 'Ampeln', num: fmtPct(share),
+      act: `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="Deine größten Zeitfresser" data-meta="${top.length} Ampeln mit der meisten Wartezeit" data-pts="${tpts}">${ic('map')}Auf der Karte</button>`,
       short: `${fmtPct(share)} deiner Wartezeit an Ampeln entfallen auf ${what}.`,
       html: `<p>${fmtPct(share)} deiner Wartezeit an Ampeln entfallen auf ${what}:</p><ul class="facts">${top.map((x) => { const o = othersAt(x.signal, x.h); return `<li>${ic('light')}<span>${placeFor(x.sample)}${x.h != null ? `<span class="others">Richtung ${esc(dirShort(x.h))}</span>` : ''}${o ? `<span class="others">Andere (${o.n}): ${fmtPct(o.share)} mit Halt, Ø ${durText(o.avg)}</span>` : ''}</span><b>${durText(x.wait)}</b></li>`; }).join('')}</ul>` };
   }
@@ -4898,6 +4903,7 @@
     const best = ws[0], worst = ws[ws.length - 1];
     if (worst.v - best.v < 5000) return null;
     return { prio: 3, icon: 'clock', title: 'Wann es besser fließt', meta: 'Mit dem Auto, Wartezeit je km', cat: 'Zeit', num: '−' + durText(worst.v - best.v),
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="plan">${ic('clock')}Abfahrt planen</button>`,
       short: `${worst.w.label} wartest du je km am längsten, ${best.w.label} am kürzesten.`,
       html: `<ul class="facts">${ws.map((x) => `<li>${ic('clock')}<span>${esc(x.w.label)} <span class="small muted">(${x.n} Fahrten)</span></span><b>${durText(x.v)}</b></li>`).join('')}</ul>` };
   }
@@ -4921,6 +4927,7 @@
     const halts = cs.reduce((x, c) => x + c.halts, 0);
     if (halts < 0.05) return null;
     return { prio: 5, icon: 'euro', cls: 'amber', title: 'Was dich Ampeln kosten', meta: 'Die letzten 30 Tage, geschätzt', cat: 'Kosten', num: fmtEuro(halts),
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="stats">${ic('chart')}Im Verlauf ansehen</button>`,
       short: `Ampelhalte kosteten dich etwa ${fmtEuro(halts)}.`,
       html: `<div class="big-line">${ic('euro')}<span><b>${fmtEuro(halts)}</b> für Leerlauf und Anfahren bei ${cs.length} Autofahrt${cs.length === 1 ? '' : 'en'}</span></div>` };
   }
@@ -4930,25 +4937,130 @@
     return { prio: -1, icon: 'bell', cls: 'amber', title: 'Meldungen für deine Wege', cat: 'Meldung', num: String(ns.length), short: `${esc(ns[0].titel)}${ns.length > 1 ? ` und ${ns.length - 1} weitere Meldung${ns.length > 2 ? 'en' : ''}` : ''}.`,
       html: `<ul class="ki-list">${ns.map((n) => `<li>${ic('bell')}<span><strong>${esc(n.titel)}</strong>${n.text ? `<br>${esc(n.text)}` : ''}${n.quelle ? `<br><span class="small muted">Quelle: ${esc(n.quelle)}${n.bis ? ` · bis ${esc(n.bis)}` : ''}</span>` : ''}</span></li>`).join('')}</ul>` };
   }
-  function computeTips() {
-    const list = trips.filter((t) => !t.demo);
+  function computeTips(mode) {
+    const list = trips.filter((t) => !t.demo && (!mode || mode === 'alle' || MODE_GROUP[t.mode] === mode));
     return [tipNews(), tipAnomalies(list)].concat(tipRoutes(list), [tipTimeEaters(list), tipWindows(list), tipStyle(list), tipCosts(list)])
       .filter(Boolean).sort((x, y) => x.prio - y.prio);
+  }
+  // ---------- Tipps nach Profil (Barrierefreiheit): aus Fahrten, Zielen und offenen Daten ----------
+  const TIP_MODES = [['alle', 'Alle'], ['auto', 'Auto'], ['rad', 'Rad'], ['oepnv', 'Bus & Bahn'], ['fuss', 'Zu Fuß']];
+  let tipMode = null;
+  function tipModeCounts() {
+    const c = {};
+    trips.filter((t) => !t.demo).forEach((t) => { const g = MODE_GROUP[t.mode]; if (g) c[g] = (c[g] || 0) + 1; });
+    return c;
+  }
+  const visitedClusters = (list) => {
+    const seen = new Map();
+    for (const t of list) for (const e of t.events) { const c = e.signal && clusterById[e.signal]; if (c && !seen.has(c.id)) seen.set(c.id, { c, e }); }
+    return [...seen.values()];
+  };
+  const mapBtn = (name, pts, meta) => `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="${esc(name)}"${meta ? ` data-meta="${esc(meta)}"` : ''} data-pts="${pts.map((q) => `${q.lat},${q.lon}`).join(';')}">${ic('map')}Auf der Karte</button>`;
+  const niceName = (e) => { const n = labelFor(e); return /\d+[.,]\d{3}/.test(n) ? 'Ampel ohne Namen' : n; };
+  function profileTips(list) {
+    if (!settings.access.on) return [];
+    const type = settings.access.type, out = [];
+    const mob = type === 'rollstuhl' || type === 'rollator';
+    // 1. zweimal warten an derselben Ampel zu Fuß: die Grünphase reicht nicht für die ganze Straße
+    if (mob || type === 'andere' || type === 'ruhe') {
+      const by = {};
+      for (const t of list) for (const e of t.events) {
+        if (e.type !== 'halt' || !e.signal || e.queued || (e.halts || 1) < 2) continue;
+        if (!(e.mode === 'fuss' || t.mode === 'fuss')) continue;
+        const x = by[e.signal] || (by[e.signal] = { n: 0, e, trips: new Set() });
+        x.n++; x.trips.add(t.id);
+      }
+      const two = Object.values(by).sort((a, b) => b.n - a.n);
+      if (two.length) out.push({ icon: 'light', head: `Zweimal warten: ${niceName(two[0].e)}`, text: `${two[0].trips.size === 1 ? 'Auf einem Weg' : `Auf ${two[0].trips.size} Wegen`} musstest du hier mitten auf der Straße ein zweites Mal warten. Die Grünphase reicht nicht für die ganze Querung.${settings.server.wir ? ' Deine Messung zeigt das der Stadt.' : ' Wenn du Fahrten anonym teilst, sieht das auch die Stadt.'}${two.length > 1 ? ` Auch an ${two.length - 1} weiteren Ampel${two.length > 2 ? 'n' : ''}.` : ''}`, act: mapBtn('Zweimal warten', two.slice(0, 5).map((x) => x.e), 'Ampeln, an denen du mitten auf der Straße erneut wartest'), prio: 1 });
+    }
+    // 2. Haltestellen ohne Hochbahnsteig an deinen Zielen und wo du gewartet hast
+    if (mob && fp) {
+      const places = settings.ziele.map((z) => ({ lat: z.lat, lon: z.lon, z }));
+      for (const t of list) for (const e of t.events) if (e.type === 'halt' && e.atStop) places.push({ lat: e.lat, lon: e.lon });
+      const checked = new Set(), bad = [];
+      for (const q of places.slice(0, 60)) {
+        const idx = fpStopsNear(q, q.z ? 400 : 80, 0);
+        for (const i of idx) {
+          const name = fp.stops[i][1].replace(/^Bielefeld,\s*/, '');
+          if (checked.has(name)) continue;
+          checked.add(name);
+          const info = stopInfo([fp.stops[i][2], fp.stops[i][3]], 'bahn');
+          if (info && info.ok === 0) bad.push({ name, lat: fp.stops[i][2], lon: fp.stops[i][3], z: q.z });
+        }
+      }
+      if (bad.length) {
+        const b = bad[0];
+        // nächster stufenloser Einstieg in der Nähe
+        let alt = null, ad = 900;
+        fp.stops.forEach((st, i) => {
+          const d = dist(b, { lat: st[2], lon: st[3] });
+          if (d < ad && d > 30 && fp.kindOf && fp.kindOf[i] && fp.kindOf[i].has(0)) { const inf = stopInfo([st[2], st[3]], 'bahn'); if (inf && inf.ok === 1) { ad = d; alt = { name: st[1].replace(/^Bielefeld,\s*/, ''), d }; } }
+        });
+        out.push({ icon: 'tram', head: `Kein Hochbahnsteig: ${b.name}`, text: `${b.z ? `Bei deinem Ziel ${b.z.name}` : 'Auf deinen Wegen'} liegt die Haltestelle ${b.name} ohne stufenlosen Einstieg.${alt ? ` Stufenlos geht es an ${alt.name}, etwa ${roundM(alt.d)} m entfernt.` : ''}${bad.length > 1 ? ` Dazu ${bad.length - 1} weitere.` : ''}`, act: mapBtn('Haltestellen ohne Hochbahnsteig', bad.slice(0, 6)), prio: 2 });
+      }
+    }
+    // 3. an deinen Zielen: rollstuhlgerechte Toilette und Behindertenparkplatz
+    if (mob && settings.ziele.length) {
+      const rows = [];
+      for (const z of settings.ziele.slice(0, 4)) {
+        const wc = ((bfData && bfData.wc) || []).filter((w) => w[2] === 1).map((w) => ({ w, d: dist(z, { lat: w[0], lon: w[1] }) })).filter((x) => x.d <= 400).sort((a, b) => a.d - b.d)[0];
+        const pk = bppNear(z.lat, z.lon, 400)[0];
+        if (wc || pk) rows.push(`<b>${esc(z.name)}</b>: ${[wc && `rollstuhlgerechte Toilette ${roundM(wc.d)} m`, pk && `Behindertenparkplatz ${roundM(pk.d)} m`].filter(Boolean).join(', ')}`);
+      }
+      if (rows.length) out.push({ icon: 'pin', head: 'An deinen Zielen', html: rows.join('<br>'), act: `<button type="button" class="btn quiet tip-go" data-tipgo="mapacc">${ic('map')}Barrierefrei auf der Karte</button>`, prio: 3 });
+    }
+    // 4. Sehen: Ampeln ohne Tonsignal auf deinen Wegen; Hören: Ampeln mit Vibration
+    if (type === 'sehen' || type === 'hoeren') {
+      const vis = visitedClusters(list);
+      const key = type === 'sehen' ? 'sound' : 'vib', word = type === 'sehen' ? 'Tonsignal' : 'Vibration';
+      const yes = vis.filter((x) => accOf(x.c)[key] === 'yes'), no = vis.filter((x) => accOf(x.c)[key] === 'no'), unk = vis.length - yes.length - no.length;
+      if (vis.length) out.push({ icon: type === 'sehen' ? 'sound' : 'light', head: `${word} an deinen Ampeln`, prio: 1,
+        text: `${yes.length} von ${vis.length} Ampeln auf deinen Wegen haben ${type === 'sehen' ? 'ein Tonsignal' : 'eine Vibration am Taster'}${no.length ? `, ${no.length} nicht${(() => { const nm = [...new Set(no.map((x) => niceName(x.e)))].filter((v) => v !== 'Ampel ohne Namen'); return nm.length && nm.length <= 2 ? ': ' + nm.join(', ') : ''; })()}` : ''}.${unk ? ` Bei ${unk} ist es nicht erfasst. Nach dem nächsten Weg zu Fuß fragt Flowtown kurz nach.` : ''}`,
+        act: no.length ? mapBtn(`Ampeln ohne ${word}`, no.slice(0, 8).map((x) => x.c)) : '' });
+      if (type === 'sehen') out.push({ icon: 'mic', head: begleitOn() ? 'Begleitmodus ist an' : 'Begleitmodus zu Fuß', prio: 4,
+        text: begleitOn() ? 'Zu Fuß kündigt Flowtown Ampeln an, sagt Richtungen als Uhrzeit und warnt bei falscher Richtung. Frag jederzeit: Wo bin ich?' : 'Flowtown kann dich zu Fuß begleiten: Ampeln mit Ausstattung, Richtungen als Uhrzeit, Warnung bei falscher Richtung.',
+        act: `<button type="button" class="btn quiet tip-go" data-tipgo="wo">${ic('mic')}Wo bin ich?</button>` });
+    }
+    return out.sort((a, b) => a.prio - b.prio);
+  }
+  // ohne Fahrten: schon jetzt etwas zu den Zielen, aus der Verkehrslage
+  function zielTips() {
+    if (!settings.ziele.length || !lageCache) return [];
+    const out = [];
+    for (const z of settings.ziele.slice(0, 4)) {
+      const it = (lageCache.items || []).find((x) => Array.isArray(x.pts) && x.pts.some((q) => dist(z, { lat: q[0], lon: q[1] }) <= 300));
+      if (it) out.push({ icon: 'alert', head: `${cap(LAGE_LABEL[it.art] || 'Meldung')} bei ${z.name}`, text: it.titel || it.text || '', act: `<button type="button" class="btn quiet tip-go" data-tipgo="plan" data-z="${z.id}">${ic('route')}Weg prüfen</button>` });
+    }
+    return out;
   }
   // Tipps: je Tipp eine Zeile mit Titel, einem Satz und der Wirkung als Marke; Einzelheiten beim Antippen
   let tipOpen = null;
   // Farben der Tipps: blau, was beim Planen hilft (Weg, Zeit, Alternativen); grün, was Ampeln und Fahrweise betrifft
   const TIP_WORLD = { Ampeln: 'red', Ampel: 'hist', Kosten: 'red', Meldung: 'hist', Weg: 'plan', Rad: 'plan', Zeit: 'plan', Fahrweise: 'go' };
   function renderTips() {
-    const tips = computeTips();
+    const counts = tipModeCounts(), used = Object.keys(counts);
+    if (!tipMode || (tipMode !== 'alle' && !counts[tipMode])) tipMode = used.length > 1 ? used.sort((a, b) => counts[b] - counts[a])[0] : 'alle';
+    const tips = computeTips(tipMode);
     const n = trips.filter((t) => !t.demo).length;
-    $('#tips-small').textContent = tips.length ? `${tips.length} für dich, aus ${n} Fahrt${n === 1 ? '' : 'en'}. Tippe für Einzelheiten.` : `Noch zu wenig Daten (${n} Fahrt${n === 1 ? '' : 'en'}).`;
-    const card = (x, i) => `<div class="tipcard${i === 0 ? ' tip-top' : ''}" data-world="${TIP_WORLD[x.cat] || 'tip'}"><button type="button" class="tip-row" data-tip="${i}" aria-expanded="${tipOpen === i}"><span class="tip-ic">${ic(x.icon)}</span><span class="tip-main">${i === 0 && tips.length > 1 ? '<em class="tip-kick">Wichtigster Tipp</em>' : ''}<b>${x.head || plain(x.title)}</b><span>${plain(x.short)}</span></span>${x.num ? `<span class="tip-num">${x.num}</span>` : ''}</button>${tipOpen === i ? `<div class="tip-detail">${x.html}</div>` : ''}</div>`;
+    const real = trips.filter((t) => !t.demo);
+    const prof = profileTips(real), zt = n ? [] : zielTips();
+    const easy = settings.access.on && settings.access.type === 'lernen';
+    $('#tips-small').textContent = tips.length ? `${tips.length} für dich, aus ${n} Fahrt${n === 1 ? '' : 'en'}. Tippe für Einzelheiten.` : n ? 'Mit diesem Verkehrsmittel noch zu wenig Fahrten.' : 'Noch keine Fahrten. Schon jetzt für dich:';
+    const card = (x, i) => `<div class="tipcard${i === 0 ? ' tip-top' : ''}" data-world="${TIP_WORLD[x.cat] || 'tip'}"><button type="button" class="tip-row" data-tip="${i}" aria-expanded="${tipOpen === i}"><span class="tip-ic">${ic(x.icon)}</span><span class="tip-main">${i === 0 && tips.length > 1 ? '<em class="tip-kick">Wichtigster Tipp</em>' : ''}<b>${x.head || plain(x.title)}</b><span>${plain(x.short)}</span></span>${x.num ? `<span class="tip-num">${x.num}</span>` : ''}</button>${tipOpen === i ? `<div class="tip-detail">${x.html}</div>` : ''}${x.act ? `<div class="tip-act">${x.act}</div>` : ''}</div>`;
+    const pcard = (x) => `<div class="prof-tip"><span class="prof-ic">${ic(x.icon)}</span><div><b>${esc(x.head)}</b><p>${x.html || esc(x.text || '')}</p>${x.act ? `<div class="tip-act">${x.act}</div>` : ''}</div></div>`;
     const news = '';   // Meldungen erscheinen nur, wenn es welche für die eigenen Wege gibt
-    $('#tips-body').innerHTML = (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${tips.map(card).join('')}`
+    const sw = used.length > 1 ? `<div class="seg pill tip-modes" role="group" aria-label="Tipps nach Verkehrsmittel">${TIP_MODES.filter(([k]) => k === 'alle' || counts[k]).map(([k, l]) => `<button type="button" data-tipmode="${k}" aria-pressed="${tipMode === k}">${l}</button>`).join('')}</div>` : '';
+    const profBox = settings.access.on ? `<section class="tip-prof" aria-labelledby="tip-prof-h"><h3 id="tip-prof-h">${ic('access')}Für dich: ${esc(ACCESS_LABEL[settings.access.type])}</h3>${prof.length ? prof.slice(0, easy ? 2 : 4).map(pcard).join('') : `<p class="small">Sobald du Wege mit Flowtown gemacht oder Ziele gespeichert hast, stehen hier Hinweise für dein Profil: Hindernisse, Haltestellen, Ampeln.</p>`}</section>` : '';
+    const top = easy ? 3 : 3, first = tips.slice(0, top), rest = easy ? [] : tips.slice(top);
+    $('#tips-body').innerHTML = profBox + sw + (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${first.map(card).join('')}${rest.length ? `<details class="more-box tip-more"${tipOpen != null && tipOpen >= top ? ' open' : ''}><summary>${ic('list')}Weitere Tipps (${rest.length})</summary><div class="tip-list">${rest.map((x, j) => card(x, j + top)).join('')}</div></details>` : ''}`
+      : zt.length ? `<h3 class="eyebrow">Schon jetzt für deine Ziele</h3><section class="tip-prof plain">${zt.map(pcard).join('')}</section>`
       : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
       + (() => { const f = faqCards(), k = kiCard(); return (f ? `<div class="tip-acc">${f}</div>` : '') + (k ? `<div class="tip-help"><h3 class="eyebrow">Mehr Hilfe</h3>${k}</div>` : ''); })() + news;
     if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
+    if (settings.access.on && !tipsProfLoading && ['rollstuhl', 'rollator'].includes(settings.access.type) && (!bpp || !bfData || !fp)) {
+      tipsProfLoading = true;
+      Promise.allSettled([bpp ? 0 : loadBpp(), bfData ? 0 : loadBf(), fp ? 0 : loadFahrplan()]).then((r) => { if (r.some((x) => x.value) && !$('#view-tips').hidden) renderTips(); });
+    }
     requestNames([].concat(...trips.map((t) => t.events.filter((e) => e.signal))), () => { if (!$('#view-tips').hidden) renderTips(); });
     // Werte anderer und Meldungen nachladen, dann einmal neu zeichnen
     if (!tipsLoading && apiBase() && (Date.now() - newsAt > 600000 || (settings.server.wir && Date.now() - wirAt > 600000))) {
@@ -4956,7 +5068,7 @@
       Promise.all([loadNews(), loadWir()]).then(() => { if (!$('#view-tips').hidden) renderTips(); }).finally(() => { tipsLoading = false; });
     }
   }
-  let tipsLoading = false;
+  let tipsLoading = false, tipsProfLoading = false;
   // ---------- KI-Einschätzung ----------
   const kiState = { busy: false, error: '', result: store.get('ki', null) };
   // Ampelnamen im KI-Text antippbar machen: nur genaue Treffer, längste Namen zuerst
@@ -5397,6 +5509,17 @@
   $('#btn-plan-back').addEventListener('click', () => showView('start'));
   $('#tips-body').addEventListener('click', (ev) => {
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
+    const m = ev.target.closest('[data-tipmode]');
+    if (m) { tipMode = m.dataset.tipmode; tipOpen = null; renderTips(); return; }
+    const go = ev.target.closest('[data-tipgo]');
+    if (go) {
+      const k = go.dataset.tipgo;
+      if (k === 'plan') { if (go.dataset.z) openPlan(go.dataset.z); else showView('plan'); }
+      else if (k === 'stats') showView('stats');
+      else if (k === 'mapacc') { mapLayers.acc = true; mapLayers.tram = true; settings.mapLayers = mapLayers; store.set('settings', settings); showView('map'); }
+      else if (k === 'wo') { unlockSpeech(); whereAmI(true); }
+      return;
+    }
     const t = ev.target.closest('.tip-row[data-tip]');
     if (t) { const i = Number(t.dataset.tip); tipOpen = tipOpen === i ? null : i; renderTips(); }
     const fq = ev.target.closest('.tip-row[data-faq]');

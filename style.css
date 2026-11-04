@@ -1170,3 +1170,28 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 .tip-help .tipcard,.tip-acc .tipcard,.tip-help .card,.lw-nums>span,.wk-t{box-shadow:0 0 0 1px rgba(21,25,30,.05),0 1px 2px rgba(21,25,30,.13),0 2px 5px rgba(21,25,30,.09)}
 .tabs{box-shadow:0 0 0 1px rgba(21,25,30,.06),0 2px 4px rgba(21,25,30,.15),0 6px 16px rgba(21,25,30,.17)}
 .ask-bar{box-shadow:0 1px 2px rgba(21,25,30,.12),0 3px 7px rgba(21,25,30,.10)}
+/* 0.77 Tipps: Umschalter, Profil, Handlungsknöpfe */
+.tip-modes{flex-wrap:wrap;align-self:flex-start;max-width:100%}
+.tip-modes button{min-height:44px;padding:4px 15px;font-size:15px}
+.tip-act{display:flex;flex-wrap:wrap;gap:8px;padding:0 18px 16px}
+.tip-go{min-height:44px;display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:700;padding:6px 14px;border-radius:999px}
+.tip-go .ic{width:18px;height:18px}
+.tip-prof{background:var(--acc-bg);border:1px solid var(--acc-line);border-radius:28px;padding:20px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.tip-prof h3{margin:0;display:flex;align-items:center;gap:10px;font-family:var(--display);font-size:20px;color:var(--acc-ink)}
+.tip-prof h3 .ic{width:26px;height:26px;color:var(--acc)}
+.tip-prof>p{margin:0;color:var(--acc-ink)}
+.prof-tip{display:flex;gap:14px;align-items:flex-start;background:var(--surface);border-radius:20px;padding:16px;box-shadow:var(--shadow)}
+.prof-ic{flex:none;width:40px;height:40px;border-radius:50%;background:var(--acc);color:#fff;display:grid;place-items:center}
+.prof-ic .ic{width:22px;height:22px}
+.prof-tip>div{flex:1;min-width:0}
+.prof-tip b{display:block;font-size:17px;color:var(--acc-ink);line-height:1.3}
+.prof-tip p{margin:4px 0 0;font-size:15px;line-height:1.45}
+.prof-tip .tip-act{padding:10px 0 0}
+.tip-prof.plain{background:var(--tint);border-color:transparent}
+.tip-prof.plain .prof-ic{background:var(--accent)}
+.tip-prof.plain .prof-tip b{color:var(--fg)}
+.tip-more{background:var(--surface);border:0;border-radius:22px;box-shadow:var(--shadow);padding:6px 16px}
+.tip-more>summary{min-height:48px;display:flex;align-items:center;gap:10px;font-weight:700;cursor:pointer}
+.tip-more>summary .ic{width:20px;height:20px}
+.tip-more .tip-list{display:flex;flex-direction:column;gap:16px;padding:6px 0 14px}
+.prof-tip p b{display:inline;font-size:inherit}
