@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.83.1';
+  const VERSION = '0.83.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -5861,9 +5861,8 @@
     $('#set-voice').checked = voiceOn();
     $('#set-voice-rate').value = String((settings.voice && settings.voice.rate) || 1);
     $('#box-voice').hidden = !canSpeak;
-    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '') + (voiceOn() ? ' · Ansagen' : '') + (settings.theme === 'light' || settings.theme === 'dark' ? ' · ' + (settings.theme === 'light' ? 'hell' : 'dunkel') : '');
+    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '') + (voiceOn() ? ' · Ansagen' : '');
     document.documentElement.classList.toggle('gross', !!settings.big);
-    applyTheme();
   }
   $('#set-access').addEventListener('change', (ev) => {
     const v = ev.target.value;
@@ -5873,20 +5872,6 @@
     applyAccessUI();
   });
   $('#set-big').addEventListener('change', (ev) => { settings.big = ev.target.checked; store.set('settings', settings); applyAccessUI(); });
-  // Darstellung: wie am Handy, immer hell oder immer dunkel
-  function applyTheme() {
-    const t = settings.theme === 'light' || settings.theme === 'dark' ? settings.theme : 'auto';
-    const html = document.documentElement;
-    if (t === 'auto') delete html.dataset.theme; else html.dataset.theme = t;
-    const cs = document.querySelector('meta[name="color-scheme"]');
-    if (cs) cs.content = t === 'auto' ? 'light dark' : t;
-    document.querySelectorAll('meta[name="theme-color"]').forEach((m) => {
-      if (!m.dataset.orig) m.dataset.orig = m.content;
-      m.content = t === 'auto' ? m.dataset.orig : (t === 'dark' ? '#0e1311' : '#f7f7f5');
-    });
-    $('#set-theme').value = t;
-  }
-  $('#set-theme').addEventListener('change', (ev) => { settings.theme = ev.target.value; store.set('settings', settings); applyAccessUI(); });
   function updateVoiceBtn() {
     const b = $('#btn-voice');
     if (!b) return;
