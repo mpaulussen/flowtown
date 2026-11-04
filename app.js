@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.84.0';
+  const VERSION = '0.85.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3718,16 +3718,39 @@
   // Frag Flowtown oben auf den Hauptseiten, mit einem kurzen Beispiel, das zur Seite passt
   const ASK_EX = { start: 'Nächste Bahn?', plan: 'Rollstuhl-WC?', tips: 'Park + Ride?', stats: 'Baustellen?' };
   const ASK_EX_MINE = { tips: 'Mein Zeitfresser?', stats: 'Wo warte ich lange?' };   // mit eingeschalteter Auswertung
+  // KI-Karte je Seite: Überschrift, ein Satz, Beispielfragen. Fragen zu eigenen Fahrten nur, wenn die Auswertung mitgehen darf;
+  // „letzte Fahrt“ beantwortet die App immer selbst
+  const ASK_HERO = {
+    start: { title: 'KI, die mit dir spricht', sub: 'Frag nach Bus und Bahn, Stau oder deinen Fahrten. Flowtown antwortet sofort, getippt oder gesprochen.',
+      ex: [['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['Stau auf meinen Wegen?', 'Gibt es Stau auf meinen Wegen?'], ['Wo verliere ich Zeit?', 'Wo verliere ich die meiste Zeit?']] },
+    tips: { title: 'KI-Tipps für deine Wege', sub: 'Frag, wann du am besten losfährst, was sich lohnt und wo es Alternativen gibt.',
+      mine: [['Mein größter Zeitfresser?', 'Was ist mein größter Zeitfresser?'], ['Wann am besten los?', 'Wann fahre ich auf meinen Wegen am besten los?'], ['Lohnt sich das Rad?', 'Lohnt sich auf meinen Wegen das Rad?']],
+      ex: [['Wann ist wenig Verkehr?', 'Wann ist in Bielefeld am wenigsten Verkehr?'], ['Park + Ride?', 'Wo gibt es Park + Ride in Bielefeld?'], ['Lohnt sich das Rad?', 'Lohnt sich das Rad in Bielefeld?']] },
+    stats: { title: 'KI-Analyse deiner Fahrten', sub: 'Frag nach Wartezeiten, Ampeln und deinen Wochen. Flowtown rechnet mit deinen Fahrten.',
+      always: [['Letzte Fahrt: wie lange gestanden?', 'Wie lange stand ich bei der letzten Fahrt?']],
+      mine: [['Wo warte ich am längsten?', 'An welcher Ampel warte ich am längsten?'], ['Wie war meine Woche?', 'Wie war meine Woche im Vergleich?']],
+      ex: [['Baustellen heute?', 'Gibt es heute Baustellen in Bielefeld?']] }
+  };
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
+    const hero = ASK_HERO[name];
     $('#ask-wrap').hidden = !on;
     if (on) {
-      const slot = $('#ask-slot-' + name), w = $('#ask-wrap');
-      if (slot && w.parentNode !== slot) slot.appendChild(w);
+      const slot = $('#ask-slot-' + name), w = $('#ask-wrap'), card = $('#ask-hero');
+      if (hero) {
+        if (card.parentNode !== slot) slot.appendChild(card);
+        if (w.parentNode !== $('#ask-hero-field')) $('#ask-hero-field').appendChild(w);
+        const mine = !!settings.assistStats;
+        const ex = (hero.always || []).concat(mine && hero.mine ? hero.mine : hero.ex);
+        $('#ask-hero-title').textContent = hero.title;
+        $('#ask-hero-sub').textContent = hero.sub;
+        $('#ask-ex').innerHTML = ex.map(([label, q]) => `<button type="button" class="ask-ex-chip" data-askex="${esc(q)}">${esc(label)}</button>`).join('');
+        $('#ask-allow').hidden = mine || !hero.mine;
+      } else if (slot && w.parentNode !== slot) slot.appendChild(w);
       $('#ask-inp').placeholder = 'Frag Flowtown: ' + ((settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
     }
     $('#ask-mic').hidden = !SR;
-    $('#ask-hero').hidden = !(on && name === 'start');   // auf Heute: Feld in eigener Karte mit Beispielfragen
+    $('#ask-hero').hidden = !(on && hero);
     // ein Mikrofon genügt: steht das Feld da, sitzt es im Feld statt oben in der Leiste
     const hm = $('#btn-mic'); if (hm) hm.hidden = !SR || on;
   }
@@ -5924,6 +5947,12 @@
   $('#ask-mic').addEventListener('click', () => listen());
   // Beispielfragen auf Heute: ein Tipp stellt die Frage
   $('#ask-hero').addEventListener('click', (ev) => {
+    if (ev.target.closest('#ask-allow')) {
+      showView('more');
+      const d = $('#box-server'); if (d) d.open = true;
+      setTimeout(() => { const c = $('#inp-ask-stats'); if (c) { c.scrollIntoView({ block: 'center' }); c.focus({ preventScroll: true }); } }, 50);
+      return;
+    }
     const b = ev.target.closest('[data-askex]');
     if (!b) return;
     $('#ask-inp').value = b.dataset.askex;

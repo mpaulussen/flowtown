@@ -145,15 +145,18 @@
       <p class="eyebrow" id="today-date"></p>
       <h2 id="h-start" class="greet">Hallo!</h2>
     </header>
-    <section class="ask-hero" id="ask-hero" aria-labelledby="ask-hero-h" hidden>
-      <h3 class="ask-hero-kick" id="ask-hero-h"><span class="ask-hero-ic" aria-hidden="true"><svg class="ic"><use href="#i-spark"/></svg></span>KI, die mit dir spricht</h3>
-      <p class="ask-hero-sub">Frag nach Bus und Bahn, Stau oder deinen Fahrten. Flowtown antwortet sofort, getippt oder gesprochen.</p>
     <div class="ask-slot" id="ask-slot-start">
-      <!-- Frag Flowtown: ein Feld, wandert unter den ersten Absatz von Heute, Wohin?, Tipps und Verlauf -->
+      <!-- Frag Flowtown: eine Karte mit Feld und Beispielfragen, wandert auf Heute, Tipps und Verlauf; auf Wohin? nur das Feld -->
+    <section class="ask-hero" id="ask-hero" aria-labelledby="ask-hero-h" hidden>
+      <h3 class="ask-hero-kick" id="ask-hero-h"><span class="ask-hero-ic" aria-hidden="true"><svg class="ic"><use href="#i-spark"/></svg></span><span id="ask-hero-title">KI, die mit dir spricht</span></h3>
+      <p class="ask-hero-sub" id="ask-hero-sub"></p>
+      <div id="ask-hero-field">
       <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><button type="button" class="ask-mic" id="ask-mic" aria-label="Sprechen statt tippen" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
-    </div>
-      <div class="ask-ex" role="group" aria-label="Beispielfragen"><button type="button" class="ask-ex-chip" data-askex="Wann fährt die nächste Bahn?">Nächste Bahn?</button><button type="button" class="ask-ex-chip" data-askex="Gibt es Stau auf meinen Wegen?">Stau auf meinen Wegen?</button><button type="button" class="ask-ex-chip" data-askex="Wo verliere ich die meiste Zeit?">Wo verliere ich Zeit?</button></div>
+      </div>
+      <div class="ask-ex" id="ask-ex" role="group" aria-label="Beispielfragen"></div>
+      <button type="button" class="ask-allow" id="ask-allow" hidden><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Für Antworten zu deinen Fahrten: Auswertung erlauben</span></button>
     </section>
+    </div>
     <section class="entry go-card" aria-labelledby="h-go">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
     <div id="mode-box" class="mode-box">

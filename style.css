@@ -1259,3 +1259,6 @@ html,body{touch-action:manipulation}
 .ask-ex{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
 .ask-ex::-webkit-scrollbar{display:none}
 .ask-ex-chip{flex:none;white-space:nowrap}
+.ask-allow{font:inherit;font-size:14px;font-weight:700;align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:4px 0;background:none;border:0;color:#173f66;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
+.ask-allow .ic{width:18px;height:18px;flex:none}
+.ask-allow[hidden]{display:none}
