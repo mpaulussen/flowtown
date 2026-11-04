@@ -1262,3 +1262,14 @@ html,body{touch-action:manipulation}
 .ask-allow{font:inherit;font-size:14px;font-weight:700;align-self:flex-start;display:inline-flex;align-items:center;gap:8px;min-height:40px;padding:4px 0;background:none;border:0;color:#173f66;text-decoration:underline;text-underline-offset:3px;cursor:pointer;text-align:left}
 .ask-allow .ic{width:18px;height:18px;flex:none}
 .ask-allow[hidden]{display:none}
+/* 0.86 KI-Karte mit Profil: orange wie alles zur Barrierefreiheit, eigene Fragen je Einschränkung */
+.ask-hero-prof{margin:-2px 0 0;display:flex;align-items:center;gap:6px;font-size:14px;font-weight:700}
+.ask-hero-prof .ic{width:18px;height:18px;flex:none}
+.ask-hero.acc{--ask:var(--acc);background:var(--acc-bg);color:var(--acc-ink)}
+.ask-hero.acc .ask-hero-kick,.ask-hero.acc .ask-hero-sub,.ask-hero.acc .ask-hero-prof,.ask-hero.acc .ask-allow{color:var(--acc-ink)}
+.ask-hero.acc .ask-hero-ic{background:var(--acc)}
+.ask-hero.acc .ask-bar{border-color:var(--acc)}
+.ask-hero.acc .ask-ex-chip{border-color:var(--acc-line);color:var(--acc-ink)}
+.ask-hero.acc .ask-ex-chip:focus-visible{outline-color:var(--acc)}
+.ask-hero.acc .ask-mic{background:color-mix(in srgb,var(--acc) 12%,transparent);color:var(--acc)}
+@media (max-height:740px){.ask-hero-prof{display:none!important}}

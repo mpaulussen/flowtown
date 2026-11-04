@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.85.0';
+  const VERSION = '0.86.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3731,6 +3731,34 @@
       mine: [['Wo warte ich am längsten?', 'An welcher Ampel warte ich am längsten?'], ['Wie war meine Woche?', 'Wie war meine Woche im Vergleich?']],
       ex: [['Baustellen heute?', 'Gibt es heute Baustellen in Bielefeld?']] }
   };
+  // Mit Profil: eigene Fragen je Einschränkung. [Text auf dem Knopf, gestellte Frage]; „mine“ braucht die freigegebene Auswertung.
+  // „Wo bin ich?“ und „Lies mir die Tipps vor“ beantwortet die App selbst.
+  const ASK_ACC = {
+    rollstuhl: {
+      start: [['Stufenlos zur Bahn?', 'Welche Haltestelle in meiner Nähe hat einen stufenlosen Einstieg?'], ['Aufzug gestört?', 'Sind Aufzüge an meinen Haltestellen gerade gestört?'], ['Rollstuhl-WC?', 'Wo ist ein rollstuhlgerechtes WC in der Nähe?']],
+      tips: [['Stufenlos ans Ziel?', 'Wie komme ich stufenlos zu meinen Zielen?'], ['Behindertenparkplatz?', 'Wo gibt es Behindertenparkplätze an meinem Ziel?'], ['Hilfe beim Umsteigen?', 'Wie bekomme ich Hilfe beim Ein- und Umsteigen in der Bahn?']],
+      stats: [['Ampeln zu kurz grün?', 'An welchen Ampeln auf meinen Wegen reicht die Grünphase nicht?']] },
+    rollator: {
+      start: [['Stufenlos zur Bahn?', 'Welche Haltestelle in meiner Nähe hat einen stufenlosen Einstieg?'], ['Ebener Weg?', 'Welcher Weg zu meinem Ziel ist eben, ohne Kopfsteinpflaster?'], ['Pause unterwegs?', 'Wo kann ich mich auf meinem Weg ausruhen?']],
+      tips: [['Stufenlos ans Ziel?', 'Wie komme ich stufenlos zu meinen Zielen?'], ['Aufzug gestört?', 'Sind Aufzüge an meinen Haltestellen gerade gestört?'], ['Toilette am Ziel?', 'Gibt es an meinen Zielen eine barrierefreie Toilette?']],
+      stats: [['Ampeln zu kurz grün?', 'An welchen Ampeln auf meinen Wegen reicht die Grünphase nicht?']] },
+    sehen: {
+      start: [['Wo bin ich?', 'Wo bin ich?'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['Ampel mit Ton?', 'Welche Ampeln in meiner Nähe haben ein Tonsignal?']],
+      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['Ampeln mit Ton am Weg?', 'Welche Ampeln auf meinen Wegen haben ein Tonsignal?'], ['Hilfe beim Umsteigen?', 'Wie bekomme ich Hilfe beim Ein- und Umsteigen in der Bahn?']],
+      stats: [['Ampeln ohne Ton?', 'An welchen Ampeln auf meinen Wegen fehlt ein Tonsignal?']] },
+    hoeren: {
+      start: [['Störungen jetzt?', 'Gibt es gerade Störungen bei Bus und Bahn?'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['Notruf ohne Sprechen?', 'Wie setze ich einen Notruf ohne Sprechen ab?']],
+      tips: [['Umleitungen?', 'Gibt es Umleitungen bei Bus und Bahn auf meinen Wegen?'], ['Hilfe für Hörbehinderte?', 'Welche Hilfe gibt es bei der Bahn für hörbehinderte Fahrgäste?'], ['Notruf ohne Sprechen?', 'Wie setze ich einen Notruf ohne Sprechen ab?']],
+      stats: [] },
+    lernen: {
+      start: [['Wo bin ich?', 'Wo bin ich?'], ['Wann kommt mein Bus?', 'Wann kommt mein Bus? Bitte in einfacher Sprache.'], ['Wie komme ich hin?', 'Wie komme ich zu meinem Ziel? Bitte in einfacher Sprache.']],
+      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['Was mache ich bei Verspätung?', 'Was mache ich, wenn der Bus zu spät ist? Bitte in einfacher Sprache.'], ['Wer kann mir helfen?', 'Wer kann mir unterwegs helfen? Bitte in einfacher Sprache.']],
+      stats: [] },
+    ruhe: {
+      start: [['Wann ist es leer?', 'Wann sind Bus und Bahn auf meinen Wegen am leersten?'], ['Ruhiger Weg?', 'Gibt es einen ruhigeren Weg zu meinem Ziel?'], ['Pause unterwegs?', 'Wo kann ich unterwegs eine Pause machen?']],
+      tips: [['Beste ruhige Zeit?', 'Wann ist auf meinen Wegen am wenigsten los?'], ['Ruhiger Weg?', 'Gibt es einen ruhigeren Weg zu meinem Ziel?'], ['Pause unterwegs?', 'Wo kann ich unterwegs eine Pause machen?']],
+      stats: [] }
+  };
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
     const hero = ASK_HERO[name];
@@ -3741,13 +3769,22 @@
         if (card.parentNode !== slot) slot.appendChild(card);
         if (w.parentNode !== $('#ask-hero-field')) $('#ask-hero-field').appendChild(w);
         const mine = !!settings.assistStats;
-        const ex = (hero.always || []).concat(mine && hero.mine ? hero.mine : hero.ex);
+        const acc = settings.access.on && ASK_ACC[settings.access.type] ? settings.access.type : null;
+        let ex = (hero.always || []).concat(mine && hero.mine ? hero.mine : hero.ex);
+        if (acc) {
+          // Verlauf: Profilfrage braucht die eigenen Fahrten; Heute und Tipps: nur Fragen zum Profil
+          ex = name === 'stats' ? (hero.always || []).concat(mine ? ASK_ACC[acc].stats : [], mine ? hero.mine : hero.ex).slice(0, 3) : ASK_ACC[acc][name];
+        }
+        card.classList.toggle('acc', !!acc);
+        $('#ask-hero-prof').hidden = !acc;
+        $('#ask-hero-prof span').textContent = acc ? 'Für dich: ' + ACCESS_LABEL[acc] : '';
         $('#ask-hero-title').textContent = hero.title;
         $('#ask-hero-sub').textContent = hero.sub;
         $('#ask-ex').innerHTML = ex.map(([label, q]) => `<button type="button" class="ask-ex-chip" data-askex="${esc(q)}">${esc(label)}</button>`).join('');
-        $('#ask-allow').hidden = mine || !hero.mine;
+        $('#ask-allow').hidden = mine || !hero.mine || (acc && name !== 'stats');
       } else if (slot && w.parentNode !== slot) slot.appendChild(w);
-      $('#ask-inp').placeholder = 'Frag Flowtown: ' + ((settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
+      const accEx = hero && settings.access.on && ASK_ACC[settings.access.type] && name !== 'stats' ? ASK_ACC[settings.access.type][name][0][0] : '';
+      $('#ask-inp').placeholder = 'Frag Flowtown: ' + (accEx || (settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
     }
     $('#ask-mic').hidden = !SR;
     $('#ask-hero').hidden = !(on && hero);
