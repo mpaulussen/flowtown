@@ -5,8 +5,9 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Flowtown</title>
 <meta name="description" content="Flowtown – Die grüne Welle beginnt bei dir. Weniger Stopps, weniger Sprit, in der Stadt und auf der Autobahn. Prototyp: zeichnet Halte an Ampeln auf und zeigt, wo du wartest.">
-<meta name="theme-color" content="#f7f7f5">
-<meta name="color-scheme" content="light">
+<meta name="theme-color" content="#f7f7f5" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0e1311" media="(prefers-color-scheme: dark)">
+<meta name="color-scheme" content="light dark">
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon-192.png">
@@ -212,7 +213,7 @@
       <p class="nav-rest" id="nav-rest"></p>
       <button type="button" class="btn nav-re" id="btn-nav-re" hidden><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Strecke neu berechnen</button>
     </div>
-    <div class="drive-map" id="drive-map" aria-hidden="true" hidden></div>
+    <div class="drive-map" id="drive-map" aria-hidden="true" inert hidden></div>
     <div class="drive-state" id="drive-state" role="status" aria-live="polite">Warte auf GPS …</div>
     <div class="speed"><span id="drive-speed">–</span><small>km/h</small></div>
     <p class="dir" id="drive-dir" aria-live="off"></p>
@@ -292,6 +293,7 @@
       <p id="map-status" class="map-status" role="status" aria-live="polite" hidden></p>
       <button id="btn-locate" class="map-locate" type="button" aria-label="Zu meinem Standort"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg></button>
     </div>
+    <details id="map-list" class="card map-list" hidden></details>
     <button id="btn-melden" class="btn" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Hindernis melden</button>
     <p id="map-loc-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="map-legend" class="map-legend small"></div>

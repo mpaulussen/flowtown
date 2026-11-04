@@ -1237,3 +1237,99 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 #view-start .greet{font-size:24px}
 /* kleine Bildschirme: Gruß nur für Screenreader, damit Womit?, Losfahren und Wohin? ohne Scrollen zu sehen sind */
 @media (max-height:740px){#view-start .claim{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}}
+/* Karte als Liste */
+.map-list{padding:12px 16px}
+.map-list>summary{display:flex;align-items:center;gap:8px;min-height:44px;font-weight:700;cursor:pointer}
+.map-list-ol{margin:8px 0 0;padding:0;list-style:none;display:flex;flex-direction:column}
+.map-list-row{font:inherit;width:100%;text-align:left;display:flex;flex-direction:column;gap:2px;padding:10px 4px;min-height:48px;background:none;border:0;border-top:1px solid var(--line);color:var(--fg);cursor:pointer}
+.map-list-row span{font-size:14px;color:var(--muted)}
+/* Kontraste: Unterwegs mit (Aufzeichnung), rote Markierung, Link der Karten-Quelle */
+body[data-view="drive"] .mode-q{color:var(--drive-muted)}
+.pill.red{color:#a32b1f}
+.leaflet-control-attribution a{text-decoration:underline}
+/* 0.82 Dunkelmodus nach Systemeinstellung. Die Aufzeichnung ist ohnehin dunkel. Feste Farben weiter oben werden hier einzeln umgestellt. */
+@media (prefers-color-scheme: dark){
+  :root{
+    --bg:#0e1311; --surface:#19211d; --fg:#e9eeeb; --muted:#a6b0aa; --line:#303a35;
+    --accent:#5fd09b; --on-accent:#0b1712; --tint:#1d3328;
+    --amber:#f0b429; --amber-ink:#f5c860; --amber-tint:#3a2f12;
+    --good:#5fd09b; --warn:#e9a94a; --bad:#ff8a7a; --bad-tint:#3d1f1b; --warn-bg:#3a2f12;
+    --nav:#141a17; --on-nav:#a6b0aa;
+    --w-vor-bg:#1d3328; --w-vor-ink:#8fe0b8; --w-vor-acc:#5fd09b;
+    --w-tip-bg:#1d3328; --w-tip-ink:#8fe0b8; --w-hist-bg:#1d3328; --w-hist-ink:#8fe0b8; --w-map-bg:#1d3328; --w-map-ink:#8fe0b8;
+    --acc:#ffa463; --acc-bg:#33221a; --acc-ink:#ffc49a; --acc-line:#7a4a28;
+    --plan:#8fbff0; --ask:#8fbff0;
+    --shadow:0 0 0 1px rgba(255,255,255,.06),0 2px 6px rgba(0,0,0,.5); --shadow-lift:0 0 0 1px rgba(255,255,255,.08),0 6px 16px rgba(0,0,0,.6);
+    color-scheme:dark;
+  }
+  input,select,textarea{background:var(--surface);color:var(--fg);border-color:var(--line)}
+  .leaflet-popup-content-wrapper,.leaflet-popup-tip{background:var(--surface);color:var(--fg)}
+  .leaflet-container a.leaflet-popup-close-button{color:var(--muted)}
+  .leaflet-control-attribution{background:rgba(25,33,29,.85)!important;color:var(--muted)}
+  .leaflet-control-attribution a{color:var(--accent)}
+  button,label,select,.btn{-webkit-tap-highlight-color:rgba(255,255,255,.1)}
+  .btn.danger{color:var(--on-accent)}
+  .thumbs button[aria-pressed="true"].up{color:var(--on-accent)}
+  .thumbs button[aria-pressed="true"].down{color:var(--on-accent)}
+  .btn.miss[aria-pressed="true"]{color:var(--on-accent)}
+  .entry .switch input:checked+span{color:var(--on-accent)}
+  .seg.pill button[aria-pressed="true"]{color:var(--on-accent)}
+  .layer-chip[aria-pressed="true"]{color:var(--on-accent)}
+  .bf-ja{color:#5fd09b}
+  .bf-nein{color:#ff9a8a}
+  .bf-offen{color:#a6b0aa}
+  .bf-note{color:#b9c2bc}
+  .amp-name .kurz{color:#ff9a8a}
+  .acc-chip[aria-pressed="true"]{color:var(--on-accent)}
+  #btn-melden[aria-pressed="true"]{color:var(--on-accent)}
+  .leg-chip[aria-pressed="true"]{color:var(--on-accent)}
+  .go-ic{color:var(--on-accent)}
+  .plan-card,#view-plan{--w-vor-bg:#1a2a3d;--w-vor-ink:#a9cdf5;--plan:#8fbff0}
+  .plan-card{background-image:radial-gradient(circle at 100% 0,#22344a 0 90px,transparent 91px)}
+  .plan-card .go-ic{color:var(--on-accent)}
+  .btn.plan-go{color:var(--on-accent)}
+  .go-card{--go-bg:#1d3328;--go-ink:#8fe0b8;background-image:radial-gradient(circle at 100% 0,#22402f 0 90px,transparent 91px)}
+  .go-card .switch input:checked+span{color:var(--on-accent)}
+  .go-card .acc-chip[aria-pressed="true"]{color:var(--on-accent)}
+  #view-plan .switch input:checked+span{color:var(--on-accent)}
+  #view-plan .acc-chip[aria-pressed="true"]{color:var(--on-accent)}
+  .bpp .vf-h4 .ic,.bpp summary .ic{color:#8fbff0}
+  .w-voice[aria-pressed="true"]{color:var(--on-accent)}
+  .lw.green{--lw-ink:#8fe0b8}
+  .lw.red{--lw-bg:#3a1f1c;--lw-ink:#ffb3a6}
+  .tipcard[data-world="plan"]{--tb:#1a2a3d;--ti:#a9cdf5}
+  .tipcard.tip-top{background-color:#1a2a3d;--tb:var(--surface);--ti:#a9cdf5;color:#a9cdf5}
+  .tipcard.tip-top .tip-main span{color:#a9cdf5}
+  .tip-kick{color:#8fbff0}
+  .tip-help{background-color:#1a2a3d}
+  .tip-help .eyebrow{color:#a9cdf5}
+  .tip-help .tipcard{--tb:#1a2a3d;--ti:#a9cdf5}
+  .tipcard[data-world="red"]{background-color:#3a1f1c;--tb:var(--surface);--ti:#ff9a8a;border-color:#6b3a33}
+  .tipcard[data-world="red"] .tip-main b{color:#ffb3a6}
+  .tipcard[data-world="red"] .tip-main span{color:#f0c2ba}
+  .tipcard[data-world="red"] .tip-num{border-color:#6b3a33}
+  #box-krise a.tel{color:#ff9a8a}
+  .sos-call{color:var(--on-accent)}
+  .sos-body a.tel{color:#ff9a8a}
+  body[data-view="plan"] .ask-bar{--ask:#8fbff0}
+  .ask-bar .btn{color:var(--on-accent)}
+  .ask-mic.listening{color:var(--on-accent)}
+  .vf-map{background-color:#202824}
+  .acc-chip[aria-pressed="true"],.go-card .acc-chip[aria-pressed="true"],#view-plan .acc-chip[aria-pressed="true"],.w-access .acc-chip[aria-pressed="true"]{color:var(--on-accent)}
+  .w-access .acc-chip:not([aria-pressed="true"]){background-color:var(--surface)}
+  .tip-acc .more-box{background-color:var(--surface)}
+  .layer-chip[data-layer="acc"][aria-pressed="true"]{color:var(--on-accent)}
+  .acc-chip:not([aria-pressed="true"]),.go-card .acc-chip:not([aria-pressed="true"]),#view-plan .acc-chip:not([aria-pressed="true"]){background-color:var(--surface)}
+  .merk .small.muted{color:#d9c2ad}
+  .merk-q{background-color:var(--surface)}
+  .merk-btns .btn{background-color:var(--surface)}
+  .goal-chip.blue{--gc:#8fbff0}
+  .goal-chip[aria-pressed="true"]{color:var(--on-accent)}
+  .fd.blue{--fc:#8fbff0;--fb:#1a2a3d}
+  .wk-t{background-color:#202824}
+  .tabs{background-color:var(--surface)}
+  .tabs button[aria-current="page"],.tabs button[aria-current="page"][data-world]{background-color:#1d3328}
+  .wk-t{background-color:var(--surface)}
+  .prof-ic{color:var(--on-accent)}
+  .pill.red{color:var(--bad)}
+}

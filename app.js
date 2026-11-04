@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.82.0';
+  const VERSION = '0.83.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3303,7 +3303,23 @@
   let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: false }, settings.mapLayers || {});
   const groups = {};
   const mapStatus = (t) => { $('#map-status').textContent = t || ''; $('#map-status').hidden = !t; };
+  // Die Karte als Liste: für Screenreader, ohne Internet und für alle, die lieber lesen als suchen
+  let mapListMarkers = {};
+  function renderMapList() {
+    const box = $('#map-list');
+    if (!box) return;
+    const per = aggregate(trips).per.map((a) => { const n = a.halts + a.passes; return { a, n, avg: a.wait / n / 1000 }; })
+      .filter((x) => x.n > 0).sort((x, y) => y.avg - x.avg);
+    box.hidden = !per.length;
+    if (!per.length) { box.innerHTML = ''; return; }
+    const top = per.slice(0, 15);
+    box.innerHTML = `<summary>${ic('list')}Meine Ampeln als Liste (${per.length})</summary>
+      <p class="small muted">Sortiert nach Wartezeit, die längste zuerst. Tippe auf eine Ampel, um sie auf der Karte zu zeigen.</p>
+      <ol class="map-list-ol">${top.map((x) => `<li><button type="button" class="map-list-row" data-mapsig="${esc(String(x.a.signal))}"><b>${esc(labelFor(x.a.sample))}</b><span>Ø ${Math.round(x.avg)} s Wartezeit · ${fmtPct(x.a.halts / x.n)} mit Halt · ${x.n} ${x.n === 1 ? 'Fahrt' : 'Fahrten'}</span></button></li>`).join('')}</ol>
+      ${per.length > top.length ? `<p class="small muted">Dazu ${per.length - top.length} weitere mit kürzerer Wartezeit.</p>` : ''}`;
+  }
   function renderMap() {
+    renderMapList();
     if (typeof L === 'undefined') { mapStatus('Die Karte braucht eine Internetverbindung.'); return; }
     if (!map) {
       map = L.map('map', { zoomControl: true });
@@ -3319,6 +3335,7 @@
     const fit = [];
     // Meine Ampeln
     groups.signals.clearLayers();
+    mapListMarkers = {};
     if (mapLayers.signals) {
       layer = groups.signals;
       for (const a of aggregate(trips).per) {
@@ -3329,7 +3346,7 @@
           const dn = d.halts + d.passes;
           return `${esc(dirName(d.h) || 'Richtung unbekannt')}: ${dn}× vorbei, ${fmtPct(d.halts / dn)} mit Halt, Ø ${Math.round(d.wait / dn / 1000)} s`;
         }).join('<br>');
-        L.circleMarker([a.lat, a.lon], { radius: 8 + Math.sqrt(avgAll) * 5, color: col, weight: 2, fillColor: col, fillOpacity: 0.45 })
+        mapListMarkers[a.signal] = L.circleMarker([a.lat, a.lon], { radius: 8 + Math.sqrt(avgAll) * 5, color: col, weight: 2, fillColor: col, fillOpacity: 0.45 })
           .bindPopup(`<strong>${esc(labelFor(a.sample))}</strong>${lsaLabel(clusterById[a.signal]) ? `<br><span class="muted">${esc(lsaLabel(clusterById[a.signal]))}</span>` : ''}<br>${n} Fahrten, ${fmtPct(a.halts / n)} mit Halt<br>Ø Wartezeit ${Math.round(avgAll)} s, längste ${fmtS(a.maxWait)}${a.up || a.down ? `<br>Bewertung: ${a.up} gut, ${a.down} schlecht` : ''}${settings.access.on ? `<br>${esc(accText(a.signal))}` : ''}<br><br>${dirLines}`)
           .addTo(layer);
         fit.push([a.lat, a.lon]);
@@ -3741,6 +3758,16 @@
     window.scrollTo(0, 0);
   }
   $$('.tabs button').forEach((b) => b.addEventListener('click', () => showView(b.dataset.view)));
+  $('#map-list').addEventListener('click', (ev) => {
+    const r = ev.target.closest('[data-mapsig]');
+    if (!r) return;
+    const m = mapListMarkers[r.dataset.mapsig];
+    if (!m || !map) { mapStatus('Die Karte ist gerade nicht verfügbar. Die Angaben stehen hier in der Liste.'); return; }
+    if (!mapLayers.signals) return;
+    map.setView(m.getLatLng(), Math.max(map.getZoom(), 16));
+    m.openPopup();
+    $('#map').scrollIntoView({ block: 'center' });
+  });
 
   // ---------- Heute: Verkehrsmittel, eigene Wege, beste Abfahrtszeit ----------
   const heuteOn = () => !$('#view-start').hidden || !$('#view-plan').hidden;
