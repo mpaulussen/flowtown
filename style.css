@@ -1273,3 +1273,6 @@ html,body{touch-action:manipulation}
 .ask-hero.acc .ask-ex-chip:focus-visible{outline-color:var(--acc)}
 .ask-hero.acc .ask-mic{background:color-mix(in srgb,var(--acc) 12%,transparent);color:var(--acc)}
 @media (max-height:740px){.ask-hero-prof{display:none!important}}
+/* 0.87 Stimme wählen; Hinweis, wie man eine bessere lädt */
+.voice-hint{background:var(--acc-bg);color:var(--acc-ink);border-radius:14px;padding:10px 12px;display:flex;flex-direction:column;gap:6px;font-size:15px;line-height:1.4}
+.voice-hint p{margin:0}

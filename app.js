@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.86.0';
+  const VERSION = '0.87.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1363,11 +1363,37 @@
   // Läuft ganz auf dem Gerät; Flowtown schickt dafür nichts an einen Server. Auf dem iPhone erst nach einem Tippen möglich (Start-Knopf).
   const canSpeak = 'speechSynthesis' in window && typeof SpeechSynthesisUtterance !== 'undefined';
   const voiceOn = () => canSpeak && !!(settings.voice && settings.voice.on);
-  let voiceDe = null;
+  let voiceDe = null, voicesDe = [];
+  // Beste deutsche Stimme: Premium und Erweitert (iPhone), Natural und Neural (Android, Windows) vor der kleinen Standardstimme.
+  // Die Spaßstimmen von Apple (Grandma, Rocko …) klingen bewusst künstlich und kommen nur, wenn man sie selbst wählt.
+  const VOICE_FUN = /\b(eddy|flo|grandma|grandpa|oma|opa|reed|rocko|sandy|shelley|albert|bahh|bells|boing|bubbles|cellos|jester|organ|superstar|trinoids|whisper|wobble|zarvox|bad news|good news)\b/i;
+  const voiceQuality = (v) => (/premium/i.test(v.name) ? 3 : /enhanced|erweitert|verbessert|neural|natural|wavenet|studio|hohe qualität|high quality/i.test(v.name + ' ' + v.voiceURI) ? 2 : VOICE_FUN.test(v.name) ? -1 : 0);
+  const voiceScore = (v) => voiceQuality(v) * 10 + (/^de[-_]DE/i.test(v.lang) ? 2 : 0) + (v.localService ? 1 : 0);
+  const voiceLabel = (v) => v.name.replace(/\s*\((Premium|Erweitert|Enhanced|Verbessert|hohe Qualität|High Quality|Natural)\)/i, '') + (voiceQuality(v) === 3 ? ' · Premium' : voiceQuality(v) === 2 ? ' · hohe Qualität' : voiceQuality(v) < 0 ? ' · Spaßstimme' : '') + (/^de[-_](AT|CH)/i.test(v.lang) ? (/AT/i.test(v.lang) ? ' · Österreich' : ' · Schweiz') : '') + (v.localService ? '' : ' · braucht Internet');
   function pickVoice() {
     if (!canSpeak) return;
-    const vs = speechSynthesis.getVoices();
-    voiceDe = vs.find((v) => /^de[-_]DE/i.test(v.lang) && v.localService) || vs.find((v) => /^de/i.test(v.lang) && v.localService) || vs.find((v) => /^de/i.test(v.lang)) || null;
+    voicesDe = speechSynthesis.getVoices().filter((v) => /^de/i.test(v.lang)).sort((a, b) => voiceScore(b) - voiceScore(a));
+    const want = settings.voice && settings.voice.name;
+    voiceDe = (want && voicesDe.find((v) => v.voiceURI === want || v.name === want)) || voicesDe.find((v) => voiceQuality(v) >= 0) || voicesDe[0] || null;
+    renderVoiceSet();
+  }
+  function renderVoiceSet() {
+    const sel = document.getElementById('set-voice-name');
+    if (!sel) return;
+    const want = (settings.voice && settings.voice.name) || '';
+    sel.innerHTML = `<option value="">Automatisch: ${voiceDe && !want ? esc(voiceLabel(voiceDe)) : 'die beste Stimme'}</option>` + voicesDe.map((v) => `<option value="${esc(v.voiceURI || v.name)}">${esc(voiceLabel(v))}</option>`).join('');
+    sel.value = voicesDe.some((v) => (v.voiceURI || v.name) === want) ? want : '';
+    // nur Standardstimmen da: zeigen, wie man eine bessere lädt
+    const best = voicesDe.length ? voiceQuality(voicesDe[0]) : 0;
+    const hint = document.getElementById('voice-hint');
+    if (!hint) return;
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const android = /Android/.test(navigator.userAgent);
+    const how = ios ? 'iPhone: Einstellungen → Bedienungshilfen → Gesprochene Inhalte → Stimmen → Deutsch. Dort „Anna (Premium)“ oder eine Stimme mit „Erweitert“ laden. Danach Flowtown neu öffnen.'
+      : android ? 'Android: Einstellungen → Sprachausgabe (Text-in-Sprache) → Google-Sprachdienste → Sprachdaten installieren → Deutsch. Dort eine Stimme laden, am besten über WLAN. Danach Flowtown neu öffnen.'
+      : 'In den Einstellungen deines Geräts unter Sprachausgabe eine deutsche Stimme in hoher Qualität laden. Danach Flowtown neu öffnen.';
+    hint.hidden = best >= 2;
+    hint.innerHTML = `<p><b>Klingt die Stimme blechern?</b> Dein Handy hat bessere, natürlichere Stimmen. Lade einmal eine:</p><p>${esc(how)}</p>`;
   }
   if (canSpeak) { pickVoice(); speechSynthesis.addEventListener && speechSynthesis.addEventListener('voiceschanged', pickVoice); }
   // Text zum Sprechen: Abkürzungen ausschreiben, Zeichen weglassen
@@ -6005,6 +6031,12 @@
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
+  $('#set-voice-name').addEventListener('change', (ev) => {
+    settings.voice = Object.assign({ on: voiceOn(), rate: 1 }, settings.voice || {}, { name: ev.target.value || null });
+    store.set('settings', settings);
+    pickVoice();
+    speak('So klinge ich jetzt.', { now: true, force: true });
+  });
   $('#btn-voice-test').addEventListener('click', () => speak('In 200 Metern Baustelle, Ravensberger Straße. Fußgänger können die Baustelle auf dem gegenüberliegenden Gehweg passieren.', { now: true, force: true }));
   $('#btn-end').addEventListener('click', () => { $('#btn-end').hidden = true; $('#btn-end-confirm').hidden = false; $('#btn-end-cancel').hidden = false; $('#btn-end-confirm').focus(); });
   $('#btn-end-cancel').addEventListener('click', () => { resetEndButtons(); $('#btn-end').focus(); });
