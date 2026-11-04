@@ -92,7 +92,7 @@ button:focus-visible,input:focus-visible+span,select:focus-visible,.file-btn:foc
 .access-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px}
 .check{display:flex;align-items:center;gap:10px;min-height:44px;font-weight:600;cursor:pointer}
 .check .ic{color:var(--accent)}
-.check input{width:22px;height:22px;margin:0;accent-color:var(--accent)}
+.check input{flex:0 0 22px;width:22px;height:22px;margin:0;accent-color:var(--accent)}
 #inp-access-type{width:auto;max-width:100%}
 .today{display:flex;flex-direction:column;gap:12px}
 .tip{display:flex;gap:10px;align-items:flex-start;background:var(--amber-tint);padding:10px 12px;border-radius:12px;font-weight:600}
@@ -334,6 +334,7 @@ button.vf-line[aria-expanded="true"] .vf-chev{transform:rotate(90deg)}
 .pl-legend{list-style:none;margin:2px 0 0;padding:0;display:flex;flex-direction:column;gap:4px;font-size:14px}
 .pl-legend li{display:flex;align-items:center;gap:8px}
 .lg-dot.red{background:var(--bad)}
+.lg-dot.flow{background:color-mix(in srgb,var(--muted) 35%,var(--surface));box-shadow:inset 0 0 0 1px var(--muted)}
 .pl-legend .lg-dot{margin-top:0}
 .pl-verdict{margin:4px 0 0;font-weight:700}
 .vf-hist{background:var(--bg);border-radius:12px;padding:10px 12px}

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.81.0';
+  const VERSION = '0.81.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2488,7 +2488,7 @@
     const pc = (x) => (x / all * 100).toFixed(1) + '%';
     $('#review-head').innerHTML = `${legChainHtml(t)}<p class="st-sub">${sub}</p>
       <div class="rh-bar" role="img" aria-label="${esc(`${hmSay(dur / 1000)}, davon ${transit ? `${hmSay(stopT / 1000)} an Haltestellen, ` : ''}etwa ${hmSay(slow / 1000)} langsam oder im Stau und ${hmSay(wait / 1000)} an Ampeln`)}"><span style="width:${pc(flow)}"></span>${transit ? `<span class="stop" style="width:${pc(stopT)}"></span>` : ''}<span class="slow" style="width:${pc(slow)}"></span><span class="amp" style="width:${pc(wait)}"></span></div>
-      <ul class="pl-legend row-legend">${transit ? `<li><span class="lg-dot stop"></span>${durText(stopT)} an Haltestellen</li>` : ''}${slow >= 60000 ? `<li><span class="lg-dot red"></span>etwa ${Math.round(slow / 60000)} min langsam oder Stau</li>` : ''}<li><span class="lg-dot"></span>${durText(wait)} an Ampeln</li></ul>
+      <ul class="pl-legend row-legend">${flow >= 1000 ? `<li><span class="lg-dot flow"></span>${durText(flow)} fließend unterwegs</li>` : ''}${transit ? `<li><span class="lg-dot stop"></span>${durText(stopT)} an Haltestellen</li>` : ''}${slow >= 1000 ? `<li><span class="lg-dot red"></span>etwa ${durText(slow)} langsam oder Stau</li>` : ''}<li><span class="lg-dot"></span>${durText(wait)} an Ampeln</li></ul>
       ${fahrplanHtml(t)}`;
   }
   function renderBilanz() {
@@ -3733,6 +3733,9 @@
     if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
     if (name === 'start') renderA2hs();
     const h = $('#view-' + name + ' h2');
+    // Seitentitel nennt die Ansicht, damit Screenreader und App-Umschalter wissen, wo man ist
+    const titles = { welcome: 'Willkommen', start: 'Heute', plan: 'Wohin?', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
+    document.title = (titles[name] ? titles[name] + ' – ' : '') + 'Flowtown';
     if (h && name !== 'drive') { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
   }
