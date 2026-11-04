@@ -1137,3 +1137,9 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 .mic-status{bottom:calc(98px + env(safe-area-inset-bottom,0px));border-radius:20px;box-shadow:var(--shadow-lift)}
 .assist{bottom:calc(92px + env(safe-area-inset-bottom,0px));border-radius:26px;box-shadow:var(--shadow-lift)}
 .map-wrap #map{border:0;box-shadow:var(--shadow);border-radius:24px;height:calc(100vh - 360px);height:calc(100dvh - 360px)}
+/* 0.73 kräftigere Schatten */
+:root{--shadow:0 2px 4px rgba(21,25,30,.07),0 12px 32px rgba(21,25,30,.13);--shadow-lift:0 4px 8px rgba(21,25,30,.09),0 18px 44px rgba(21,25,30,.18)}
+.tip-help .tipcard,.tip-acc .tipcard,.tip-help .card{box-shadow:0 1px 3px rgba(21,25,30,.07),0 6px 16px rgba(21,25,30,.09)}
+.lw-nums>span,.wk-t{box-shadow:0 1px 3px rgba(21,25,30,.08),0 4px 10px rgba(21,25,30,.06)}
+.wk-t{background:#FFFFFF}
+.tabs{box-shadow:0 6px 14px rgba(21,25,30,.12),0 18px 44px rgba(21,25,30,.20)}
