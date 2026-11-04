@@ -1165,3 +1165,8 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 .tip-help .tipcard,.tip-acc .tipcard,.tip-help .card,.lw-nums>span,.wk-t{box-shadow:0 0 0 1px rgba(21,25,30,.05),0 1px 2px rgba(21,25,30,.12),0 3px 8px rgba(21,25,30,.09)}
 .tabs{box-shadow:0 0 0 1px rgba(21,25,30,.06),0 3px 6px rgba(21,25,30,.14),0 12px 28px rgba(21,25,30,.18)}
 .ask-bar{box-shadow:0 2px 3px rgba(21,25,30,.10),0 6px 14px rgba(21,25,30,.10)}
+/* 0.76 noch weniger Weichzeichnung: kurzer, klarer Schatten wie bei Karten-Apps */
+:root{--shadow:0 0 0 1px rgba(21,25,30,.05),0 1px 2px rgba(21,25,30,.14),0 3px 7px rgba(21,25,30,.12);--shadow-lift:0 0 0 1px rgba(21,25,30,.06),0 2px 3px rgba(21,25,30,.16),0 6px 14px rgba(21,25,30,.16)}
+.tip-help .tipcard,.tip-acc .tipcard,.tip-help .card,.lw-nums>span,.wk-t{box-shadow:0 0 0 1px rgba(21,25,30,.05),0 1px 2px rgba(21,25,30,.13),0 2px 5px rgba(21,25,30,.09)}
+.tabs{box-shadow:0 0 0 1px rgba(21,25,30,.06),0 2px 4px rgba(21,25,30,.15),0 6px 16px rgba(21,25,30,.17)}
+.ask-bar{box-shadow:0 1px 2px rgba(21,25,30,.12),0 3px 7px rgba(21,25,30,.10)}

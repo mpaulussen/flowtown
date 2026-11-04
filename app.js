@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.75.0';
+  const VERSION = '0.76.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
