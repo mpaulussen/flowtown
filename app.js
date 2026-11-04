@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.77.0';
+  const VERSION = '0.78.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1752,6 +1752,7 @@
     el.hidden = false;
     micStatus('');
   }
+  const TIPS_RE = /(lies|lese|sag|nenn)\b.*\btipps?\b|\btipps? vor(lesen)?\b/;
   async function runCommand(c) {
     if (!c) return false;
     if (merkVoice(c)) return true;
@@ -1759,6 +1760,7 @@
       $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
     }
     if (/notfall|notruf|krise|krisendienst|rettungsdienst|^hilfe hilfe/.test(c)) { openSos(); speak('Im Notfall wähle 112. Ich habe die Notrufnummern geöffnet.', { now: true, force: true }); return true; }
+    if (TIPS_RE.test(c)) { renderTips(); readTips(); return true; }
     if (/\bhilfe\b|was kann ich sagen|welche befehle/.test(c)) { speak(MIC_HELP, { now: true, force: true }); return true; }
     if (/ansagen (aus|stopp|stop)|sei (still|leise)|ruhe bitte/.test(c)) { setVoice(false); if (canSpeak) speechSynthesis.cancel(); micStatus('Ansagen aus'); return true; }
     if (/ansagen (an|ein)/.test(c)) { setVoice(true); speak('Ansagen an.', { now: true }); return true; }
@@ -4939,8 +4941,101 @@
   }
   function computeTips(mode) {
     const list = trips.filter((t) => !t.demo && (!mode || mode === 'alle' || MODE_GROUP[t.mode] === mode));
-    return [tipNews(), tipAnomalies(list)].concat(tipRoutes(list), [tipTimeEaters(list), tipWindows(list), tipStyle(list), tipCosts(list)])
+    const oe = !mode || mode === 'alle' || mode === 'oepnv', rad = !mode || mode === 'alle' || mode === 'rad';
+    return [tipNews(), tipAnomalies(list)].concat(tipRoutes(list), [tipTimeEaters(list), oe ? tipLines(list) : null, oe ? tipTransfers(list) : null, rad ? tipRad(list) : null, tipWindows(list), tipStyle(list), tipCosts(list)])
       .filter(Boolean).sort((x, y) => x.prio - y.prio);
+  }
+  // ---------- Tipps für Bus und Bahn: Pünktlichkeit je Linie (Abgleich mit dem Fahrplan) und Umstiege ----------
+  const lateMin = (h) => (h[2] - h[1]) / 60000;
+  function tipLines(list) {
+    const by = {};
+    for (const t of list) for (const l of t.fahrplan || []) {
+      const seen = l.halte.filter((h) => h[2] != null);
+      if (seen.length < 2) continue;
+      const k = `${l.mode}|${l.linie}`;
+      const x = by[k] || (by[k] = { mode: l.mode, linie: l.linie, ziele: {}, dep: [], gain: [], amp: 0, ampN: 0, n: 0 });
+      x.n++; x.ziele[l.ziel] = (x.ziele[l.ziel] || 0) + 1;
+      x.dep.push(lateMin(seen[0])); x.gain.push(lateMin(seen[seen.length - 1]) - lateMin(seen[0]));
+      x.amp += l.amp || 0; x.ampN += l.ampN || 0;
+    }
+    const lines = Object.values(by).filter((x) => x.n >= 2);
+    if (!lines.length) return null;
+    lines.forEach((x) => { x.avgDep = avgOf(x.dep); x.avgGain = avgOf(x.gain); x.end = avgOf(x.dep) + avgOf(x.gain); x.p = x.dep.filter((d) => d <= 2).length / x.n; });
+    lines.sort((a, b) => b.end - a.end);
+    const w = lines[0], who = w.mode === 'bus' ? 'Bus' : w.mode === 'zug' ? 'Zug' : 'Stadtbahn';
+    const sgn = (m) => { const r = Math.round(m); return r > 0 ? `+${r} min` : r < 0 ? `−${-r} min` : '±0 min'; };
+    const ziel = Object.keys(w.ziele).sort((a, b) => w.ziele[b] - w.ziele[a])[0];
+    const late = w.end >= 1.5;
+    const short = late ? `${who} ${w.linie} kommt bei dir im Schnitt ${Math.round(w.end)} min später an als im Fahrplan${w.avgGain >= 1 ? `, ${Math.round(w.avgGain) === 1 ? 'eine Minute' : Math.round(w.avgGain) + ' min'} davon unterwegs` : ''}.`
+      : `${who} ${w.linie} war auf deinen ${w.n} Fahrten meist pünktlich.`;
+    const amp = w.mode !== 'zug' && w.amp >= 60000 ? `<p class="small">An Ampeln stand ${w.mode === 'bus' ? 'der Bus' : 'die Bahn'} dabei zusammen ${durText(w.amp)} (${w.ampN} Halte). Mit Vorrang an Ampeln wäre das Zeit für alle Fahrgäste.</p>` : '';
+    return { prio: late ? 2 : 6, icon: w.mode === 'bus' ? 'bus' : 'tram', title: `Linie ${w.linie}`, head: late ? `Linie ${w.linie}: meist ${Math.round(w.end)} min später` : `Linie ${w.linie}: meist pünktlich`,
+      meta: `Richtung ${ziel}, ${w.n} Fahrten gemessen`, cat: 'Linie', num: sgn(w.end), short,
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="plan">${ic('clock')}${late ? 'Früher losfahren planen' : 'Abfahrten ansehen'}</button>`,
+      html: `<ul class="facts">${lines.slice(0, 4).map((x) => `<li>${ic(x.mode === 'bus' ? 'bus' : 'tram')}<span>${esc(x.linie)} <span class="small muted">(${x.n} Fahrten, ${fmtPct(x.p)} pünktlich ab)</span></span><b>${sgn(x.end)}</b></li>`).join('')}</ul>${amp}<p class="small muted">Abfahrt und Ankunft, wie Flowtown sie gemessen hat, verglichen mit dem Fahrplan (DELFI). Pünktlich heißt hier: höchstens 2 min später.</p>` };
+  }
+  function tipTransfers(list) {
+    const by = {};
+    for (const t of list) for (const r of t.transfers || []) {
+      if (r.lat == null) continue;
+      const k = r.stop || `${r.lat.toFixed(3)},${r.lon.toFixed(3)}`;
+      const x = by[k] || (by[k] = { name: r.stop || 'Umstieg', lat: r.lat, lon: r.lon, w: [], missed: 0 });
+      x.w.push(r.wait); if (r.missed) x.missed++;
+    }
+    const all = Object.values(by);
+    if (!all.length) return null;
+    all.forEach((x) => { x.avg = avgOf(x.w); });
+    const top = all.filter((x) => x.w.length >= 2 || x.missed).sort((a, b) => (b.missed - a.missed) || (b.avg - a.avg))[0];
+    if (!top || (top.avg < 4 * 60000 && !top.missed)) return null;
+    return { prio: 3, icon: 'walk', title: `Umsteigen: ${top.name}`, head: top.name === 'Umstieg' ? 'Umsteigen auf deinem Weg' : `Umsteigen: ${top.name}`,
+      meta: `${top.w.length}× umgestiegen`, cat: 'Umstieg', num: durText(top.avg),
+      short: `Du wartest hier im Schnitt ${Math.round(top.avg / 60000)} Minuten${top.missed ? `, ${top.missed === 1 ? 'einmal' : top.missed + '-mal'} den Anschluss verpasst` : ''}. Eine Bahn früher oder später kann den Umstieg sparen.`,
+      act: `<button type="button" class="btn quiet tip-go" data-peek="p" data-name="${esc(top.name)}" data-lat="${top.lat}" data-lon="${top.lon}">${ic('map')}Auf der Karte</button><button type="button" class="btn quiet tip-go" data-tipgo="plan">${ic('clock')}Verbindung planen</button>`,
+      html: `<ul class="facts">${all.sort((a, b) => b.avg - a.avg).slice(0, 4).map((x) => `<li>${ic('walk')}<span>${esc(x.name)} <span class="small muted">(${x.w.length}×${x.missed ? `, ${x.missed}× verpasst` : ''})</span></span><b>${durText(x.avg)}</b></li>`).join('')}</ul><p class="small muted">„Anschluss verpasst“ markierst du in der Fahrtbilanz.</p>` };
+  }
+  // ---------- Tipps fürs Rad: Stücke ohne Radweg auf dem Weg zu deinen Zielen ----------
+  function tipRad(list) {
+    if (!list.some((t) => MODE_GROUP[t.mode] === 'rad') && settings.mode !== 'rad') return null;
+    const done = [], todo = [];
+    for (const z of settings.ziele.slice(0, 4)) {
+      const r = zielRes[zKey(z, 'rad')];
+      if (r && r.rad && r.rad.m) done.push({ z, r }); else todo.push(z);
+    }
+    const bad = done.map(({ z, r }) => ({ z, r, run: r.rad.ohne[0], pct: r.rad.m.schlecht / Math.max(1, r.rad.total - r.rad.m.unbekannt) })).filter((x) => x.run).sort((a, b) => b.run.m - a.run.m)[0];
+    if (bad) {
+      return { prio: 2, icon: 'bike', title: `Rad zu ${bad.z.name}`, head: `Ohne Radweg: ${bad.run.name}`, meta: `Auf dem Weg zu ${bad.z.name}`, cat: 'Rad', num: fmtLen(bad.run.m),
+        short: `Auf dem Weg zu ${bad.z.name} fährst du ${fmtLen(bad.run.m)} ohne Radweg an der ${bad.run.name}. Flowtown zeigt dir, ob es eine ruhigere Strecke gibt.`,
+        act: `<button type="button" class="btn quiet tip-go" data-peek="l" data-name="${esc(bad.run.name)}" data-art="rad" data-lines="${bad.run.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${bad.r.data.pts.map((q) => q.join(',')).join(';')}">${ic('map')}Auf der Karte</button><button type="button" class="btn quiet tip-go" data-tipgo="planrad" data-z="${bad.z.id}">${ic('bike')}Radweg prüfen</button>`,
+        html: `<ul class="facts">${done.map(({ z, r }) => `<li>${ic('bike')}<span>${esc(z.name)}</span><b>${fmtPct(1 - r.rad.m.schlecht / Math.max(1, r.rad.total - r.rad.m.unbekannt))} mit Radweg</b></li>`).join('')}</ul><p class="small muted">Radwege laut OpenStreetMap, nicht überall vollständig.</p>` };
+    }
+    const okR = done.map(({ z, r }) => ({ z, k: r.rad.total - r.rad.m.unbekannt, g: r.rad.m.gut + r.rad.m.ruhig })).filter((x) => x.k > 300).sort((a, b) => b.g / b.k - a.g / a.k)[0];
+    if (okR) return { prio: 6, icon: 'bike', title: `Rad zu ${okR.z.name}`, head: `Gut mit dem Rad: ${okR.z.name}`, cat: 'Rad', num: fmtPct(okR.g / okR.k),
+      short: `Der Weg zu ${okR.z.name} führt zu ${fmtPct(okR.g / okR.k)} über Radwege oder ruhige Straßen, ohne längere Stücke ohne Radweg.`,
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="planrad" data-z="${okR.z.id}">${ic('bike')}Weg ansehen</button>` };
+    if (todo.length && !done.length) {
+      const z = todo[0];
+      return { prio: 5, icon: 'bike', title: 'Radweg-Check', head: `Radweg-Check: ${z.name}`, cat: 'Rad',
+        short: `Wie viel vom Weg zu ${z.name} hat einen Radweg, wo wird es holprig oder eng? Flowtown prüft die Strecke.`,
+        act: `<button type="button" class="btn quiet tip-go" data-tipgo="planrad" data-z="${z.id}">${ic('bike')}Radweg prüfen</button>`,
+        html: '<p class="small">Die Prüfung nutzt Radwege aus OpenStreetMap und das Radverkehrsnetz der Stadt Bielefeld.</p>' };
+    }
+    return null;
+  }
+  // Bus und Bahn: Fahrten mit dem Fahrplan abgleichen, damit die Linien-Tipps Daten haben (einmal je Fahrt)
+  function tipsFahrplan() {
+    const need = trips.filter((t) => !t.demo && !('fahrplan' in t && t.fpV === 2) && (isTransit(t.mode) || (t.legs || []).some((l) => isTransit(l.mode)))).slice(-25);
+    if (!need.length) return;
+    if (!fp) { loadFahrplan().then((ok) => { if (ok && !$('#view-tips').hidden) { tipsFahrplan(); renderTips(); } }); return; }
+    need.forEach((t) => ensureFahrplan(t));
+  }
+  // „Lies mir die Tipps vor“: Profil zuerst, dann die drei wichtigsten Tipps
+  let tipsSay = [];
+  function readTips() {
+    unlockSpeech();
+    if (!canSpeak) return false;
+    const txt = tipsSay.length ? tipsSay.join(' ') : 'Noch keine Tipps für dich. Nach ein paar Fahrten weiß ich mehr.';
+    speak(txt, { now: true, force: true });
+    return true;
   }
   // ---------- Tipps nach Profil (Barrierefreiheit): aus Fahrten, Zielen und offenen Daten ----------
   const TIP_MODES = [['alle', 'Alle'], ['auto', 'Auto'], ['rad', 'Rad'], ['oepnv', 'Bus & Bahn'], ['fuss', 'Zu Fuß']];
@@ -5036,7 +5131,7 @@
   // Tipps: je Tipp eine Zeile mit Titel, einem Satz und der Wirkung als Marke; Einzelheiten beim Antippen
   let tipOpen = null;
   // Farben der Tipps: blau, was beim Planen hilft (Weg, Zeit, Alternativen); grün, was Ampeln und Fahrweise betrifft
-  const TIP_WORLD = { Ampeln: 'red', Ampel: 'hist', Kosten: 'red', Meldung: 'hist', Weg: 'plan', Rad: 'plan', Zeit: 'plan', Fahrweise: 'go' };
+  const TIP_WORLD = { Linie: 'plan', Umstieg: 'plan', Ampeln: 'red', Ampel: 'hist', Kosten: 'red', Meldung: 'hist', Weg: 'plan', Rad: 'plan', Zeit: 'plan', Fahrweise: 'go' };
   function renderTips() {
     const counts = tipModeCounts(), used = Object.keys(counts);
     if (!tipMode || (tipMode !== 'alle' && !counts[tipMode])) tipMode = used.length > 1 ? used.sort((a, b) => counts[b] - counts[a])[0] : 'alle';
@@ -5052,11 +5147,16 @@
     const sw = used.length > 1 ? `<div class="seg pill tip-modes" role="group" aria-label="Tipps nach Verkehrsmittel">${TIP_MODES.filter(([k]) => k === 'alle' || counts[k]).map(([k, l]) => `<button type="button" data-tipmode="${k}" aria-pressed="${tipMode === k}">${l}</button>`).join('')}</div>` : '';
     const profBox = settings.access.on ? `<section class="tip-prof" aria-labelledby="tip-prof-h"><h3 id="tip-prof-h">${ic('access')}Für dich: ${esc(ACCESS_LABEL[settings.access.type])}</h3>${prof.length ? prof.slice(0, easy ? 2 : 4).map(pcard).join('') : `<p class="small">Sobald du Wege mit Flowtown gemacht oder Ziele gespeichert hast, stehen hier Hinweise für dein Profil: Hindernisse, Haltestellen, Ampeln.</p>`}</section>` : '';
     const top = easy ? 3 : 3, first = tips.slice(0, top), rest = easy ? [] : tips.slice(top);
-    $('#tips-body').innerHTML = profBox + sw + (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${first.map(card).join('')}${rest.length ? `<details class="more-box tip-more"${tipOpen != null && tipOpen >= top ? ' open' : ''}><summary>${ic('list')}Weitere Tipps (${rest.length})</summary><div class="tip-list">${rest.map((x, j) => card(x, j + top)).join('')}</div></details>` : ''}`
+    const say = (h, t) => `${plain(h)}. ${plain(t || '')}`.replace(/\s+/g, ' ').trim();
+    tipsSay = (settings.access.on ? prof.slice(0, easy ? 2 : 4).map((x) => say(x.head, x.text || x.html)) : []).concat(first.map((x) => say(x.head || x.title, x.short)), n ? [] : zt.map((x) => say(x.head, x.text)));
+    const readBtn = canSpeak && tipsSay.length ? `<button type="button" class="btn quiet tip-go tip-read" data-tipgo="read">${ic('sound')}Lies mir die Tipps vor</button>` : '';
+    $('#tips-body').innerHTML = readBtn + profBox + sw + (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${first.map(card).join('')}${rest.length ? `<details class="more-box tip-more"${tipOpen != null && tipOpen >= top ? ' open' : ''}><summary>${ic('list')}Weitere Tipps (${rest.length})</summary><div class="tip-list">${rest.map((x, j) => card(x, j + top)).join('')}</div></details>` : ''}`
       : zt.length ? `<h3 class="eyebrow">Schon jetzt für deine Ziele</h3><section class="tip-prof plain">${zt.map(pcard).join('')}</section>`
+      : n && tipMode !== 'alle' ? `<p class="lead-text">${cap(GROUP_WITH[tipMode] || 'damit')} hat Flowtown noch keine eigenen Tipps für dich. Nach ein paar weiteren Fahrten stehen hier Zeitfresser und Alternativen.</p>`
       : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
       + (() => { const f = faqCards(), k = kiCard(); return (f ? `<div class="tip-acc">${f}</div>` : '') + (k ? `<div class="tip-help"><h3 class="eyebrow">Mehr Hilfe</h3>${k}</div>` : ''); })() + news;
     if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
+    if (tipMode === 'alle' || tipMode === 'oepnv') tipsFahrplan();
     if (settings.access.on && !tipsProfLoading && ['rollstuhl', 'rollator'].includes(settings.access.type) && (!bpp || !bfData || !fp)) {
       tipsProfLoading = true;
       Promise.allSettled([bpp ? 0 : loadBpp(), bfData ? 0 : loadBf(), fp ? 0 : loadFahrplan()]).then((r) => { if (r.some((x) => x.value) && !$('#view-tips').hidden) renderTips(); });
@@ -5518,6 +5618,8 @@
       else if (k === 'stats') showView('stats');
       else if (k === 'mapacc') { mapLayers.acc = true; mapLayers.tram = true; settings.mapLayers = mapLayers; store.set('settings', settings); showView('map'); }
       else if (k === 'wo') { unlockSpeech(); whereAmI(true); }
+      else if (k === 'read') readTips();
+      else if (k === 'planrad') { settings.mode = 'rad'; store.set('settings', settings); setModeUI('rad'); openPlan(go.dataset.z); }
       return;
     }
     const t = ev.target.closest('.tip-row[data-tip]');
@@ -5663,7 +5765,7 @@
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
   $('#ask-mic').addEventListener('click', () => listen());
-  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else askAssist(i.value, false); i.value = ''; i.blur(); } });
+  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else if (TIPS_RE.test(cmdNorm(i.value))) { renderTips(); readTips(); } else askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
   $('#set-compass').checked = compassWanted();
