@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.79.0';
+  const VERSION = '0.80.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -716,14 +716,18 @@
           const onFoot = rec.transfer || rec.curMode === 'fuss';
           const footStop = onFoot && stopDist(s, 30) < (near ? dist(s, near) : Infinity);
           const atStop = onFoot ? footStop : train ? nearStop(s) || fpStopsNear(s, 250, 2).length > 0 : isTransit(rec.curMode) && nearStop(s);
-          const sig = atStop ? null : near;
+          // Stehen vor dem Losfahren (Anschnallen, GPS sucht noch) ist kein Warten an einer Ampel:
+          // ohne Fahrtrichtung ließe sich auch nicht sagen, welche Ampel „voraus“ liegt. Warten an der Haltestelle zählt.
+          const pre = !rec.moved && !atStop;
+          const sig = atStop || pre ? null : near;
           // keine Ampel in der Nähe, aber eine voraus: vermutlich Stau davor (endgültig zugeordnet wird am Ende der Fahrt)
-          const queueSig = !sig && !atStop && !train ? findSignal(s, s.heading, QUEUE_M, rec.transfer ? 'fuss' : rec.curMode) : null;
-          rec.stop = { t0: s.t, lat: s.lat, lon: s.lon, heading: s.heading, signal: sig, atStop, queueSig };
+          const queueSig = !sig && !atStop && !train && !pre && s.heading != null ? findSignal(s, s.heading, QUEUE_M, rec.transfer ? 'fuss' : rec.curMode) : null;
+          rec.stop = { t0: s.t, lat: s.lat, lon: s.lon, heading: s.heading, signal: sig, atStop, queueSig, pre };
           rec.fastSince = null;
         }
       } else {
         rec.slowSince = null;
+        if (!rec.moved && rec.first && dist(rec.first, p) > 40) rec.moved = true;
         checkPass(p, heading, t);
       }
     } else {
@@ -741,7 +745,7 @@
     if (rec.transfer) {
       setDriveState(`Zu Fuß · ${fmtDur(t - rec.transfer.t)}`, 'transfer');
     } else if (rec.stop) {
-      const label = rec.stop.signal ? 'Halt an Ampel' : rec.stop.queueSig ? 'Stau vor Ampel' : rec.stop.atStop ? (rec.transfer || rec.curMode === 'fuss' ? 'Warten an der Haltestelle' : 'Halt an Haltestelle') : 'Halt';
+      const label = rec.stop.pre ? 'Bereit, noch nicht losgefahren' : rec.stop.signal ? 'Halt an Ampel' : rec.stop.queueSig ? 'Stau vor Ampel' : rec.stop.atStop ? (rec.transfer || rec.curMode === 'fuss' ? 'Warten an der Haltestelle' : 'Halt an Haltestelle') : 'Halt';
       setDriveState(`${label} · ${fmtDur(t - rec.stop.t0)}`, 'halt');
     } else {
       setDriveState(vs < cfg.stopV ? 'Langsam …' : 'Unterwegs', 'moving');
@@ -816,6 +820,7 @@
   function endStop(tEnd) {
     const s = rec.stop;
     rec.stop = null; rec.slowSince = null; rec.fastSince = null;
+    if (s.pre) { rec.moved = true; return; }   // Stehen vor dem Losfahren zählt nicht
     const wait = tEnd - s.t0;
     if (wait < MIN_WAIT_MS) return;
     if (s.atStop && rec.transfer) return;   // Warten am Bahnsteig steckt schon in der Umstiegszeit
@@ -871,7 +876,7 @@
       if (e.signal) { target = e; chainT = e.t; continue; }
       if (e.type !== 'halt' || e.atStop) { target = null; continue; }
       const ok = target && chainT - (e.tEnd || e.t) <= QUEUE_MS && dist(e, target) <= QUEUE_M &&
-        (target.type === 'halt' || e.heading == null || angDiff(bearing(e, target), e.heading) <= 45);
+        (target.type === 'halt' || (e.heading == null ? dist(e, target) <= 80 : angDiff(bearing(e, target), e.heading) <= 45));
       if (!ok) { target = null; continue; }
       if (target.type === 'halt') {
         target.wait += e.wait; target.halts = (target.halts || 1) + (e.halts || 1); target.t = e.t; target.queued = true;
