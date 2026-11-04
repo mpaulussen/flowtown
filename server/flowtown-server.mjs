@@ -1102,7 +1102,19 @@ async function bfBuilding(slug) {
   const ann = (n) => { const x = all['gebaeude_field' + n]; return x && x.annotation && x.annotation.value ? bfText(x.annotation.value) : ''; };
   const val = (k) => (all[k] ? bfText(all[k].value) : '');
   const park = parseInt(val('gebaeude_field15'), 10);
+  const d = [];
+  for (const x of Object.values(all)) {
+    const m = /^gebaeude_field(\d+)$/.exec(x.id || '');
+    if (!m) continue;
+    const n = Number(m[1]);
+    if (n < 11 || n === 15) continue;   // Erfassung, Adresse, Kontakt
+    const v = bfText(x.value), a = x.annotation && x.annotation.value ? bfText(x.annotation.value) : '';
+    if ((!v || /^nicht relevant$/i.test(v)) && !a) continue;
+    d.push([n, clip(bfText(x.label).replace(/\s*\?\s*$/, '?'), 120), clip(v, 40), clip(a, 200)]);
+  }
+  d.sort((p, q) => p[0] - q[0]);
   return {
+    d, stand2: val('gebaeude_field2'),
     id: g.id, n: clip(g.title, 80), u: g.url, lat: r5(Number(g.location.lat)), lon: r5(Number(g.location.lng)),
     adr: clip([g.location.street_name, g.location.street_number && g.location.street_number !== '0' ? g.location.street_number : ''].filter(Boolean).join(' '), 60),
     tel: val('gebaeude_field10').replace(/^Tel\.?\s*/i, ''), park: isFinite(park) ? park : null,
@@ -1278,10 +1290,16 @@ async function refreshBf() {
     }
     const orte = [];
     for (const s of slugs) {
-      try { const o = await bfBuilding(s); if (o) orte.push(o); } catch (e) { /* einzelnes Gebäude überspringen */ }
+      try { const o = await bfBuilding(s); if (o && !orte.some((x) => x.id === o.id)) orte.push(o); } catch (e) { /* einzelnes Gebäude überspringen */ }   // manche Adressen liefern dasselbe Gebäude
       await new Promise((r) => setTimeout(r, 1200));
     }
-    if (orte.length) out.orte = orte;
+    if (orte.length) {
+      // Einzelangaben bleiben auf dem Server (für Frag Flowtown), die App lädt nur die kurze Liste
+      out.details = {};
+      for (const o of orte) { out.details[o.id] = { d: o.d, stand: o.stand2 || o.stand }; delete o.d; delete o.stand2; }
+      out.dV = 1;
+      out.orte = orte;
+    }
   } else out.orte = [];
   try { const o = await bfOsm(); if (o.wc.length || o.lift.length) Object.assign(out, o); } catch (e) { console.error('Barrierefrei OSM:', e.message); }
   try { out.faqOrte = await faqOrte(); out.faqOrteV = 3; } catch (e) { out.faqOrte = bf && bf.faqOrte || null; console.error('FAQ-Orte:', e.message); }
@@ -1305,7 +1323,8 @@ function bfTick() {
     return;
   }
   const age = bf ? Date.now() - bf.t : Infinity, h = new Date().getHours();
-  if (age === Infinity || (age > 7 * 864e5 && h >= 2 && h < 5)) {
+  if (age === Infinity || (age > 7 * 864e5 && h >= 2 && h < 5) || (BF_ON && bf && bf.orte && bf.orte.length && !bf.dV && !bf.dTry)) {
+    if (bf) bf.dTry = Date.now();
     bfRun = refreshBf().then((m) => console.log('Barrierefrei:', m)).catch((e) => console.error('Barrierefrei:', e.message)).finally(() => { bfRun = null; });
   }
 }
@@ -1802,6 +1821,7 @@ Regeln:
 - Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
 - Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
+- Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
 - Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
@@ -1815,10 +1835,39 @@ const ASSIST_TOOLS = [
     ziel: { type: 'string' }, verkehrsmittel: { type: 'string', enum: ['auto', 'rad', 'fuss', 'oepnv'] }, start: { type: 'string', description: 'leer = Standort' } }, required: ['ziel', 'verkehrsmittel'] } } },
   { type: 'function', function: { name: 'verkehrslage', description: 'Baustellen, Sperrungen und Stau in der Nähe eines Orts oder des Standorts.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' } } } } },
+  { type: 'function', function: { name: 'ort_barrierefreiheit', description: 'Alle Angaben zur Barrierefreiheit eines bestimmten Gebäudes in Bielefeld (Theater, Museum, Amt, Café …) aus „Bielefeld barrierefrei erleben“: Eingang, Aufzug, WC, Hilfen für Seh- und Hörbehinderung, Services, mit Anmerkungen.', parameters: { type: 'object', properties: {
+    name: { type: 'string', description: 'Name des Gebäudes, z. B. Stadttheater, Kunsthalle' },
+    thema: { type: 'string', enum: ['alle', 'zugang', 'aufzug', 'wc', 'sehen', 'hoeren', 'service', 'einfach'], description: 'nur ein Bereich; leer = alle' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'meine_auswertung', description: 'Auswertung der eigenen Fahrten der Person (nur auf ihrem Handy berechnet): Fahrten, Wartezeit an Ampeln, größte Zeitfresser, häufigster Weg, persönliche Tipps.', parameters: { type: 'object', properties: {} } } },
   { type: 'function', function: { name: 'hinweise', description: 'Hinweise der Redaktion barrierefrAI (häufige Fragen, z. B. Altstadt) und von Nutzerinnen gemeldete Hindernisse.', parameters: { type: 'object', properties: {
     stichwort: { type: 'string' }, ort: { type: 'string' } } } } }
 ];
+// Ort von „Bielefeld barrierefrei erleben“ nach Namen; mehrdeutig: Kandidaten zur Rückfrage
+const BF_THEMA = { zugang: [11, 37], aufzug: [39, 49], wc: [57, 71], sehen: [75, 99], hoeren: [100, 109], service: [17, 25], einfach: [111, 120] };
+const BF_STOP = new Set(['bielefeld', 'das', 'der', 'die', 'im', 'in', 'am', 'zum', 'zur', 'e', 'v', 'ev', 'gmbh']);
+const bfNorm = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9äöü]+/g, ' ').trim();
+function bfOrtDetails(name, thema) {
+  if (!bf || !(bf.orte || []).length) return { fehler: 'Die Daten von Bielefeld barrierefrei erleben sind gerade nicht geladen.' };
+  const toks = bfNorm(name).split(/\s+/).filter((w) => w && !BF_STOP.has(w));
+  if (!toks.length) return { fehler: 'Kein Name' };
+  const seen = new Set(), orte = bf.orte.filter((o) => !seen.has(o.id) && seen.add(o.id));
+  const scored = orte.map((o) => {
+    const n = bfNorm(o.n), u = bfNorm(String(o.u || '').replace(/^https?:\/\/[^/]+/, ''));
+    const hit = toks.filter((w) => n.includes(w) || u.includes(w)).length;
+    return { o, sc: hit / toks.length + (n.startsWith(toks[0]) ? 0.2 : 0) - n.length / 1000 };
+  }).filter((x) => x.sc > 0.5).sort((p, q) => q.sc - p.sc);
+  if (!scored.length) return { gefunden: false, hinweis: 'Diesen Ort gibt es in Bielefeld barrierefrei erleben nicht. Frag nach einem anderen Namen oder nutze orte_in_der_naehe.' };
+  if (scored.length > 1 && scored[1].sc >= scored[0].sc - 0.05) return { mehrdeutig: true, kandidaten: scored.slice(0, 6).map((x) => x.o.n) };
+  const o = scored[0].o, det = (bf.details || {})[o.id];
+  const rng = BF_THEMA[thema];
+  const ang = det ? det.d.filter((x) => !rng || (x[0] >= rng[0] && x[0] <= rng[1])).map((x) => ({ frage: x[1], antwort: x[2] || '', hinweis: x[3] || undefined })) : null;
+  return {
+    name: o.n, adresse: o.adr, telefon: o.tel || undefined, behindertenparkplaetze: o.park,
+    angaben: ang || Object.entries(o.f || {}).map(([k, v]) => ({ merkmal: k, antwort: v === 1 ? 'ja' : v === 0 ? 'nein' : 'keine Angabe' })),
+    hinweise: o.hinweis, stand_der_erhebung: (det && det.stand) || o.stand || undefined,
+    quelle: 'Bielefeld barrierefrei erleben (v. Bodelschwinghsche Stiftungen Bethel)', link: o.u || BF_URL
+  };
+}
 // Ort aus Text: Standort, ein gespeichertes Ziel aus dem Kontext, ein Ort von Bethel, sonst HERE
 async function assistOrt(name, ctx) {
   const n = String(name || '').trim();
@@ -1865,6 +1914,7 @@ function serverDepartures(name, kind) {
 }
 async function assistTool(name, a, ctx, act) {
   a = a || {};
+  if (name === 'ort_barrierefreiheit') return bfOrtDetails(a.name, a.thema);
   if (name === 'meine_auswertung') return ctx.auswertung === 'ausgeschaltet' ? { auswertung: 'ausgeschaltet', hinweis: 'Unter Mehr, Server und Dienste: „Frag Flowtown darf meine Auswertung nutzen“' } : ctx.auswertung;
   if (name === 'orte_in_der_naehe') {
     const o = await assistOrt(a.ort, ctx);
@@ -1988,7 +2038,7 @@ async function assist(body) {
       let out;
       try { out = await assistTool(c.function.name, args, ctx, act); } catch (e) { out = { fehler: clip(e.message, 120) }; }
       used.push(c.function.name);
-      messages.push({ role: 'tool', name: c.function.name, tool_call_id: c.id, content: JSON.stringify(out).slice(0, 4000) });
+      messages.push({ role: 'tool', name: c.function.name, tool_call_id: c.id, content: JSON.stringify(out).slice(0, c.function.name === 'ort_barrierefreiheit' ? 9000 : 4000) });
     }
   }
   return { antwort: 'Das konnte ich gerade nicht vollständig nachschlagen. Versuch es bitte etwas genauer.', aktion: null, werkzeuge: used };
