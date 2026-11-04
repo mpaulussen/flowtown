@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.69.0';
+  const VERSION = '0.70.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1705,7 +1705,7 @@
       const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '',
         unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
-      assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-4);
+      assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
       assistAct = r.aktion || null;
       showAssist(frage, r.antwort);
       assistLast = r.antwort;

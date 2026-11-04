@@ -1813,6 +1813,7 @@ const mAbs = (a, b) => Math.round(Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1
 const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App für Wege in Bielefeld (Auto, Rad, zu Fuß, Bus und Stadtbahn), mit Schwerpunkt Barrierefreiheit.
 Regeln:
 - Antworte auf Deutsch und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
+- Rückfragen im Gespräch: Antworte nur auf das, was neu gefragt ist. Wiederhole nichts, was du im Verlauf schon gesagt hast (Name, Adresse, Dauer, Linien, schon genannte Merkmale), außer die Person fragt ausdrücklich noch einmal danach. Keine Einleitung, die den Ort oder die Strecke erneut vorstellt; fang direkt mit dem Neuen an.
 - Fakten (Orte, Entfernungen, Zeiten, Linien, Barrierefreiheit) nur aus den Ergebnissen der Werkzeuge; Angaben zu den eigenen Fahrten aus dem Werkzeug meine_auswertung. Erfinde nichts. Liefert ein Werkzeug nichts, sag das offen und schlage vor, was die Person stattdessen tun kann.
 - Berücksichtige das Profil: Rollstuhl oder Rollator heißt stufenlos, Hochbahnsteig, Aufzug, rollstuhlgerechte Toilette. Sehbehinderung: Orientierung und Ampeln mit Tonsignal. Einfache Sprache: sehr kurze Sätze und einfache Wörter.
 - Barrierefreiheit nie aus Vermutung: Fehlt eine Angabe (Hochbahnsteig, Aufzug, stufenlos), sag „dazu habe ich keine Angabe“, nie „barrierefrei“ oder „stufenlos“. Bei Aufzügen und Baustellen: „bitte vor Ort prüfen“, weil sich das ändern kann.
@@ -2021,8 +2022,10 @@ async function assist(body) {
   const auswertung = assistStatsClean(k.auswertung);
   const ctx = { pos, auswertung, ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
   const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
-  const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-4).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
-  const messages = [{ role: 'system', content: ASSIST_SYSTEM + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage }];
+  const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
+  // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
+  const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
+  const messages = [{ role: 'system', content: ASSIST_SYSTEM + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage }];
   const act = {}, used = [];
   for (let round = 0; round < 4; round++) {
     const m = await mistralChat(messages);
