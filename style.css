@@ -1075,3 +1075,24 @@ body[data-view="plan"] .ask-bar{--ask:#1f5c99}
 .merk-btns .btn{min-height:44px;padding:0 16px;border-color:var(--acc-line);color:var(--acc-ink);background:#fff}
 .merk-btns .btn:not(.quiet){font-weight:700}
 .merk-q.done{opacity:.8}
+/* 0.71 Was ist dir wichtig? und „Für dich“ auf Heute */
+.w-goals{display:flex;flex-direction:column;gap:8px;background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:14px 16px}
+.w-goals h3{margin:0;font-family:var(--display);font-size:20px}
+.goal-chips{display:flex;flex-wrap:wrap;gap:8px}
+.goal-chip{--gc:var(--accent);font:inherit;font-size:15px;font-weight:700;min-height:44px;padding:6px 14px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--gc) 45%,var(--line));background:var(--surface);color:var(--gc);display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.goal-chip.acc{--gc:var(--acc)}.goal-chip.blue{--gc:#1f5c99}
+.goal-chip .ic{width:18px;height:18px}
+.goal-chip[aria-pressed="true"]{background:var(--gc);border-color:var(--gc);color:#fff}
+.goal-chip:focus-visible{outline:3px solid var(--gc);outline-offset:2px}
+.fuer-dich{display:flex;flex-direction:column;gap:6px}
+.fuer-dich .eyebrow{margin:0}
+.fd-list{display:flex;flex-direction:column;gap:8px}
+.fd{--fc:var(--accent);--fb:var(--tint);all:unset;box-sizing:border-box;cursor:pointer;display:flex;align-items:center;gap:12px;width:100%;background:var(--fb);color:var(--fg);border-radius:16px;padding:10px 14px;min-height:56px}
+.fd.acc{--fc:var(--acc);--fb:var(--acc-bg)}.fd.blue{--fc:#1f5c99;--fb:#e6eef8}
+.fd>.ic:first-child{width:24px;height:24px;color:var(--fc);flex:none}
+.fd>span{flex:1;min-width:0;display:flex;flex-direction:column;line-height:1.25}
+.fd b{font-size:16px;color:var(--fc)}
+.fd span span{font-size:14px;color:var(--muted)}
+.fd .wrow-go{color:var(--fc)}
+.fd:focus-visible{outline:3px solid var(--fc);outline-offset:2px}
+.fd-ask{display:flex;align-items:center;gap:6px}.fd-ask .fd{flex:1}

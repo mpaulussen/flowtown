@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.70.0';
+  const VERSION = '0.71.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -5261,6 +5261,65 @@
     h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
+  // ---------- Was ist dir wichtig? Auswahl auf der Begrüßung und unter Mehr; „Heute“ zeigt dazu zuerst passende Bausteine ----------
+  const GOALS = {
+    schnell: { label: 'Schneller ankommen', fd: ['clock', 'Beste Abfahrt zu deinem Ziel', 'Stau, Baustellen und die beste Zeit'] },
+    stufenlos: { label: 'Ohne Stufen', cls: 'acc', fd: ['access', 'Stufenlose Haltestellen und Orte', 'Hochbahnsteige, Aufzüge, Toiletten auf der Karte'] },
+    blick: { label: 'Ohne Blick aufs Display', cls: 'blue', fd: ['mic', 'Wo bin ich?', 'Adresse, Ampel und Haltestelle, vorgelesen'] },
+    rad: { label: 'Sicher mit dem Rad', fd: ['bike', 'Radwege auf der Karte', 'Gute Wege, holprige Stellen, Baustellen'] },
+    stadt: { label: 'Die Stadt verbessern', fd: ['chart', 'Deine Wirkung für Bielefeld', 'Fahrten anonym beitragen, Ampeln bewerten'] }
+  };
+  const goals = () => (Array.isArray(settings.goals) ? settings.goals : []).filter((g) => GOALS[g]);
+  function renderGoals() {
+    const g = goals();
+    $$('.goal-chip').forEach((b) => b.setAttribute('aria-pressed', String(g.includes(b.dataset.goal))));
+    $('#goals-sub').textContent = g.length ? g.map((k) => GOALS[k].label).join(' · ') : 'Noch nichts gewählt';
+    const el = $('#fuer-dich');
+    if (!el) return;
+    // schon eingerichtet, aber noch nichts gewählt: einmal fragen
+    if (!g.length && settings.onboarded && !settings.goalsAsked) {
+      el.hidden = false;
+      el.innerHTML = `<div class="fd-ask"><button type="button" class="fd" data-fd="wahl">${ic('check')}<span><b>Was ist dir wichtig?</b><span>Wähle aus, dann zeigt Flowtown dir das zuerst.</span></span>${ic('chevron', 'wrow-go')}</button><button type="button" class="vf-x" data-fd="nein" aria-label="Hinweis ausblenden">${ic('x')}</button></div>`;
+      return;
+    }
+    el.hidden = !g.length;
+    el.innerHTML = g.length ? `<h3 class="eyebrow">Für dich</h3><div class="fd-list">${g.map((k) => { const [icon, t, sub] = GOALS[k].fd; return `<button type="button" class="fd${GOALS[k].cls ? ' ' + GOALS[k].cls : ''}" data-fd="${k}">${ic(icon)}<span><b>${t}</b><span>${sub}</span></span>${ic('chevron', 'wrow-go')}</button>`; }).join('')}</div>` : '';
+  }
+  function toggleGoal(k, fromWelcome) {
+    const g = goals(), on = !g.includes(k);
+    settings.goals = on ? g.concat(k) : g.filter((x) => x !== k);
+    // was sich daraus gleich ergibt; Einwilligungen bleiben sichtbar und abwählbar
+    if (on && k === 'blick' && canSpeak && !voiceOn()) setVoice(true);
+    if (on && k === 'rad' && fromWelcome) { settings.mode = 'rad'; setModeUI('rad'); }
+    if (on && k === 'stadt' && fromWelcome) $('#w-wir').checked = true;
+    store.set('settings', settings);
+    renderGoals();
+    if (fromWelcome) renderWelcomeAccess();
+    speak(on ? `${GOALS[k].label}: gewählt.${k === 'stufenlos' && !settings.access.on ? ' Wähle darunter dein Profil.' : ''}` : `${GOALS[k].label}: abgewählt.`, { now: true });
+  }
+  $('#w-goals').addEventListener('click', (ev) => { const b = ev.target.closest('.goal-chip'); if (b) toggleGoal(b.dataset.goal, true); });
+  $('#set-goals').addEventListener('click', (ev) => { const b = ev.target.closest('.goal-chip'); if (b) toggleGoal(b.dataset.goal, false); });
+  $('#fuer-dich').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-fd]');
+    if (!b) return;
+    const k = b.dataset.fd;
+    if (k === 'wahl' || k === 'nein') {
+      settings.goalsAsked = true; store.set('settings', settings);
+      if (k === 'wahl') { showView('more'); const d = $('#box-goals'); if (d) { d.open = true; setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); } }
+      renderGoals(); return;
+    }
+    if (k === 'schnell') { const z = settings.ziele[0]; if (z) openPlan(z.id); else showView('plan'); }
+    else if (k === 'blick') { unlockSpeech(); whereAmI(true); }
+    else if (k === 'stufenlos' || k === 'rad') {
+      if (k === 'stufenlos') { mapLayers.acc = true; mapLayers.tram = true; } else mapLayers.rad = true;
+      settings.mapLayers = mapLayers; store.set('settings', settings);
+      showView('map');
+    } else if (k === 'stadt') {
+      if (!settings.server.wir) { showView('more'); const d = $('#box-server'); if (d) { d.open = true; setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); } }
+      else showView('stats');
+    }
+  });
+  renderGoals();
   // Begrüßung: Vorlesen, Profil und große Schrift gleich hier einstellen
   function renderWelcomeAccess() {
     const v = $('#w-voice');

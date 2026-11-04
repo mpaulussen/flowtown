@@ -84,6 +84,11 @@
       <h2 id="h-welcome" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
       <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
     </header>
+    <section class="w-goals" aria-labelledby="w-goal-h">
+      <h3 id="w-goal-h">Was ist dir wichtig?</h3>
+      <p class="small muted">Mehrere möglich. Flowtown zeigt dir das zuerst.</p>
+      <div class="goal-chips" id="w-goals" role="group" aria-labelledby="w-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
+    </section>
     <section class="w-access" aria-labelledby="w-acc-h">
       <button id="w-voice" class="btn big w-voice" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Vorlesen und Ansagen einschalten</span></button>
       <p class="acc-q" id="w-acc-h"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei unterwegs? Wähle dein Profil:</p>
@@ -140,6 +145,7 @@
       <!-- Frag Flowtown: ein Feld, wandert unter den ersten Absatz von Heute, Wohin?, Tipps und Verlauf -->
       <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><button type="button" class="ask-mic" id="ask-mic" aria-label="Sprechen statt tippen" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
     </div>
+    <div class="fuer-dich" id="fuer-dich" hidden></div>
     <section class="entry go-card" aria-labelledby="h-go">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
     <div id="mode-box" class="mode-box">
@@ -346,6 +352,13 @@
     </details>
     </section>
     <section class="tip-list" aria-labelledby="h-more-fahrt"><h3 class="eyebrow" id="h-more-fahrt">Für deine Fahrten</h3>
+    <details class="tipcard setbox" id="box-goals">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span><span class="tip-main"><b>Was dir wichtig ist</b><span id="goals-sub">Noch nichts gewählt</span></span></summary>
+      <div class="tip-detail">
+        <p class="small muted" id="set-goal-h">Flowtown zeigt dir das auf „Heute“ zuerst. Mehrere möglich.</p>
+        <div class="goal-chips" id="set-goals" role="group" aria-labelledby="set-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
+      </div>
+    </details>
     <details class="tipcard setbox" id="box-access" data-world="acc">
       <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg></span><span class="tip-main"><b>Barrierefrei unterwegs</b><span id="access-sub">Kein Profil</span></span></summary>
       <div class="tip-detail">
