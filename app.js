@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.83.2';
+  const VERSION = '0.83.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4905,6 +4905,8 @@
   const median = (xs) => { const v = xs.slice().sort((x, y) => x - y), m = Math.floor(v.length / 2); return v.length % 2 ? v[m] : (v[m - 1] + v[m]) / 2; };
   const dayLabel = (t) => new Date(t).toLocaleDateString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit' });
   const routePts = (g) => g.trips[0].events.filter((e) => e.signal).map((e) => `${e.lat},${e.lon}`).join(';');
+  // Ampeln des Wegs für die kleine Karte: aus den geladenen Ampeldaten, sonst aus der Fahrt selbst
+  const routeMapPts = (g) => { const fromSig = g.sig.map((id) => { const c = clusterById[id]; return c ? `${c.lat},${c.lon}` : ''; }).filter(Boolean); return fromSig.length >= 2 ? fromSig.join(';') : routePts(g); };
   const routeName = (g) => `<button type="button" class="place" data-peek="r" data-pts="${routePts(g)}" data-name="${esc(labelFor(g.first))} → ${esc(labelFor(g.last))}">${esc(labelFor(g.first))}<span class="arrow" aria-label="nach">→</span>${esc(labelFor(g.last))}</button>`;
 
   // Ungewöhnlich lange Wartezeit an einer Ampel in den letzten 7 Tagen, verglichen mit den übrigen Besuchen
@@ -4968,7 +4970,7 @@
       }
       const zEnd = settings.ziele.find((z) => dist(z, g.last) <= 300);
       const act = zEnd ? `<button type="button" class="btn quiet tip-go" data-tipgo="plan" data-z="${zEnd.id}">${ic('route')}${prio === 1 ? 'Mit dem Rad prüfen' : 'Weg zu ' + esc(zEnd.name) + ' prüfen'}</button>`
-        : `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="${esc(routeName(g))}" data-pts="${g.sig.map((id) => { const c = clusterById[id]; return c ? `${c.lat},${c.lon}` : ''; }).filter(Boolean).join(';')}">${ic('map')}Auf der Karte</button>`;
+        : `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="${esc(labelFor(g.first))} → ${esc(labelFor(g.last))}" data-pts="${routeMapPts(g)}">${ic('map')}Auf der Karte</button>`;
       return { prio, act, icon: prio === 1 ? 'bike' : 'route', title: routeName(g), meta: `Dein Weg · ${g.trips.length}× unterwegs`, short: short || `${g.trips.length}× unterwegs auf diesem Weg.`,
         head: prio === 1 ? 'Rad ist gleich schnell' : bh.text ? 'Beste Abfahrtszeit' : 'Dein Weg', cat: prio === 1 ? 'Rad' : 'Weg', num: prio === 1 ? `${Math.max(1, Math.round(bikeMs / 60000))} min` : bh.text ? `${bh.best}–${bh.best + 1} Uhr` : `${g.trips.length}×`,
         html: `${bh.text ? `<p class="tip">${ic('bulb')}<span>${bh.text}</span></p>` : ''}${prio === 1 ? `<p class="tip">${ic('bike')}<span>${short}</span></p>` : ''}<div class="alt">${rows.join('')}</div>` };
