@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.83.4';
+  const VERSION = '0.84.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3727,6 +3727,7 @@
       $('#ask-inp').placeholder = 'Frag Flowtown: ' + ((settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
     }
     $('#ask-mic').hidden = !SR;
+    $('#ask-hero').hidden = !(on && name === 'start');   // auf Heute: Feld in eigener Karte mit Beispielfragen
     // ein Mikrofon genügt: steht das Feld da, sitzt es im Feld statt oben in der Leiste
     const hm = $('#btn-mic'); if (hm) hm.hidden = !SR || on;
   }
@@ -5921,6 +5922,13 @@
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
   $('#ask-mic').addEventListener('click', () => listen());
+  // Beispielfragen auf Heute: ein Tipp stellt die Frage
+  $('#ask-hero').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-askex]');
+    if (!b) return;
+    $('#ask-inp').value = b.dataset.askex;
+    $('#ask-bar').requestSubmit();
+  });
   $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else if (TIPS_RE.test(cmdNorm(i.value))) { renderTips(); readTips(); } else askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
