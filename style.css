@@ -1196,3 +1196,9 @@ main{padding-bottom:calc(108px + env(safe-area-inset-bottom,0px))}
 .tip-more .tip-list{display:flex;flex-direction:column;gap:16px;padding:6px 0 14px}
 .prof-tip p b{display:inline;font-size:inherit}
 .tip-read{align-self:flex-start;background:var(--tint);color:var(--w-plan-ink,#173F66)}
+/* 0.79 Profil auf Tipps wählen, KI für Auswahl */
+.tip-pick p{margin:0;font-size:15px;line-height:1.45;color:var(--acc-ink)}
+.tip-pick .acc-chip{min-height:44px;border-color:var(--acc-line);color:var(--acc-ink)}
+.tip-pick .acc-chip:focus-visible{outline-color:var(--acc)}
+.ki-for{display:inline-flex;align-items:center;gap:6px;margin:0 0 6px;padding:3px 10px;border-radius:999px;background:var(--tint);color:var(--w-plan-ink,#173F66);font-weight:700}
+.ki-for .ic{width:15px;height:15px}

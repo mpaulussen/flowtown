@@ -92,7 +92,11 @@ Harte Regeln:
 - Uhrzeiten und Tageszeiten nennst du nur, wenn sie wörtlich in den Daten stehen. Erfinde keine Orte, Zeiten oder Zahlen.
 - Keine allgemeinen Ratschläge, die auf jeden passen würden ("vorausschauend fahren", "Stoßzeiten meiden"),
   ohne Ort und Zahl aus den Daten.
-- Ist ein Profil zur Barrierefreiheit gesetzt, achte besonders auf Wege zu Fuß, Umstiege und Grünzeiten.
+- Ist ein Profil zur Barrierefreiheit gesetzt ("profil_barrierefrei"), achte besonders auf Wege zu Fuß, Umstiege und Grünzeiten.
+  Mindestens eine Empfehlung betrifft dann das Profil und stützt sich auf "barrierefrei_hinweise" (Haltestellen ohne Stufen,
+  Ampeln mit oder ohne Tonsignal, Orte an den Zielen). Was dort nicht steht, behauptest du nicht.
+- Steht "fokus_verkehrsmittel" in den Daten, hat die Person die Tipps für dieses Verkehrsmittel gewählt. Alle Werte gelten nur dafür.
+  Sprich nur über dieses Verkehrsmittel und nenne es in der Einschätzung.
 - Nichts empfehlen, wofür man das Handy während der Fahrt braucht.
 Wenn die Daten insgesamt dünn sind, sag das in der Einschätzung offen und nenne, welche Fahrten noch fehlen.
 

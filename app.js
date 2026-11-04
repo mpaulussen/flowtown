@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.78.0';
+  const VERSION = '0.79.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -5116,8 +5116,43 @@
         text: begleitOn() ? 'Zu Fuß kündigt Flowtown Ampeln an, sagt Richtungen als Uhrzeit und warnt bei falscher Richtung. Frag jederzeit: Wo bin ich?' : 'Flowtown kann dich zu Fuß begleiten: Ampeln mit Ausstattung, Richtungen als Uhrzeit, Warnung bei falscher Richtung.',
         act: `<button type="button" class="btn quiet tip-go" data-tipgo="wo">${ic('mic')}Wo bin ich?</button>` });
     }
+    // 5. Orte an deinen Zielen laut „Bielefeld barrierefrei erleben“: was für dein Profil passt und was fehlt
+    if (bfData && bfData.orte && settings.ziele.length) {
+      const chk = BF_CHECK[type] || BF_CHECK.andere, rows = [];
+      for (const z of settings.ziele.slice(0, 5)) {
+        const o = bfNear(z);
+        if (!o) continue;
+        const vals = chk.map(([k, label]) => [bfGet(o, k), label]).filter(([v]) => v != null);
+        if (!vals.length) continue;
+        const yes = vals.filter(([v]) => v === 1).map(([, l]) => l), no = vals.filter(([v]) => v === 0).map(([, l]) => l);
+        rows.push({ z, o, yes, no, html: `<b>${esc(z.name)}</b>${o.n && o.n !== z.name ? ` (${esc(o.n)})` : ''}: ${yes.length ? `${bfMark(1)} ${esc(yes.join(', '))}` : ''}${yes.length && no.length ? '; ' : ''}${no.length ? `${bfMark(0)} ${esc(no.join(', '))}` : ''}` });
+      }
+      if (rows.length) out.push({ icon: 'access', head: rows.length === 1 ? `${rows[0].z.name}: so ist es vor Ort` : 'Deine Ziele: so ist es vor Ort', html: rows.map((r) => r.html).join('<br>'), prio: 2,
+        text: rows.map((r) => `${r.z.name}: ${r.yes.length ? 'vorhanden: ' + r.yes.join(', ') : ''}${r.yes.length && r.no.length ? '; ' : ''}${r.no.length ? 'fehlt: ' + r.no.join(', ') : ''}.`).join(' '),
+        act: `<button type="button" class="btn quiet tip-go" data-tipgo="plan" data-z="${rows[0].z.id}">${ic('route')}Weg zu ${esc(rows[0].z.name)}</button>` });
+    }
+    // 6. Einfache Sprache, Ruhe, Hören: was Flowtown unterwegs für dich tut
+    if (type === 'lernen') out.push({ icon: 'mic', head: 'Frag einfach: Wo bin ich?', prio: 3,
+      text: 'Tippe auf den Knopf oder sag „Wo bin ich?“. Flowtown sagt dir die Straße, die nächste Ampel und die Haltestelle. In kurzen Sätzen.',
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="wo">${ic('mic')}Wo bin ich?</button>` });
+    if (type === 'ruhe') out.push({ icon: 'clock', head: 'Mit Ruhe planen', prio: 4,
+      text: 'Flowtown zeigt vor der Fahrt Stau, Baustellen und Sperrungen. So weißt du vorher, ob es eng wird, und kannst früher losgehen oder eine Pause einplanen. Im Notfall hilft der rote Knopf oben.',
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="plan">${ic('clock')}Weg planen</button>` });
+    if (type === 'hoeren') out.push({ icon: 'info', head: 'Alles auch als Text', prio: 4,
+      text: 'Was Flowtown ansagt, steht immer auch auf dem Bildschirm: Ampeln, Haltestellen, Umstiege. Fragen kannst du tippen statt sprechen.',
+      act: '' });
+    // 7. noch nichts: Ziel speichern, dann gibt es Hinweise
+    if (!out.length && !settings.ziele.length) out.push({ icon: 'pin', head: 'Speichere ein Ziel', prio: 9,
+      text: 'Mit einem Ziel zeigt Flowtown dir sofort, was es dort gibt: Haltestellen mit oder ohne Stufen, Toiletten, Parkplätze und wie der Ort für dich passt.',
+      act: `<button type="button" class="btn quiet tip-go" data-tipgo="plan">${ic('pin')}Ziel speichern</button>` });
     return out.sort((a, b) => a.prio - b.prio);
   }
+  // ohne Profil: auf der Tipps-Seite gleich wählen können
+  function profPicker() {
+    const want = goals().some((g) => g === 'stufenlos' || g === 'blick');
+    return `<section class="tip-prof tip-pick" aria-labelledby="tip-pick-h"><h3 id="tip-pick-h">${ic('access')}Tipps für Menschen mit Behinderung</h3><p>${want ? 'Du hast gesagt, dass dir Barrierefreiheit wichtig ist. ' : ''}Wähle dein Profil, dann zeigt Flowtown dir hier Haltestellen ohne Stufen, Ampeln mit Tonsignal, Toiletten und Hinweise an deinen Zielen.</p><div class="acc-chips" role="group" aria-label="Profil wählen">${Object.keys(ACCESS_LABEL).filter((k) => k !== 'andere').map((k) => `<button type="button" class="acc-chip" data-tipacc="${k}">${esc(ACC_SHORT[k] || ACCESS_LABEL[k])}</button>`).join('')}</div></section>`;
+  }
+  const ACC_SHORT = { rollstuhl: 'Rollstuhl', rollator: 'Rollator', sehen: 'Ich sehe schlecht', hoeren: 'Ich höre schlecht', lernen: 'Einfache Sprache', ruhe: 'Ruhe und Pausen' };
   // ohne Fahrten: schon jetzt etwas zu den Zielen, aus der Verkehrslage
   function zielTips() {
     if (!settings.ziele.length || !lageCache) return [];
@@ -5145,7 +5180,8 @@
     const pcard = (x) => `<div class="prof-tip"><span class="prof-ic">${ic(x.icon)}</span><div><b>${esc(x.head)}</b><p>${x.html || esc(x.text || '')}</p>${x.act ? `<div class="tip-act">${x.act}</div>` : ''}</div></div>`;
     const news = '';   // Meldungen erscheinen nur, wenn es welche für die eigenen Wege gibt
     const sw = used.length > 1 ? `<div class="seg pill tip-modes" role="group" aria-label="Tipps nach Verkehrsmittel">${TIP_MODES.filter(([k]) => k === 'alle' || counts[k]).map(([k, l]) => `<button type="button" data-tipmode="${k}" aria-pressed="${tipMode === k}">${l}</button>`).join('')}</div>` : '';
-    const profBox = settings.access.on ? `<section class="tip-prof" aria-labelledby="tip-prof-h"><h3 id="tip-prof-h">${ic('access')}Für dich: ${esc(ACCESS_LABEL[settings.access.type])}</h3>${prof.length ? prof.slice(0, easy ? 2 : 4).map(pcard).join('') : `<p class="small">Sobald du Wege mit Flowtown gemacht oder Ziele gespeichert hast, stehen hier Hinweise für dein Profil: Hindernisse, Haltestellen, Ampeln.</p>`}</section>` : '';
+    const pickTop = !settings.access.on && goals().some((g) => g === 'stufenlos' || g === 'blick');
+    const profBox = !settings.access.on ? (pickTop ? profPicker() : '') : `<section class="tip-prof" aria-labelledby="tip-prof-h"><h3 id="tip-prof-h">${ic('access')}Für dich: ${esc(ACCESS_LABEL[settings.access.type])}</h3>${prof.length ? prof.slice(0, easy ? 2 : 4).map(pcard).join('') : `<p class="small">Sobald du Wege mit Flowtown gemacht oder Ziele gespeichert hast, stehen hier Hinweise für dein Profil: Hindernisse, Haltestellen, Ampeln.</p>`}</section>`;
     const top = easy ? 3 : 3, first = tips.slice(0, top), rest = easy ? [] : tips.slice(top);
     const say = (h, t) => `${plain(h)}. ${plain(t || '')}`.replace(/\s+/g, ' ').trim();
     tipsSay = (settings.access.on ? prof.slice(0, easy ? 2 : 4).map((x) => say(x.head, x.text || x.html)) : []).concat(first.map((x) => say(x.head || x.title, x.short)), n ? [] : zt.map((x) => say(x.head, x.text)));
@@ -5154,12 +5190,14 @@
       : zt.length ? `<h3 class="eyebrow">Schon jetzt für deine Ziele</h3><section class="tip-prof plain">${zt.map(pcard).join('')}</section>`
       : n && tipMode !== 'alle' ? `<p class="lead-text">${cap(GROUP_WITH[tipMode] || 'damit')} hat Flowtown noch keine eigenen Tipps für dich. Nach ein paar weiteren Fahrten stehen hier Zeitfresser und Alternativen.</p>`
       : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
+      + (!settings.access.on && !pickTop ? profPicker() : '')
       + (() => { const f = faqCards(), k = kiCard(); return (f ? `<div class="tip-acc">${f}</div>` : '') + (k ? `<div class="tip-help"><h3 class="eyebrow">Mehr Hilfe</h3>${k}</div>` : ''); })() + news;
     if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
     if (tipMode === 'alle' || tipMode === 'oepnv') tipsFahrplan();
-    if (settings.access.on && !tipsProfLoading && ['rollstuhl', 'rollator'].includes(settings.access.type) && (!bpp || !bfData || !fp)) {
+    const mobP = ['rollstuhl', 'rollator'].includes(settings.access.type);
+    if (settings.access.on && !tipsProfLoading && (!bfData || (mobP && (!bpp || !fp)))) {
       tipsProfLoading = true;
-      Promise.allSettled([bpp ? 0 : loadBpp(), bfData ? 0 : loadBf(), fp ? 0 : loadFahrplan()]).then((r) => { if (r.some((x) => x.value) && !$('#view-tips').hidden) renderTips(); });
+      Promise.allSettled([bpp || !mobP ? 0 : loadBpp(), bfData ? 0 : loadBf(), fp || !mobP ? 0 : loadFahrplan()]).then((r) => { if (r.some((x) => x.value) && !$('#view-tips').hidden) renderTips(); });
     }
     requestNames([].concat(...trips.map((t) => t.events.filter((e) => e.signal))), () => { if (!$('#view-tips').hidden) renderTips(); });
     // Werte anderer und Meldungen nachladen, dann einmal neu zeichnen
@@ -5188,19 +5226,22 @@
       return out.replace(/\u0000(\d+)\u0000/g, (m, i) => slots[Number(i)]);
     };
   }
+  // wofür eine Einschätzung gilt: Verkehrsmittel und Profil
+  const kiFor = (mode) => [mode && mode !== 'alle' ? cap(GROUP_WITH[mode]) : 'Alle Wege', settings.access.on ? ACCESS_LABEL[settings.access.type] : ''].filter(Boolean).join(' · ');
   function kiCard() {
     if (!apiBase()) return '';
     if (!settings.server.ki) return `<div class="card">${cardHead('spark', 'KI-Einschätzung', 'Mistral, EU')}<p class="small muted">Unter „Mehr“ erlauben, dann gibt es persönliche Empfehlungen.</p></div>`;
     const r = kiState.result;
     const L2 = kiLinker();
-    const body = r ? `<p>${L2(r.einschaetzung)}</p>${r.groesster_hebel ? `<p class="tip">${ic('spark')}<span><strong>Größter Hebel:</strong> ${L2(r.groesster_hebel)}</span></p>` : ''}<ul class="ki-list">${r.empfehlungen.map((e) => `<li>${ic('bulb')}<span><strong>${L2(e.titel)}</strong><br>${L2(e.text)}</span></li>`).join('')}</ul>
+    const forNow = kiFor(tipMode || 'alle'), stale = r && (r.fuer || 'Alle Wege') !== forNow;
+    const body = r ? `<p class="ki-for small">${ic('spark')}Für: ${esc(r.fuer || 'Alle Wege')}</p><p>${L2(r.einschaetzung)}</p>${r.groesster_hebel ? `<p class="tip">${ic('spark')}<span><strong>Größter Hebel:</strong> ${L2(r.groesster_hebel)}</span></p>` : ''}<ul class="ki-list">${r.empfehlungen.map((e) => `<li>${ic('bulb')}<span><strong>${L2(e.titel)}</strong><br>${L2(e.text)}</span></li>`).join('')}</ul>
       <p class="small muted">${esc(r.modell || 'Mistral')} · ${esc(dayLabel(r.t))} · KI kann sich irren</p>` : '<p class="small muted">Persönliche Einschätzung aus deinen Werten.</p>';
     return `<div class="card">${cardHead('spark', 'KI-Einschätzung', 'Mistral, EU')}${body}${kiState.error ? `<p class="msg warn">${esc(kiState.error)}</p>` : ''}
-      <button type="button" class="btn${r ? '' : ' primary'}" id="btn-ki" ${kiState.busy ? 'disabled' : ''}>${ic('spark')}${kiState.busy ? 'Einschätzung wird erstellt …' : r ? 'Neu einschätzen' : 'Einschätzung holen'}</button></div>`;
+      <button type="button" class="btn${r && !stale ? '' : ' primary'}" id="btn-ki" ${kiState.busy ? 'disabled' : ''}>${ic('spark')}${kiState.busy ? 'Einschätzung wird erstellt …' : stale ? `Neu einschätzen für ${esc(forNow)}` : r ? 'Neu einschätzen' : `Einschätzung holen${forNow !== 'Alle Wege' ? ': ' + esc(forNow) : ''}`}</button></div>`;
   }
   // Zusammengefasste Werte für die KI: keine Koordinaten, keine Uhrzeiten einzelner Fahrten, keine Start- und Zielorte
-  function kiFacts() {
-    const list = trips.filter((t) => !t.demo);
+  function kiFacts(mode) {
+    const list = trips.filter((t) => !t.demo && (!mode || mode === 'alle' || MODE_GROUP[t.mode] === mode));
     const since = Date.now() - 30 * 864e5;
     const recent = list.filter((t) => t.start >= since);
     const s = (ms) => Math.round(ms / 1000);
@@ -5265,7 +5306,9 @@
       verkehrsmittel: groups, zeitfresser, wege,
       auto_warten_je_km_nach_zeitfenster: windowStats(list, 1).map((x) => ({ zeitfenster: x.w.label, fahrten: x.n, warten_je_km_s: s(x.v) })),
       auffaelligkeiten_7_tage: anomalyList(list).slice(0, 5).map((x) => ({ tag: dayLabel(x.e.t), ampel: labelFor(x.e), warten_s: s(x.e.wait), sonst_s: s(x.usual) })),
-      app_hinweise: computeTips().filter((x) => x.icon !== 'bell').map((x) => plain(x.title) + ': ' + plain(x.short)),
+      fokus_verkehrsmittel: mode && mode !== 'alle' ? GROUP_WITH[mode] : null,
+      barrierefrei_hinweise: settings.access.on ? profileTips(list).slice(0, 5).map((x) => plain(x.head) + ': ' + plain(x.text || x.html || '')) : null,
+      app_hinweise: computeTips(mode).filter((x) => x.icon !== 'bell').map((x) => plain(x.title) + ': ' + plain(x.short)),
       fahrweise_auto: steady.length ? { gleichmaessig_anteil: Math.round(avgOf(steady) * 100) / 100, starke_bremsungen_je_100km: carKm ? Math.round(car.reduce((x, t) => x + (t.stats.brakes || 0), 0) / carKm * 1000) / 10 : null } : null,
       kosten_ampelhalte_eur_geschaetzt: costs.length ? Math.round(costs.reduce((x, c) => x + c.halts, 0) * 100) / 100 : null,
       moegliche_ersparnisse: ersparnisse,
@@ -5276,8 +5319,9 @@
     kiState.busy = true; kiState.error = ''; renderTips();
     try {
       await loadWir();
-      const r = await postJson('/api/ki', { facts: kiFacts() });
-      kiState.result = Object.assign({ t: Date.now() }, r);
+      const mode = tipMode || 'alle';
+      const r = await postJson('/api/ki', { facts: kiFacts(mode) });
+      kiState.result = Object.assign({ t: Date.now(), fuer: kiFor(mode) }, r);
       store.set('ki', kiState.result);
     } catch (e) {
       kiState.error = 'Die Einschätzung hat nicht geklappt: ' + e.message;
@@ -5609,6 +5653,17 @@
   $('#btn-plan-back').addEventListener('click', () => showView('start'));
   $('#tips-body').addEventListener('click', (ev) => {
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
+    const pa = ev.target.closest('[data-tipacc]');
+    if (pa) {
+      const k = pa.dataset.tipacc;
+      settings.access = { on: true, type: k };
+      if (k === 'sehen' && !settings.voice && canSpeak) settings.voice = { on: true, rate: 1 };
+      store.set('settings', settings);
+      applyAccessUI(); tipsProfLoading = false; renderTips();
+      speak(`Profil ${ACCESS_LABEL[k]} gewählt. Ändern kannst du es unter Mehr.`, { now: true });
+      const h = $('#tip-prof-h'); if (h) { h.setAttribute('tabindex', '-1'); h.focus(); }
+      return;
+    }
     const m = ev.target.closest('[data-tipmode]');
     if (m) { tipMode = m.dataset.tipmode; tipOpen = null; renderTips(); return; }
     const go = ev.target.closest('[data-tipgo]');
