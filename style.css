@@ -1294,3 +1294,8 @@ html,body{touch-action:manipulation}
 .best-an{font-weight:400;color:var(--muted)}
 .best-main>span{font-size:14px;color:var(--muted);line-height:1.35}
 .best-tag{flex:none;font-size:12px;font-weight:700;padding:3px 8px;border-radius:999px;background:var(--plan,#1f5c99);color:#fff}
+/* 0.89 offene Fragen: Gespräch beginnen, eigene Ziele als Antwort zum Antippen, am Ziel */
+.ask-ex-chip.open::after{content:"…";content:"…" / "";margin-left:2px}
+.assist-pick{margin:4px 0 2px}
+.best-am{margin:0;display:flex;gap:8px;align-items:flex-start;font-size:15px;line-height:1.4;color:var(--w-vor-ink,#173f66)}
+.best-am .ic{width:20px;height:20px;flex:none;margin-top:2px}

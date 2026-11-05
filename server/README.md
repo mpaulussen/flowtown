@@ -182,6 +182,7 @@ Ab App-Version 0.88 kann der Server mehr. Die App fragt `/api/health` und zeigt 
   - `weg_check`: Hindernisse auf dem Fußweg zu einem Ziel (Stufen, Belag, Steigung, hohe Bordsteine, Gleise, Ampeln mit und ohne Tonsignal), Baustellen und gemeldete Hindernisse. Nutzt die Kacheln des Weg-Checks (`fussnetz`); fehlt eine, holt der Server sie und antwortet nach höchstens 6 Sekunden mit dem, was da ist.
   - `oepnv_stoerungen`: Umleitungen von moBiel und in der App gemeldete defekte Aufzüge.
   - `ampeln_mit_ton`: Ampeln in der Nähe mit Tonsignal laut OpenStreetMap und den Rückmeldungen nach Fahrten.
+  - `ort_info`: was an einem Ort zählt, an dem die Person sein will: Barrierefreiheit des Gebäudes (Bethel), nächstes rollstuhlgerechtes WC, Toilette, Behindertenparkplatz, Stadtbahn mit Hochbahnsteig, gemeldete Hindernisse. Dieselben Angaben stehen als `am_ziel` auch in `vergleich` und `weg_check`.
 - `meine_auswertung` enthält jetzt auch den Vergleich der eigenen Fahrten nach Verkehrsmittel und die eigenen Ampel-Bewertungen (etwa „Grün zu kurz“).
 
 ### Gemeldete Hindernisse prüfen

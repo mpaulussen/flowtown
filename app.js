@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.88.0';
+  const VERSION = '0.89.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1590,6 +1590,7 @@
   }
   async function handleCommand(alts) {
     micStatus('Verstanden: „' + alts[0] + '“');
+    if (pendingIntent && apiBase()) { askAssist(alts[0], true); return; }
     for (const a of alts) if (await runCommand(cmdNorm(a))) return;
     if (apiBase()) { askAssist(alts[0], true); return; }   // kein fester Befehl: freie Frage an die Assistenz
     speak('Das habe ich nicht verstanden. Sag zum Beispiel: Losfahren, Zur Uni, Nächste Bahn ab Jahnplatz, oder Hilfe.', { now: true, force: true });
@@ -1786,6 +1787,8 @@
     const say = (t, o) => { if (spoken || voiceOn()) speak(t, Object.assign({ now: true, force: true }, o || {})); };
     frage = String(frage || '').trim();
     if (!frage || assistBusy) return;
+    let shown = frage;
+    if (pendingIntent) { const d = intentDef(pendingIntent); pendingIntent = null; frage = d.tpl.replace('{x}', frage.replace(/^(zu[mr]?|nach|in die|ins|zur|zum)\s+/i, '')); }
     if (isLastTripQ(frage)) { answerLastTrip(frage, spoken); return; }
     if (!settings.assist) {
       const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein ungefährer Standort (auf etwa 100 m gerundet) an den Flowtown-Server und an Mistral (KI-Anbieter, Rechenzentren in der EU). Gespeichert wird nichts. Einverstanden?');
@@ -1793,7 +1796,7 @@
       settings.assist = true; store.set('settings', settings);
     }
     assistBusy = true;
-    showAssist(frage, null);
+    showAssist(shown, null);
     if (spoken) setTimeout(() => { if (assistBusy) say('Einen Moment.'); }, 500);   // erst, wenn das Mikrofon frei ist
     else say('Einen Moment.');
     try {
@@ -1807,13 +1810,13 @@
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
       assistAct = r.aktion || null;
-      showAssist(frage, r.antwort);
+      showAssist(shown, r.antwort);
       assistLast = r.antwort;
       say(r.antwort, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : null);
     } catch (e) {
       const msg = /eingerichtet/.test(e.message) ? 'Die Assistenz ist auf dem Server noch nicht eingerichtet.' : /keine weiteren/.test(e.message) ? e.message : 'Die Assistenz ist gerade nicht erreichbar.';
       assistAct = null;
-      showAssist(frage, msg);
+      showAssist(shown, msg);
       assistLast = msg;
       say(msg);
     } finally { assistBusy = false; }
@@ -1856,7 +1859,7 @@
     const el = $('#assist');
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
     el.innerHTML = `<div class="assist-head"><b>${ic('mic')}Frag Flowtown</b>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
-      <p class="assist-q">${esc(frage)}</p>
+      ${frage ? `<p class="assist-q">${esc(frage)}</p>` : ''}
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
       <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic('mic')}</button>` : ''}</form>
       <p class="small muted">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>`;
@@ -3760,56 +3763,73 @@
   // Frag Flowtown oben auf den Hauptseiten, mit einem kurzen Beispiel, das zur Seite passt
   const ASK_EX = { start: 'Nächste Bahn?', plan: 'Rollstuhl-WC?', tips: 'Park + Ride?', stats: 'Baustellen?' };
   const ASK_EX_MINE = { tips: 'Mein Zeitfresser?', stats: 'Wo warte ich lange?' };   // mit eingeschalteter Auswertung
-  // KI-Karte je Seite: Überschrift, ein Satz, Beispielfragen. Nur Fragen, die Flowtown wirklich beantworten kann:
-  // [Text auf dem Knopf, gestellte Frage, Bedingung]. Bedingung: Name eines Server-Werkzeugs (erst nach dem Server-Update da),
-  // „mine“ = braucht die freigegebene Auswertung. {Z} = erstes gespeichertes Ziel, sonst der Hauptbahnhof.
-  // „Wo bin ich?“, „Lies mir die Tipps vor“ und „letzte Fahrt“ beantwortet die App selbst.
+  // KI-Karte je Seite. Die Vorschläge fragen erst offen („Wohin möchtest du?“) und werden dann mit der Antwort konkret:
+  // Weg prüfen, Verkehrsmittel vergleichen und sagen, was am Ziel zählt. Einträge: { l: Knopf, i: Gespräch } oder
+  // { l: Knopf, q: gleich gestellte Frage }; n = Bedingung (Server-Werkzeug oder „mine“ = freigegebene Auswertung).
+  const accName = () => (settings.access.on ? ACCESS_LABEL[settings.access.type] : '');
+  const accWith = () => ({ rollstuhl: 'mit Rollstuhl', rollator: 'mit Rollator oder Gehhilfe', sehen: 'und siehst schlecht', hoeren: 'und hörst schlecht', lernen: '', ruhe: 'und brauchst Ruhe' }[settings.access.on ? settings.access.type : ''] || '');
   const ASK_HERO = {
-    start: { title: 'KI, die mit dir spricht', sub: 'Frag, womit du am besten hinkommst, wo Hindernisse sind und was bei Bus und Bahn los ist.' },
-    tips: { title: 'KI-Tipps für deine Wege', sub: 'Frag nach der besten Abfahrt, Alternativen zum Auto und Hilfen an deinem Ziel.' },
-    stats: { title: 'KI-Analyse deiner Fahrten', sub: 'Frag, womit du am schnellsten warst, wo du Zeit verlierst und was dir unterwegs aufgefallen ist.' }
+    start: { title: 'KI, die mit dir spricht', sub: () => (settings.access.on && accWith() ? `Du bist heute wieder unterwegs, ${accWith()}? Sag mir, wohin. Ich prüfe den Weg und was dich dort erwartet.` : 'Ich helfe dir gerne, deinen besten Weg zu finden. Sag mir einfach, wohin du willst.') },
+    tips: { title: 'KI-Tipps für deine Wege', sub: () => 'Frag, was sich lohnt: Rad, Bus und Bahn oder Auto, die beste Abfahrt und was dich am Ziel erwartet.' },
+    stats: { title: 'KI-Analyse deiner Fahrten', sub: () => 'Frag, womit du am schnellsten warst, wo du Zeit verlierst und was dir unterwegs aufgefallen ist.' }
   };
-  const Q_LAST = ['Letzte Fahrt: wie lange gestanden?', 'Wie lange stand ich bei der letzten Fahrt?'];
+  // Gespräche: Eröffnung und die Frage, in die die Antwort ({x}) eingesetzt wird
+  function intentDef(k) {
+    const P = accName();
+    const D = {
+      weg: { open: settings.access.on && accWith() ? `Du bist heute wieder unterwegs, ${accWith()}. Wohin möchtest du? Ich suche den besten Weg, prüfe ihn und sage dir, was dich dort erwartet.` : 'Ich helfe dir gerne, deinen besten Weg zu finden. Wohin möchtest du?',
+        tpl: 'Wie komme ich jetzt am besten zu {x}? Vergleiche die Möglichkeiten, prüfe den Weg und sag mir, was mich am Ziel erwartet.' },
+      vergleich: { open: 'Ich vergleiche für dich Auto, Bus und Bahn, Rad und zu Fuß. Wohin soll es gehen?', tpl: 'Was lohnt sich für den Weg zu {x}: Rad, Bus und Bahn, Auto oder zu Fuß? Nenn mir die Optionen.' },
+      ort: { open: 'Sag mir, für welchen Ort du Infos willst. Ein Name, ein Gebäude oder eine Adresse genügt.', tpl: 'Was muss ich über {x} wissen? Zugang, Toilette, Parken und die nächste Haltestelle.' },
+      stufenlos: { open: `Wohin möchtest du? Ich prüfe den Weg auf Stufen und Hindernisse und sage dir, was dich am Ziel erwartet.`, tpl: `Ich bin unterwegs ${accWith() || 'mit Rollstuhl'}. Wie komme ich stufenlos zu {x}? Prüfe den Weg und sag mir, was mich dort erwartet: Zugang, rollstuhlgerechtes WC, Behindertenparkplatz, Haltestelle mit Hochbahnsteig.` },
+      wc: { open: 'Wo willst du hin? Ich suche das rollstuhlgerechte WC dort, wo du hinwillst, nicht hier.', tpl: 'Wo ist ein rollstuhlgerechtes WC bei {x}, und wie komme ich stufenlos hin?' },
+      sicher: { open: 'Wohin möchtest du? Ich prüfe den Weg auf Ampeln mit Tonsignal, Stufen und Gleise und sage dir, was dich am Ziel erwartet.', tpl: 'Ich sehe schlecht. Prüfe den Weg zu {x}: Ampeln mit Tonsignal, Stufen und Gleise. Was erwartet mich am Ziel?' },
+      hoeren: { open: 'Wohin möchtest du? Ich sage dir, ob Bus und Bahn normal fahren, und was dich am Ziel erwartet.', tpl: 'Wie komme ich zu {x}? Gibt es Störungen bei Bus und Bahn auf dem Weg, und was gibt es am Ziel für hörbehinderte Menschen?' },
+      einfach: { open: 'Wohin willst du? Sag es mir einfach.', tpl: 'Wie komme ich zu {x}? Bitte in einfacher Sprache. Sag mir auch, was mich dort erwartet.' },
+      ruhig: { open: 'Wohin möchtest du? Ich suche einen entspannten Weg und eine ruhige Zeit.', tpl: 'Wie komme ich möglichst entspannt zu {x}? Wann ist es dort ruhig, und gibt es eine Toilette am Ziel?' },
+      abfahrt: { open: 'Wohin fährst du? Ich sage dir, wann du am besten losfährst.', tpl: 'Wann fahre ich am besten zu {x} los, und womit?' }
+    };
+    return D[k] || D.weg;
+  }
+  const Q_LAST = { l: 'Wie war meine letzte Fahrt?', q: 'Wie lange stand ich bei der letzten Fahrt?' };
+  const Q_STOER = { l: 'Fahren Bus und Bahn normal?', q: 'Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?', n: 'oepnv_stoerungen' };
+  const Q_ORT = { l: 'Infos zu einem Ort', i: 'ort' };
+  const Q_MINE = { l: 'Was fällt dir an meinen Fahrten auf?', q: 'Was fällt dir an meinen Fahrten auf? Womit war ich am schnellsten, und wo verliere ich Zeit?', n: 'mine' };
   const ASK_Q = {
     '': {
-      start: [['{Z}: womit am besten?', 'Womit komme ich jetzt am besten zu {Z}?', 'vergleich'], ['{Z}: Hindernisse am Weg?', 'Gibt es Hindernisse oder Baustellen auf dem Weg zu {Z}?', 'weg_check'], ['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?', 'oepnv_stoerungen'],
-        ['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['{Z}: Baustellen am Weg?', 'Gibt es Baustellen oder Stau auf dem Weg zu {Z} mit dem Auto?']],
-      tips: [['{Z}: Rad statt Auto?', 'Lohnt sich für den Weg zu {Z} das Rad oder Bus und Bahn statt Auto?', 'vergleich'], ['{Z}: wann am besten los?', 'Wann fahre ich mit dem Auto am besten zu {Z} los?'], ['Park + Ride?', 'Wo gibt es Park + Ride in meiner Nähe?']],
-      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine'], ['Wo verliere ich Zeit?', 'Wo verliere ich auf meinen Wegen die meiste Zeit?', 'mine'],
-        ['{Z}: womit am besten?', 'Womit komme ich jetzt am besten zu {Z}?', 'vergleich'], ['Baustellen hier?', 'Gibt es Baustellen in meiner Nähe?']]
+      start: [{ l: 'Finde meinen besten Weg', i: 'weg' }, { l: 'Rad, Bus oder Auto: was lohnt sich?', i: 'vergleich', n: 'vergleich' }, Q_ORT, Q_STOER],
+      tips: [{ l: 'Rad, Bus oder Auto: was lohnt sich?', i: 'vergleich', n: 'vergleich' }, { l: 'Wann fahre ich am besten los?', i: 'abfahrt' }, { l: 'Was kann ich besser machen?', q: 'Was kann ich auf meinen Wegen besser machen?', n: 'mine' }, { l: 'Park + Ride?', q: 'Wo gibt es Park + Ride in meiner Nähe?' }],
+      stats: [Q_LAST, Q_MINE, { l: 'Womit war ich am schnellsten?', q: 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', n: 'mine' }, { l: 'Finde meinen besten Weg', i: 'weg' }]
     },
     rollstuhl: {
-      start: [['{Z}: stufenlos hin?', 'Ist der Weg zu {Z} stufenlos? Welche Hindernisse gibt es?', 'weg_check'], ['{Z}: womit am besten?', 'Womit komme ich mit dem Rollstuhl am besten zu {Z}?', 'vergleich'], ['Aufzug gestört?', 'Sind gerade Aufzüge an Haltestellen gestört?', 'oepnv_stoerungen'],
-        ['Stufenlose Haltestelle hier?', 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?'], ['Rollstuhl-WC hier?', 'Wo ist ein rollstuhlgerechtes WC in der Nähe?']],
-      tips: [['{Z}: Behindertenparkplatz?', 'Gibt es Behindertenparkplätze bei {Z}?'], ['Stadttheater barrierefrei?', 'Wie barrierefrei ist das Stadttheater Bielefeld?'], ['Rollstuhl-WC hier?', 'Wo ist ein rollstuhlgerechtes WC in der Nähe?']],
-      stats: [Q_LAST, ['Wo war es zu kurz grün?', 'An welchen Ampeln war die Grünphase für mich zu kurz?', 'mine'], ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine'], ['{Z}: stufenlos hin?', 'Ist der Weg zu {Z} stufenlos?', 'weg_check']]
+      start: [{ l: 'Stufenlos ans Ziel', i: 'stufenlos', n: 'weg_check' }, { l: 'Rollstuhl-WC am Ziel', i: 'wc', n: 'ort_info' }, Q_ORT, { l: 'Aufzug gestört?', q: 'Sind gerade Aufzüge an Haltestellen gestört?', n: 'oepnv_stoerungen' }, { l: 'Finde meinen besten Weg', i: 'weg' }],
+      tips: [{ l: 'Was lohnt sich mit Rollstuhl?', i: 'vergleich', n: 'vergleich' }, { l: 'Rollstuhl-WC am Ziel', i: 'wc', n: 'ort_info' }, Q_ORT, { l: 'Stufenlose Haltestelle hier?', q: 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?' }],
+      stats: [Q_LAST, { l: 'Wo war es zu kurz grün?', q: 'An welchen Ampeln war die Grünphase für mich zu kurz?', n: 'mine' }, Q_MINE, { l: 'Stufenlos ans Ziel', i: 'stufenlos', n: 'weg_check' }]
     },
     rollator: {
-      start: [['{Z}: ebener Weg?', 'Gibt es auf dem Weg zu {Z} Kopfsteinpflaster, Stufen oder Steigungen?', 'weg_check'], ['{Z}: womit am besten?', 'Womit komme ich mit dem Rollator am besten zu {Z}?', 'vergleich'], ['Aufzug gestört?', 'Sind gerade Aufzüge an Haltestellen gestört?', 'oepnv_stoerungen'],
-        ['Stufenlose Haltestelle hier?', 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?'], ['WC in der Nähe?', 'Wo ist eine Toilette in der Nähe?']],
-      tips: [['Stufenlose Haltestelle hier?', 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?'], ['WC in der Nähe?', 'Wo ist eine Toilette in der Nähe?'], ['Stadttheater barrierefrei?', 'Wie barrierefrei ist das Stadttheater Bielefeld?']],
-      stats: [Q_LAST, ['Wo war es zu kurz grün?', 'An welchen Ampeln war die Grünphase für mich zu kurz?', 'mine'], ['{Z}: ebener Weg?', 'Gibt es auf dem Weg zu {Z} Kopfsteinpflaster oder Stufen?', 'weg_check']]
+      start: [{ l: 'Ebener Weg ans Ziel', i: 'stufenlos', n: 'weg_check' }, Q_ORT, { l: 'Aufzug gestört?', q: 'Sind gerade Aufzüge an Haltestellen gestört?', n: 'oepnv_stoerungen' }, { l: 'Finde meinen besten Weg', i: 'weg' }],
+      tips: [{ l: 'Was lohnt sich mit Rollator?', i: 'vergleich', n: 'vergleich' }, { l: 'Toilette am Ziel', i: 'wc', n: 'ort_info' }, Q_ORT, { l: 'Stufenlose Haltestelle hier?', q: 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?' }],
+      stats: [Q_LAST, { l: 'Wo war es zu kurz grün?', q: 'An welchen Ampeln war die Grünphase für mich zu kurz?', n: 'mine' }, Q_MINE, { l: 'Ebener Weg ans Ziel', i: 'stufenlos', n: 'weg_check' }]
     },
     sehen: {
-      start: [['Wo bin ich?', 'Wo bin ich?'], ['{Z}: Ampeln mit Ton am Weg?', 'Welche Ampeln auf dem Weg zu {Z} haben ein Tonsignal, und gibt es Stufen?', 'weg_check'], ['Ampeln mit Ton hier?', 'Welche Ampeln in meiner Nähe haben ein Tonsignal?', 'ampeln_mit_ton'],
-        ['Nächste Bahn?', 'Wann fährt die nächste Bahn?']],
-      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['{Z}: womit am besten?', 'Womit komme ich am besten zu {Z}?', 'vergleich'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?']],
-      stats: [Q_LAST, ['Wo fehlte ein Tonsignal?', 'An welchen Ampeln fehlte mir ein Tonsignal?', 'mine'], ['{Z}: Ampeln mit Ton am Weg?', 'Welche Ampeln auf dem Weg zu {Z} haben ein Tonsignal?', 'weg_check']]
+      start: [{ l: 'Wo bin ich?', q: 'Wo bin ich?' }, { l: 'Sicher ans Ziel', i: 'sicher', n: 'weg_check' }, Q_ORT, { l: 'Ampeln mit Ton hier?', q: 'Welche Ampeln in meiner Nähe haben ein Tonsignal?', n: 'ampeln_mit_ton' }, { l: 'Finde meinen besten Weg', i: 'weg' }],
+      tips: [{ l: 'Tipps vorlesen', q: 'Lies mir die Tipps vor' }, { l: 'Was lohnt sich für mich?', i: 'vergleich', n: 'vergleich' }, Q_ORT],
+      stats: [Q_LAST, { l: 'Wo fehlte ein Tonsignal?', q: 'An welchen Ampeln fehlte mir ein Tonsignal?', n: 'mine' }, Q_MINE]
     },
     hoeren: {
-      start: [['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?', 'oepnv_stoerungen'], ['{Z}: womit am besten?', 'Womit komme ich am besten zu {Z}?', 'vergleich'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?']],
-      tips: [['Umleitungen bei Bus und Bahn?', 'Welche Umleitungen gibt es gerade bei Bus und Bahn?', 'oepnv_stoerungen'], ['{Z}: Baustellen am Weg?', 'Gibt es Baustellen auf dem Weg zu {Z}?'], ['Stadttheater für Hörbehinderte?', 'Was gibt es im Stadttheater Bielefeld für hörbehinderte Menschen?']],
-      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine'], ['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen bei Bus und Bahn?', 'oepnv_stoerungen']]
+      start: [{ l: 'Finde meinen besten Weg', i: 'hoeren' }, Q_STOER, Q_ORT],
+      tips: [{ l: 'Rad, Bus oder Auto: was lohnt sich?', i: 'vergleich', n: 'vergleich' }, Q_STOER, Q_ORT],
+      stats: [Q_LAST, Q_MINE, Q_STOER]
     },
     lernen: {
-      start: [['Wo bin ich?', 'Wo bin ich?'], ['{Z}: wie komme ich hin?', 'Wie komme ich am besten zu {Z}? Bitte in einfacher Sprache.', 'vergleich'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn? Bitte in einfacher Sprache.']],
-      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['Fährt mein Bus normal?', 'Gibt es Störungen bei Bus und Bahn? Bitte in einfacher Sprache.', 'oepnv_stoerungen'], ['{Z}: wann los?', 'Wann fahre ich am besten zu {Z} los? Bitte in einfacher Sprache.']],
-      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Womit war ich am schnellsten? Bitte in einfacher Sprache.', 'mine']]
+      start: [{ l: 'Wo bin ich?', q: 'Wo bin ich?' }, { l: 'Wie komme ich hin?', i: 'einfach' }, { l: 'Fährt mein Bus normal?', q: 'Gibt es Störungen bei Bus und Bahn? Bitte in einfacher Sprache.', n: 'oepnv_stoerungen' }],
+      tips: [{ l: 'Tipps vorlesen', q: 'Lies mir die Tipps vor' }, { l: 'Wie komme ich hin?', i: 'einfach' }, Q_ORT],
+      stats: [Q_LAST, { l: 'Womit war ich am schnellsten?', q: 'Womit war ich am schnellsten? Bitte in einfacher Sprache.', n: 'mine' }]
     },
     ruhe: {
-      start: [['{Z}: wann ist wenig los?', 'Wann ist auf dem Weg zu {Z} am wenigsten Verkehr?'], ['{Z}: womit am besten?', 'Womit komme ich am entspanntesten zu {Z}?', 'vergleich'], ['WC in der Nähe?', 'Wo ist eine Toilette in der Nähe?']],
-      tips: [['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen bei Bus und Bahn?', 'oepnv_stoerungen'], ['{Z}: Baustellen am Weg?', 'Gibt es Baustellen auf dem Weg zu {Z}?'], ['Stadttheater barrierefrei?', 'Wie barrierefrei ist das Stadttheater Bielefeld?']],
-      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine']]
+      start: [{ l: 'Entspannt ans Ziel', i: 'ruhig' }, Q_ORT, Q_STOER],
+      tips: [{ l: 'Wann ist wenig los?', i: 'abfahrt' }, { l: 'Was lohnt sich für mich?', i: 'vergleich', n: 'vergleich' }, Q_ORT],
+      stats: [Q_LAST, Q_MINE]
     }
   };
   // Werkzeuge, die der Server kann (aus /api/health); bis zum Server-Update nur die bisherigen Fragen
@@ -3826,10 +3846,25 @@
   }
   function askExamples(name) {
     const acc = settings.access.on && ASK_Q[settings.access.type] ? settings.access.type : '';
-    const z = settings.ziele[0] ? settings.ziele[0].name : 'Hauptbahnhof';
-    const ok = (need) => !need || (need === 'mine' ? !!settings.assistStats : serverTools.includes(need));
-    const list = (ASK_Q[acc][name] || []).filter(([, , need]) => ok(need)).slice(0, 3);
-    return { acc, ex: list.map(([l, q]) => [l.replace('{Z}', z), q.replace('{Z}', z)]), needsMine: (ASK_Q[acc][name] || []).some(([, , need]) => need === 'mine') && !settings.assistStats };
+    const ok = (n) => !n || (n === 'mine' ? !!settings.assistStats : serverTools.includes(n));
+    const all = ASK_Q[acc][name] || [];
+    const ex = all.filter((x) => ok(x.n)).slice(0, 3);
+    if (ex.length < 2) ex.push(acc === 'lernen' ? { l: 'Wie komme ich hin?', i: 'einfach' } : acc === 'sehen' ? { l: 'Finde meinen besten Weg', i: serverTools.includes('weg_check') ? 'sicher' : 'weg' } : { l: 'Finde meinen besten Weg', i: 'weg' });
+    return { acc, ex, needsMine: all.some((x) => x.n === 'mine') && !settings.assistStats };
+  }
+  // Gespräch beginnen: Flowtown fragt offen nach dem Ziel; die Antwort wird in die passende Frage eingesetzt
+  let pendingIntent = null;
+  function startIntent(k) {
+    const d = intentDef(k);
+    pendingIntent = k;
+    assistAct = null;
+    showAssist('', d.open);
+    const z = settings.ziele.slice(0, 3);
+    const form = $('#assist .assist-form');
+    if (z.length && form) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Oder eines deiner Ziele">${z.map((x) => `<button type="button" class="vf-chip" data-intentans="${esc(x.name)}">${esc(x.name)}</button>`).join('')}</div>`);
+    const inp = $('#assist-inp');
+    if (inp) { inp.placeholder = k === 'ort' ? 'Ort, Gebäude oder Adresse …' : 'Ziel: Ort, Adresse oder Einrichtung …'; inp.focus({ preventScroll: true }); }
+    if (voiceOn()) speak(d.open, { now: true, force: true, onend: () => { if (!$('#assist').hidden && pendingIntent) listenAfter('Ich höre zu …'); } });
   }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
@@ -3845,12 +3880,11 @@
         $('#ask-hero-prof').hidden = !acc;
         $('#ask-hero-prof span').textContent = acc ? 'Für dich: ' + ACCESS_LABEL[acc] : '';
         $('#ask-hero-title').textContent = hero.title;
-        $('#ask-hero-sub').textContent = hero.sub;
-        $('#ask-ex').innerHTML = ex.map(([label, q]) => `<button type="button" class="ask-ex-chip" data-askex="${esc(q)}">${esc(label)}</button>`).join('');
+        $('#ask-hero-sub').textContent = hero.sub();
+        $('#ask-ex').innerHTML = ex.map((x) => `<button type="button" class="ask-ex-chip${x.i ? ' open' : ''}" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('');
         $('#ask-allow').hidden = !needsMine || name === 'start';
       } else if (slot && w.parentNode !== slot) slot.appendChild(w);
-      const first = hero ? askExamples(name).ex.find(([l]) => l !== Q_LAST[0]) : null;
-      $('#ask-inp').placeholder = 'Frag Flowtown: ' + (first ? first[0] : (settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
+      $('#ask-inp').placeholder = name === 'stats' ? 'Frag Flowtown zu deinen Fahrten …' : name === 'start' ? 'Frag Flowtown: Wohin möchtest du?' : 'Frag Flowtown …';
     }
     $('#ask-mic').hidden = !SR;
     $('#ask-hero').hidden = !(on && hero);
@@ -3920,7 +3954,7 @@
     if (!apiBase() || !serverTools.includes('vergleich') || !settings.ziele.length) return '';
     const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0];
     const r = bestRes[z.id];
-    const chips = settings.ziele.length > 1 ? `<div class="vf-chips" role="group" aria-label="Ziel für den Vergleich">${settings.ziele.slice(0, 6).map((x) => `<button type="button" class="vf-chip${x.id === z.id ? ' on' : ''}" data-best-ziel="${x.id}" aria-pressed="${x.id === z.id}">${esc(x.name)}</button>`).join('')}</div>` : '';
+    const chips = `<div class="vf-chips" role="group" aria-label="Ziel für den Vergleich">${settings.ziele.slice(0, 5).map((x) => `<button type="button" class="vf-chip${x.id === z.id ? ' on' : ''}" data-best-ziel="${x.id}" aria-pressed="${x.id === z.id}">${esc(x.name)}</button>`).join('')}<button type="button" class="vf-chip add" data-best-other="1">Anderes Ziel …</button></div>`;
     let body;
     if (!r) body = `<button type="button" class="btn best-go" data-best="go">${ic('spark')}<span>Womit heute am besten zu „${esc(z.name)}“?</span></button><p class="small muted best-note">Vergleicht Auto, Bus und Bahn, Rad und zu Fuß${settings.access.on ? ', passend zu deinem Profil' : ''}. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>`;
     else if (r.loading) body = '<p class="small muted">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß …</p>';
@@ -3928,9 +3962,26 @@
     else {
       const d = r.data, e = d.empfehlung;
       const rows = d.optionen.slice().sort((a, b) => (a.verkehrsmittel === e.verkehrsmittel ? -1 : b.verkehrsmittel === e.verkehrsmittel ? 1 : 0) || (a.geeignet === b.geeignet ? 0 : a.geeignet ? -1 : 1) || String(a.ankunft).localeCompare(String(b.ankunft)));
-      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div><p class="small muted">Stand ${esc(d.jetzt)} Uhr · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
+      const am = d.am_ziel ? amZielText(d.am_ziel) : '';
+      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
     }
     return `<div class="best">${chips}<div id="best-body" aria-live="polite">${body}</div></div>`;
+  }
+  // was am Ziel zählt, nach Profil, in einem Satz
+  function amZielText(a) {
+    const t = settings.access.on ? settings.access.type : '', out = [];
+    const m = (x) => (x && typeof x === 'object' ? `${x.entfernung_m} m` : null);
+    if (['rollstuhl', 'rollator'].includes(t)) {
+      if (m(a.rollstuhl_wc)) out.push(`rollstuhlgerechtes WC ${m(a.rollstuhl_wc)}`);
+      if (m(a.behindertenparkplatz)) out.push(`Behindertenparkplatz ${m(a.behindertenparkplatz)}`);
+      if (a.stadtbahn && typeof a.stadtbahn === 'object') out.push(`Stadtbahn ${a.stadtbahn.name} ${m(a.stadtbahn)}${a.stadtbahn.hochbahnsteig === 'ja' ? ', mit Hochbahnsteig' : a.stadtbahn.hochbahnsteig === 'nein' ? ', ohne Hochbahnsteig' : ''}`);
+    } else {
+      if (m(a.toilette)) out.push(`Toilette ${m(a.toilette)}`);
+      if (a.stadtbahn && typeof a.stadtbahn === 'object') out.push(`Stadtbahn ${a.stadtbahn.name} ${m(a.stadtbahn)}`);
+      if (m(a.behindertenparkplatz) && t) out.push(`Behindertenparkplatz ${m(a.behindertenparkplatz)}`);
+    }
+    if (a.gemeldet && a.gemeldet.length) out.push('gemeldet: ' + a.gemeldet.map((x) => x.art).join(', '));
+    return out.join(' · ');
   }
   async function runBest() {
     const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0];
@@ -3940,7 +3991,7 @@
     try {
       const pos = await myStart();
       if (!pos) throw new Error('Ohne deinen Standort kann Flowtown nicht vergleichen. Bitte den Standortzugriff erlauben.');
-      const q = new URLSearchParams({ from: pos.map((x) => x.toFixed(3)).join(','), to: `${Number(z.lat).toFixed(4)},${Number(z.lon).toFixed(4)}`, profil: settings.access.on ? settings.access.type : '' });
+      const q = new URLSearchParams({ from: pos.map((x) => x.toFixed(3)).join(','), to: `${Number(z.lat).toFixed(4)},${Number(z.lon).toFixed(4)}`, profil: settings.access.on ? settings.access.type : '', name: z.name });
       const d = await api('/api/vergleich?' + q);
       bestRes[z.id] = { t: Date.now(), data: d };
       if (voiceOn()) speak(`Zum Ziel ${z.name} am besten ${GROUP_WITH[d.empfehlung.verkehrsmittel]}. ${d.empfehlung.grund.split(';')[0]}.`, { now: true });
@@ -5946,6 +5997,7 @@
     const bz = ev.target.closest('[data-best-ziel]');
     if (bz) { bestZiel = bz.dataset.bestZiel; renderPlanTeaser(); return; }
     if (ev.target.closest('[data-best="go"]')) { unlockSpeech(); runBest(); return; }
+    if (ev.target.closest('[data-best-other]')) { unlockSpeech(); startIntent('vergleich'); return; }
     const bm = ev.target.closest('[data-best-mode]');
     if (bm) { const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0]; setModeVoice(BEST_MODE[bm.dataset.bestMode]); if (z) openPlan(z.id); }
   });
@@ -6093,10 +6145,12 @@
   $('#sos').addEventListener('click', (ev) => { if (ev.target.closest('[data-sos="close"]')) closeSos(); });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('#sos').hidden) closeSos(); });
   $('#assist').addEventListener('click', (ev) => {
+    const ans = ev.target.closest('[data-intentans]');
+    if (ans) { unlockSpeech(); askAssist(ans.dataset.intentans, false); return; }
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;
     const a = b.dataset.assist;
-    if (a === 'close') { $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); if (recog && recog.auto) recog.abort(); micStatus(''); }
+    if (a === 'close') { pendingIntent = null; $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); if (recog && recog.auto) recog.abort(); micStatus(''); }
     else if (a === 'mic') listen();
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (a === 'ziel' && assistAct) {
@@ -6116,6 +6170,8 @@
       setTimeout(() => { const c = $('#inp-ask-stats'); if (c) { c.scrollIntoView({ block: 'center' }); c.focus({ preventScroll: true }); } }, 50);
       return;
     }
+    const it = ev.target.closest('[data-askintent]');
+    if (it) { unlockSpeech(); startIntent(it.dataset.askintent); return; }
     const b = ev.target.closest('[data-askex]');
     if (!b) return;
     $('#ask-inp').value = b.dataset.askex;

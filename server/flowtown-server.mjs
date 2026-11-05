@@ -1832,7 +1832,11 @@ Regeln:
 - Hindernisse auf einem Weg (Stufen, Treppen, Kopfsteinpflaster, Steigung, hohe Bordsteine, ebener Weg, gemeldete Hindernisse, Ampeln mit Tonsignal unterwegs): Werkzeug weg_check. Nenne die wichtigsten Stellen mit Straße und Länge. Sag dazu, dass die App unter „Wohin?“ einen Weg mit weniger Hindernissen sucht.
 - Störungen, Umleitungen und Ausfälle bei Bus und Bahn, defekte Aufzüge: Werkzeug oepnv_stoerungen. Gemeldete Aufzüge immer mit „bitte vor Ort prüfen“.
 - Ampeln mit Tonsignal in der Nähe eines Orts: Werkzeug ampeln_mit_ton. Sag nie, ob eine Ampel gerade grün ist.
-- Fragen mit „in einfacher Sprache“: sehr kurze Sätze, ein Gedanke je Satz, keine Fremdwörter.`;
+- Fragen mit „in einfacher Sprache“: sehr kurze Sätze, ein Gedanke je Satz, keine Fremdwörter.
+- Fehlt bei einer Frage zu Weg, Ort oder Vergleich das Ziel, frag in einem freundlichen Satz nach, wohin es gehen soll. Rate kein Ziel.
+- Am Ziel zählt, was dort ist, nicht am Standort: Toilette, Behindertenparkplatz, Zugang und Haltestelle immer für das Ziel nennen (am_ziel aus vergleich und weg_check, sonst ort_info oder orte_in_der_naehe mit dem Ziel als ort).
+- Nach Wegen mit Profil: erst die beste Möglichkeit, dann das Wichtigste auf dem Weg, dann das Wichtigste am Ziel, alles in höchstens drei Sätzen.
+- „Infos zu einem Ort“, „Was erwartet mich dort?“: Werkzeug ort_info.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
@@ -1857,6 +1861,8 @@ const ASSIST_TOOLS = [
     ziel: { type: 'string' }, start: { type: 'string', description: 'leer = Standort' } }, required: ['ziel'] } } },
   { type: 'function', function: { name: 'oepnv_stoerungen', description: 'Aktuelle Umleitungen und Störungen bei Bus und Stadtbahn von moBiel und gemeldete defekte Aufzüge.', parameters: { type: 'object', properties: {
     linie: { type: 'string', description: 'z. B. 4 oder 25; leer = alle' } } } } },
+  { type: 'function', function: { name: 'ort_info', description: 'Was an einem Ort zählt, an dem die Person sein will (nicht am Standort): Barrierefreiheit des Gebäudes laut Bielefeld barrierefrei erleben, nächstes rollstuhlgerechtes WC und Toilette, Behindertenparkplatz, nächste Stadtbahn-Haltestelle mit Hochbahnsteig, gemeldete Hindernisse.', parameters: { type: 'object', properties: {
+    ort: { type: 'string', description: 'Name, Gebäude oder Adresse in Bielefeld' } }, required: ['ort'] } } },
   { type: 'function', function: { name: 'ampeln_mit_ton', description: 'Ampeln in der Nähe eines Orts mit Angabe, ob sie ein Tonsignal für blinde Menschen haben, und den Straßen der Kreuzung.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' } } } } }
 ];
@@ -2114,6 +2120,35 @@ async function ampelnNahe(pos) {
   list.sort((a, b) => a.entfernung_m - b.entfernung_m);
   return { ampeln: list.slice(0, 6), quelle: 'OpenStreetMap und Rückmeldungen in Flowtown' };
 }
+// ---------- Am Ziel: was dort zählt (nicht am Standort): Gebäude laut Bethel, WC, Behindertenparkplatz, Haltestelle, Meldungen ----------
+const ZIEL_THEMA = { rollstuhl: ['zugang', 'aufzug', 'wc'], rollator: ['zugang', 'aufzug', 'wc'], sehen: ['sehen', 'zugang'], hoeren: ['hoeren'], lernen: ['einfach'], ruhe: ['service', 'wc'] };
+function zielInfo(pos, name, typ) {
+  const near = (list, max) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(pos, x.pos) })).filter((x) => x.entfernung_m <= max).sort((a, b) => a.entfernung_m - b.entfernung_m)[0];
+  const strip = (x) => { if (!x) return undefined; const o = Object.assign({}, x); delete o.pos; o.entfernung_m = Math.round(o.entfernung_m / 10) * 10; return o; };
+  const out = {};
+  // Gebäude: nur wenn der Name eindeutig zu einem Ort von „Bielefeld barrierefrei erleben“ passt
+  if (name && bf && (bf.orte || []).length) {
+    const themen = ZIEL_THEMA[typ] || ['zugang', 'wc'];
+    const first = bfOrtDetails(name, themen[0]);
+    if (first && first.name && !first.mehrdeutig) {
+      const ang = [].concat(...themen.map((t, i) => ((i ? bfOrtDetails(name, t) : first).angaben || []))).slice(0, 14);
+      out.gebaeude = { name: first.name, adresse: first.adresse, angaben: ang, hinweise: first.hinweise, stand: first.stand_der_erhebung, quelle: 'Bielefeld barrierefrei erleben' };
+    }
+  }
+  const wc = (bf && bf.wc || []).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', pos: [w[0], w[1]] }));
+  out.rollstuhl_wc = strip(near(wc.filter((w) => w.rollstuhlgerecht === 'ja'), 800)) || 'keines bis 800 m bekannt';
+  if (!['rollstuhl', 'rollator'].includes(typ)) out.toilette = strip(near(wc, 600)) || 'keine bis 600 m bekannt';
+  if (!typ || ['rollstuhl', 'rollator'].includes(typ)) out.behindertenparkplatz = strip(near((bpp && bpp.plaetze || []).map((q) => ({ name: q[3] || 'Behindertenparkplatz', plaetze: q[2] || undefined, pos: [q[0], q[1]] })), 500)) || 'keiner bis 500 m bekannt';
+  const stops = tramStops();
+  if (stops) {
+    const list = [];
+    for (const [k, st] of stops) { const e = hst && hst.liste.find((x) => x.k === k); list.push({ name: st.name, hochbahnsteig: e ? e.hbs : 'keine Angabe', pos: st.pos.slice().sort((a, b) => mAbs(pos, a) - mAbs(pos, b))[0] }); }
+    out.stadtbahn = strip(near(list, 1000)) || 'keine Haltestelle bis 1 km';
+  }
+  const g = hinweise.filter((h) => h.bis > Date.now() && h.weg < 2 && h.art !== 'gut' && mAbs(pos, [h.lat, h.lon]) <= 150).slice(0, 4).map((h) => ({ art: HINWEIS_NAME[h.art] || h.art, entfernung_m: Math.round(mAbs(pos, [h.lat, h.lon]) / 10) * 10 }));
+  if (g.length) out.gemeldet = g;
+  return out;
+}
 async function assistTool(name, a, ctx, act) {
   a = a || {};
   if (name === 'ort_barrierefreiheit') return bfOrtDetails(a.name, a.thema);
@@ -2126,13 +2161,14 @@ async function assistTool(name, a, ctx, act) {
     if (name === 'vergleich') {
       const v = await vergleichZiel(f, t, ctx.typ);
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
-      return Object.assign({ ziel: to.name }, v);
+      return Object.assign({ ziel: to.name }, v, { am_ziel: zielInfo(to.pos, to.name, ctx.typ) });
     }
     const r = await checkZiel(f, t, 'fuss', true);
     const ck = await wegCheck(r.pts, 6000);
     act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: 'fuss' };
     return { ziel: to.name, dauer_min: Math.round(r.dauer / 60), km: r.km, profil: ctx.typ || 'kein Profil', wichtig_fuer_profil: wichtigFuer(ctx.typ, ck) || undefined, check: ck,
       baustellen: (r.items || []).slice(0, 3).map((it) => ({ titel: it.titel, hinweis: it.text || '' })), gemeldet: hinweiseAm(r.pts, 25),
+      am_ziel: zielInfo(to.pos, to.name, ctx.typ),
       hinweis: 'Einen Weg mit weniger Hindernissen zeigt die App unter Wohin? beim Ziel (zu Fuß, mit Profil).' };
   }
   if (name === 'oepnv_stoerungen') {
@@ -2147,6 +2183,11 @@ async function assistTool(name, a, ctx, act) {
       return { gemeldet: 'Aufzug defekt', bei: near && near.d <= 300 ? 'Haltestelle ' + near.n : 'ohne Haltestelle in der Nähe', bestaetigt: h.ok || 0 };
     });
     return { umleitungen: items, aufzuege_gemeldet: aufzug, quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt' };
+  }
+  if (name === 'ort_info') {
+    const o = await assistOrt(a.ort, ctx);
+    if (!o) return { fehler: 'Diesen Ort habe ich nicht gefunden. Bitte genauer nennen, zum Beispiel mit Straße.' };
+    return Object.assign({ ort: o.name, profil: ctx.typ || 'kein Profil' }, zielInfo(o.pos, a.ort, ctx.typ));
   }
   if (name === 'ampeln_mit_ton') {
     const o = await assistOrt(a.ort, ctx);
@@ -2314,7 +2355,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton'], ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info'], ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -2383,7 +2424,8 @@ const server = http.createServer(async (req, res) => {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Der Vergleich braucht einen HERE-Schlüssel auf dem Server.' }, origin);
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       const from = coord(url.searchParams.get('from'), 3), to = coord(url.searchParams.get('to'), 4);
-      return send(res, 200, await vergleichZiel(from, to, profilTyp({ profil_typ: url.searchParams.get('profil') })), origin);
+      const typ = profilTyp({ profil_typ: url.searchParams.get('profil') });
+      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ) }), origin);
     }
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);
