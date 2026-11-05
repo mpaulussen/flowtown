@@ -191,7 +191,7 @@ Die Assistenz lernt aus geprüften Beispielen: Zu jeder neuen Frage bekommt Mist
 
 1. **Testlauf** auf dem Server (stellt alle Fragen aus `server/testfragen.csv` an die echte Assistenz, etwa zwei Minuten; zählt wie 36 Fragen bei Mistral und HERE):
    ```bash
-   cd /opt/flowtown/server && sudo -u flowtown bash -c 'set -a; . /etc/flowtown.env; DATA_DIR=/var/lib/flowtown node flowtown-server.mjs testlauf'
+   cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs testlauf'
    ```
    Ergebnis: `/var/lib/flowtown/testlauf/testlauf-<Datum>.csv` mit Frage, Profil, Antwort, benutzten Werkzeugen und leeren Spalten zum Ausfüllen. Eigene Fragen: eine eigene CSV mit denselben Spalten (`Nr;Thema;Profil;Frage;Breite;Länge`) als zusätzlichen Pfad angeben.
 2. **Korrigieren** in Google Tabellen oder Excel (Datei importieren, Trennzeichen Semikolon):
