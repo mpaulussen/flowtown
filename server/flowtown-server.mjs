@@ -1911,7 +1911,7 @@ async function assistOrt(name, ctx) {
   const n = String(name || '').trim();
   if (!n || /^(hier|standort|mein standort|in der nähe)$/i.test(n)) return ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
   // „Universität Bielefeld“, „die Uni“: Zusatz Bielefeld und Artikel weglassen, damit Haltestelle und Gebäude gefunden werden
-  const nq = n.replace(/(^|[\s,])(in\s+)?bielefeld\b/ig, ' ').replace(/^\s*(die|der|das|zur|zum|zu)\s+/i, '').replace(/^\s*uni\s*$/i, 'Universität').replace(/\s+/g, ' ').trim() || n;
+  const nq = n.replace(/(^|[\s,])(in\s+)?bielefeld\b/ig, ' ').replace(/^\s*(die|der|das|zur|zum|zu)\s+/i, '').replace(/^\s*uni\s*$/i, 'Universität').replace(/^\s*(bahnhof|hbf)\s*$/i, 'Hauptbahnhof').replace(/\s+/g, ' ').trim() || n;
   const k = hstNorm(nq);
   const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === k || hstNorm(x.name).includes(k) || k.includes(hstNorm(x.name)));
   if (z && isFinite(z.lat)) return { name: z.name, pos: [z.lat, z.lon] };
@@ -2258,6 +2258,7 @@ async function assistTool(name, a, ctx, act) {
     if (o.auswahl) return { gesucht: a.ort, mehrdeutig: true, auswahl: o.auswahl, hinweis: 'Mehrere Orte passen. Frag, welcher gemeint ist, und nenne zwei oder drei davon.' };
     return Object.assign({ ort: o.name, adresse: o.adresse, gefunden_ueber: o.gefunden_ueber, profil: ctx.typ || 'kein Profil' }, zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ));
   }
+  if (name === 'ampeln_mit_ton' && (ctx.used || []).includes('weg_check')) return { hinweis: 'Für die Ampeln auf dem Weg gelten nur die Angaben aus weg_check (check.ampeln). Nenne keine anderen Ampeln.' };
   if (name === 'ampeln_mit_ton') {
     const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Ort unbekannt oder kein Standort' };
@@ -2267,7 +2268,8 @@ async function assistTool(name, a, ctx, act) {
   if (name === 'orte_in_der_naehe') {
     const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Ort unbekannt oder kein Standort' };
-    const near = (list) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(o.pos, x.pos) })).filter((x) => x.entfernung_m <= 2000).sort((p, q) => p.entfernung_m - q.entfernung_m).slice(0, 4).map((x) => { delete x.pos; return x; });
+    const maxM = a.art === 'park_and_ride' ? 20000 : 2000;
+    const near = (list) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(o.pos, x.pos) })).filter((x) => x.entfernung_m <= maxM).sort((p, q) => p.entfernung_m - q.entfernung_m).slice(0, 4).map((x) => { delete x.pos; return x; });
     let list = [];
     if (a.art === 'rollstuhl_toilette' || a.art === 'toilette') list = (bf && bf.wc || []).filter((w) => a.art === 'toilette' || w[2] === 1).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', quelle: 'OpenStreetMap', pos: [w[0], w[1]] }));
     if (a.art === 'behindertenparkplatz') list = (bpp && bpp.plaetze || []).map((p) => ({ name: p[3] || 'Behindertenparkplatz', plaetze: p[2] || null, quelle: p[4] === 's' ? 'Stadt Bielefeld' : 'OpenStreetMap', pos: [p[0], p[1]] }));
@@ -2334,11 +2336,13 @@ async function assistTool(name, a, ctx, act) {
   }
   return { fehler: 'unbekanntes Werkzeug' };
 }
-async function mistralChat(messages, ohneWerkzeuge) {
+async function mistralChat(messages, ohneWerkzeuge, mussWerkzeug) {
   const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 30000);
   try {
     const res = await fetch(MISTRAL_URL, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${MISTRAL_KEY}` },
-      body: JSON.stringify({ model: MISTRAL_MODEL, temperature: 0.2, max_tokens: 400, tools: ASSIST_TOOLS, tool_choice: ohneWerkzeuge ? 'none' : 'auto', messages }) });
+      body: JSON.stringify({ model: MISTRAL_MODEL, temperature: 0.2, max_tokens: 400, tools: ASSIST_TOOLS, tool_choice: ohneWerkzeuge ? 'none' : mussWerkzeug ? 'any' : 'auto', messages }) });
+    // lehnt Mistral den Zwang zum Werkzeug ab, einmal ohne ihn
+    if (!res.ok && mussWerkzeug && res.status >= 400 && res.status < 500) { clearTimeout(timer); return mistralChat(messages, ohneWerkzeuge, false); }
     if (!res.ok) throw Object.assign(new Error('Mistral antwortet mit ' + res.status), { status: 502 });
     return (await res.json()).choices[0].message;
   } finally { clearTimeout(timer); }
@@ -2432,8 +2436,11 @@ async function assist(body) {
   const vorbild = bsp.length ? '\nGeprüfte Beispiele der Redaktion zu ähnlichen Fragen. Übernimm daraus Aufbau, Ton, Länge und was wichtig ist; die Fakten (Zeiten, Entfernungen, Angaben) aber nur aus den Werkzeugen von jetzt, nie aus den Beispielen:\n' + bsp.map((b) => `Frage${b.profil ? ' (Profil ' + b.profil + ')' : ''}: ${b.frage}\nGute Antwort: ${b.antwort}`).join('\n') : '';
   const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage }];
   const act = {}, used = [];
+  ctx.used = used;
+  // Nennt die Frage ein Ziel oder ein Thema mit Werkzeug, muss die erste Runde nachschlagen (sonst fragt Mistral oft unnötig nach)
+  const zwingen = !/gestürzt|notfall|unfall|verletzt|hilfe!|wetter|grün/i.test(frage) && (/\b(zu|zum|zur|nach|bei|über|am|an der|ins)\s+[A-ZÄÖÜ]/.test(frage) || /nächste[nr]?\s+(bahn|bus|stadtbahn|abfahrt)|störung|umleitung|aufz[uü]g|park\s*\+?\s*ride|toilette|\bwc\b|tonsignal|hochbahnsteig|haltestelle in meiner nähe/i.test(frage));
   for (let round = 0; round < 4; round++) {
-    const m = await mistralChat(messages);
+    const m = await mistralChat(messages, false, round === 0 && zwingen);
     const calls = m.tool_calls || [];
     if (!calls.length) {
       const antwort = clip(String(m.content || '').replace(/[*#_`]/g, ''), 600) || 'Dazu habe ich gerade keine Antwort.';
