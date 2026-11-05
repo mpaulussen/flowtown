@@ -1837,7 +1837,7 @@ Regeln:
 - Am Ziel zählt, was dort ist, nicht am Standort: Toilette, Behindertenparkplatz, Zugang und Haltestelle immer für das Ziel nennen (am_ziel aus vergleich und weg_check, sonst ort_info oder orte_in_der_naehe mit dem Ziel als ort).
 - Nach Wegen mit Profil: erst die beste Möglichkeit, dann das Wichtigste auf dem Weg, dann das Wichtigste am Ziel, alles in höchstens drei Sätzen.
 - „Infos zu einem Ort“, „Was erwartet mich dort?“: Werkzeug ort_info. Sag zuerst, für welchen Ort die Angaben gelten (ort, adresse). Gibt es „auswahl“ oder „gebaeude_auswahl“, nenne zwei, drei davon und frag, welcher gemeint ist; erfinde keine Angaben.
-- Entfernungen gelten immer vom gefundenen Ort aus; nenne sie nur, wenn der Ort eindeutig ist.`;
+- Entfernungen gelten immer vom gefundenen Ort aus (Luftlinie); nenne sie nur, wenn der Ort eindeutig ist. Liegt die Stadtbahn bei 0 bis 100 m, sag „direkt dort“. Große Gelände wie die Universität: sag, dass es um das Gelände geht.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
@@ -1897,11 +1897,13 @@ function bfOrtDetails(name, thema) {
 async function assistOrt(name, ctx) {
   const n = String(name || '').trim();
   if (!n || /^(hier|standort|mein standort|in der nähe)$/i.test(n)) return ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
-  const k = hstNorm(n);
+  // „Universität Bielefeld“, „die Uni“: Zusatz Bielefeld und Artikel weglassen, damit Haltestelle und Gebäude gefunden werden
+  const nq = n.replace(/(^|[\s,])(in\s+)?bielefeld\b/ig, ' ').replace(/^\s*(die|der|das|zur|zum|zu)\s+/i, '').replace(/^\s*uni\s*$/i, 'Universität').replace(/\s+/g, ' ').trim() || n;
+  const k = hstNorm(nq);
   const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === k || hstNorm(x.name).includes(k) || k.includes(hstNorm(x.name)));
   if (z && isFinite(z.lat)) return { name: z.name, pos: [z.lat, z.lon] };
   const orte = (bf && bf.orte) || [];
-  const exact = orte.find((x) => hstNorm(x.n) === k || hstNorm(x.n) === k + 'bielefeld');
+  const exact = orte.find((x) => hstNorm(x.n) === k || hstNorm(x.n) === hstNorm(n));
   if (exact) return { name: exact.n, pos: [exact.lat, exact.lon], adresse: exact.adr, gefunden_ueber: 'Bielefeld barrierefrei erleben' };
   const st = tramStops() && tramStops().get(k);
   if (st) return { name: 'Haltestelle ' + st.name, pos: st.pos[0], gefunden_ueber: 'Stadtbahn-Haltestelle' };
@@ -2163,11 +2165,12 @@ function zielInfo(pos, name, typ) {
   if (!out.gebaeude && bf && (bf.orte || []).length) {
     const seen = new Set();
     const nah = bf.orte.filter((x) => !seen.has(x.id) && seen.add(x.id)).map((x) => ({ name: x.n, entfernung_m: mAbs(pos, [x.lat, x.lon]), stufenlos: x.f && x.f.stufenlos === 1 ? 'ja' : x.f && x.f.stufenlos === 0 ? 'nein' : 'keine Angabe', behinderten_wc: x.f && x.f.wc === 1 ? 'ja' : x.f && x.f.wc === 0 ? 'nein' : 'keine Angabe' }))
-      .filter((x) => x.entfernung_m <= 300).sort((a, b) => a.entfernung_m - b.entfernung_m).slice(0, 4).map((x) => Object.assign(x, { entfernung_m: Math.round(x.entfernung_m / 10) * 10 }));
+      .filter((x) => x.entfernung_m <= 600).sort((a, b) => a.entfernung_m - b.entfernung_m).slice(0, 4).map((x) => Object.assign(x, { entfernung_m: Math.round(x.entfernung_m / 10) * 10 }));
     if (nah.length) out.barrierefreie_orte_nah = nah;
   }
   if (!bf || !(bf.orte || []).length) out.hinweis_daten = 'Die Daten von Bielefeld barrierefrei erleben sind auf dem Server gerade nicht geladen.';
-  const wc = (bf && bf.wc || []).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', pos: [w[0], w[1]] }));
+  const wc = (bf && bf.wc || []).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', quelle: 'OpenStreetMap', pos: [w[0], w[1]] }))
+    .concat((bf && bf.orte || []).filter((x) => x.f && x.f.wc === 1).map((x) => ({ name: 'WC im Gebäude ' + x.n, rollstuhlgerecht: 'ja', quelle: 'Bielefeld barrierefrei erleben', pos: [x.lat, x.lon] })));
   out.rollstuhl_wc = strip(near(wc.filter((w) => w.rollstuhlgerecht === 'ja'), 800)) || 'keines bis 800 m bekannt';
   if (!['rollstuhl', 'rollator'].includes(typ)) out.toilette = strip(near(wc, 600)) || 'keine bis 600 m bekannt';
   if (!typ || ['rollstuhl', 'rollator'].includes(typ)) out.behindertenparkplatz = strip(near((bpp && bpp.plaetze || []).map((q) => ({ name: q[3] || 'Behindertenparkplatz', plaetze: q[2] || undefined, pos: [q[0], q[1]] })), 500)) || 'keiner bis 500 m bekannt';
