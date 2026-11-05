@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.87.1';
+  const VERSION = '0.88.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1802,7 +1802,7 @@
       const k = stemKey(frage);
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
-      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '',
+      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '',
         unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
@@ -1839,6 +1839,16 @@
       haeufigster_weg: weg,
       letzte_fahrten: real.slice().sort((a, b) => b.start - a.start).slice(0, 3).map(tripFacts).map((f) => Object.assign(f, { laengster_ampelhalt: f.laengster_ampelhalt && f.laengster_ampelhalt.replace(/-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen') })),
       zeitfresser: fresser,
+      verkehrsmittel_vergleich: ['auto', 'oepnv', 'rad', 'fuss'].map((gr) => {
+        const ts = month.filter((t) => MODE_GROUP[t.mode] === gr && t.end);
+        if (!ts.length) return null;
+        return { verkehrsmittel: GROUP_WITH[gr], fahrten: ts.length, schnitt_min: Math.round(avgOf(ts.map((t) => t.end - t.start)) / 60000), gestanden_schnitt_min: Math.round(avgOf(ts.map(tripWait)) / 6000) / 10, km_schnitt: Math.round(avgOf(ts.map((t) => (t.distance || 0) / 1000)) * 10) / 10 };
+      }).filter(Boolean),
+      ampel_bewertungen: (() => {
+        const by = {};
+        for (const t of real) for (const e of t.events || []) if (e.signal && Array.isArray(e.tags)) for (const tag of e.tags) if (tag !== 'alles gut') { const k = e.signal + '|' + tag; by[k] = by[k] || { ampel: safe(labelFor(e)), stichwort: tag, anzahl: 0 }; by[k].anzahl++; }
+        return Object.values(by).sort((x, y) => y.anzahl - x.anzahl).slice(0, 6);
+      })(),
       tipps: computeTips().slice(0, 5).map((t) => `${plain(t.head || t.title)}: ${plain(t.short)}`.replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen').slice(0, 200))
     };
   }
@@ -3750,47 +3760,77 @@
   // Frag Flowtown oben auf den Hauptseiten, mit einem kurzen Beispiel, das zur Seite passt
   const ASK_EX = { start: 'Nächste Bahn?', plan: 'Rollstuhl-WC?', tips: 'Park + Ride?', stats: 'Baustellen?' };
   const ASK_EX_MINE = { tips: 'Mein Zeitfresser?', stats: 'Wo warte ich lange?' };   // mit eingeschalteter Auswertung
-  // KI-Karte je Seite: Überschrift, ein Satz, Beispielfragen. Fragen zu eigenen Fahrten nur, wenn die Auswertung mitgehen darf;
-  // „letzte Fahrt“ beantwortet die App immer selbst
+  // KI-Karte je Seite: Überschrift, ein Satz, Beispielfragen. Nur Fragen, die Flowtown wirklich beantworten kann:
+  // [Text auf dem Knopf, gestellte Frage, Bedingung]. Bedingung: Name eines Server-Werkzeugs (erst nach dem Server-Update da),
+  // „mine“ = braucht die freigegebene Auswertung. {Z} = erstes gespeichertes Ziel, sonst der Hauptbahnhof.
+  // „Wo bin ich?“, „Lies mir die Tipps vor“ und „letzte Fahrt“ beantwortet die App selbst.
   const ASK_HERO = {
-    start: { title: 'KI, die mit dir spricht', sub: 'Frag nach Bus und Bahn, Stau oder deinen Fahrten. Flowtown antwortet sofort, getippt oder gesprochen.',
-      ex: [['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['Stau auf meinen Wegen?', 'Gibt es Stau auf meinen Wegen?'], ['Wo verliere ich Zeit?', 'Wo verliere ich die meiste Zeit?']] },
-    tips: { title: 'KI-Tipps für deine Wege', sub: 'Frag, wann du am besten losfährst, was sich lohnt und wo es Alternativen gibt.',
-      mine: [['Mein größter Zeitfresser?', 'Was ist mein größter Zeitfresser?'], ['Wann am besten los?', 'Wann fahre ich auf meinen Wegen am besten los?'], ['Lohnt sich das Rad?', 'Lohnt sich auf meinen Wegen das Rad?']],
-      ex: [['Wann ist wenig Verkehr?', 'Wann ist in Bielefeld am wenigsten Verkehr?'], ['Park + Ride?', 'Wo gibt es Park + Ride in Bielefeld?'], ['Lohnt sich das Rad?', 'Lohnt sich das Rad in Bielefeld?']] },
-    stats: { title: 'KI-Analyse deiner Fahrten', sub: 'Frag nach Wartezeiten, Ampeln und deinen Wochen. Flowtown rechnet mit deinen Fahrten.',
-      always: [['Letzte Fahrt: wie lange gestanden?', 'Wie lange stand ich bei der letzten Fahrt?']],
-      mine: [['Wo warte ich am längsten?', 'An welcher Ampel warte ich am längsten?'], ['Wie war meine Woche?', 'Wie war meine Woche im Vergleich?']],
-      ex: [['Baustellen heute?', 'Gibt es heute Baustellen in Bielefeld?']] }
+    start: { title: 'KI, die mit dir spricht', sub: 'Frag, womit du am besten hinkommst, wo Hindernisse sind und was bei Bus und Bahn los ist.' },
+    tips: { title: 'KI-Tipps für deine Wege', sub: 'Frag nach der besten Abfahrt, Alternativen zum Auto und Hilfen an deinem Ziel.' },
+    stats: { title: 'KI-Analyse deiner Fahrten', sub: 'Frag, womit du am schnellsten warst, wo du Zeit verlierst und was dir unterwegs aufgefallen ist.' }
   };
-  // Mit Profil: eigene Fragen je Einschränkung. [Text auf dem Knopf, gestellte Frage]; „mine“ braucht die freigegebene Auswertung.
-  // „Wo bin ich?“ und „Lies mir die Tipps vor“ beantwortet die App selbst.
-  const ASK_ACC = {
+  const Q_LAST = ['Letzte Fahrt: wie lange gestanden?', 'Wie lange stand ich bei der letzten Fahrt?'];
+  const ASK_Q = {
+    '': {
+      start: [['{Z}: womit am besten?', 'Womit komme ich jetzt am besten zu {Z}?', 'vergleich'], ['{Z}: Hindernisse am Weg?', 'Gibt es Hindernisse oder Baustellen auf dem Weg zu {Z}?', 'weg_check'], ['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?', 'oepnv_stoerungen'],
+        ['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['{Z}: Baustellen am Weg?', 'Gibt es Baustellen oder Stau auf dem Weg zu {Z} mit dem Auto?']],
+      tips: [['{Z}: Rad statt Auto?', 'Lohnt sich für den Weg zu {Z} das Rad oder Bus und Bahn statt Auto?', 'vergleich'], ['{Z}: wann am besten los?', 'Wann fahre ich mit dem Auto am besten zu {Z} los?'], ['Park + Ride?', 'Wo gibt es Park + Ride in meiner Nähe?']],
+      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine'], ['Wo verliere ich Zeit?', 'Wo verliere ich auf meinen Wegen die meiste Zeit?', 'mine'],
+        ['{Z}: womit am besten?', 'Womit komme ich jetzt am besten zu {Z}?', 'vergleich'], ['Baustellen hier?', 'Gibt es Baustellen in meiner Nähe?']]
+    },
     rollstuhl: {
-      start: [['Stufenlos zur Bahn?', 'Welche Haltestelle in meiner Nähe hat einen stufenlosen Einstieg?'], ['Aufzug gestört?', 'Sind Aufzüge an meinen Haltestellen gerade gestört?'], ['Rollstuhl-WC?', 'Wo ist ein rollstuhlgerechtes WC in der Nähe?']],
-      tips: [['Stufenlos ans Ziel?', 'Wie komme ich stufenlos zu meinen Zielen?'], ['Behindertenparkplatz?', 'Wo gibt es Behindertenparkplätze an meinem Ziel?'], ['Hilfe beim Umsteigen?', 'Wie bekomme ich Hilfe beim Ein- und Umsteigen in der Bahn?']],
-      stats: [['Ampeln zu kurz grün?', 'An welchen Ampeln auf meinen Wegen reicht die Grünphase nicht?']] },
+      start: [['{Z}: stufenlos hin?', 'Ist der Weg zu {Z} stufenlos? Welche Hindernisse gibt es?', 'weg_check'], ['{Z}: womit am besten?', 'Womit komme ich mit dem Rollstuhl am besten zu {Z}?', 'vergleich'], ['Aufzug gestört?', 'Sind gerade Aufzüge an Haltestellen gestört?', 'oepnv_stoerungen'],
+        ['Stufenlose Haltestelle hier?', 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?'], ['Rollstuhl-WC hier?', 'Wo ist ein rollstuhlgerechtes WC in der Nähe?']],
+      tips: [['{Z}: Behindertenparkplatz?', 'Gibt es Behindertenparkplätze bei {Z}?'], ['Stadttheater barrierefrei?', 'Wie barrierefrei ist das Stadttheater Bielefeld?'], ['Rollstuhl-WC hier?', 'Wo ist ein rollstuhlgerechtes WC in der Nähe?']],
+      stats: [Q_LAST, ['Wo war es zu kurz grün?', 'An welchen Ampeln war die Grünphase für mich zu kurz?', 'mine'], ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine'], ['{Z}: stufenlos hin?', 'Ist der Weg zu {Z} stufenlos?', 'weg_check']]
+    },
     rollator: {
-      start: [['Stufenlos zur Bahn?', 'Welche Haltestelle in meiner Nähe hat einen stufenlosen Einstieg?'], ['Ebener Weg?', 'Welcher Weg zu meinem Ziel ist eben, ohne Kopfsteinpflaster?'], ['Pause unterwegs?', 'Wo kann ich mich auf meinem Weg ausruhen?']],
-      tips: [['Stufenlos ans Ziel?', 'Wie komme ich stufenlos zu meinen Zielen?'], ['Aufzug gestört?', 'Sind Aufzüge an meinen Haltestellen gerade gestört?'], ['Toilette am Ziel?', 'Gibt es an meinen Zielen eine barrierefreie Toilette?']],
-      stats: [['Ampeln zu kurz grün?', 'An welchen Ampeln auf meinen Wegen reicht die Grünphase nicht?']] },
+      start: [['{Z}: ebener Weg?', 'Gibt es auf dem Weg zu {Z} Kopfsteinpflaster, Stufen oder Steigungen?', 'weg_check'], ['{Z}: womit am besten?', 'Womit komme ich mit dem Rollator am besten zu {Z}?', 'vergleich'], ['Aufzug gestört?', 'Sind gerade Aufzüge an Haltestellen gestört?', 'oepnv_stoerungen'],
+        ['Stufenlose Haltestelle hier?', 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?'], ['WC in der Nähe?', 'Wo ist eine Toilette in der Nähe?']],
+      tips: [['Stufenlose Haltestelle hier?', 'Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?'], ['WC in der Nähe?', 'Wo ist eine Toilette in der Nähe?'], ['Stadttheater barrierefrei?', 'Wie barrierefrei ist das Stadttheater Bielefeld?']],
+      stats: [Q_LAST, ['Wo war es zu kurz grün?', 'An welchen Ampeln war die Grünphase für mich zu kurz?', 'mine'], ['{Z}: ebener Weg?', 'Gibt es auf dem Weg zu {Z} Kopfsteinpflaster oder Stufen?', 'weg_check']]
+    },
     sehen: {
-      start: [['Wo bin ich?', 'Wo bin ich?'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['Ampel mit Ton?', 'Welche Ampeln in meiner Nähe haben ein Tonsignal?']],
-      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['Ampeln mit Ton am Weg?', 'Welche Ampeln auf meinen Wegen haben ein Tonsignal?'], ['Hilfe beim Umsteigen?', 'Wie bekomme ich Hilfe beim Ein- und Umsteigen in der Bahn?']],
-      stats: [['Ampeln ohne Ton?', 'An welchen Ampeln auf meinen Wegen fehlt ein Tonsignal?']] },
+      start: [['Wo bin ich?', 'Wo bin ich?'], ['{Z}: Ampeln mit Ton am Weg?', 'Welche Ampeln auf dem Weg zu {Z} haben ein Tonsignal, und gibt es Stufen?', 'weg_check'], ['Ampeln mit Ton hier?', 'Welche Ampeln in meiner Nähe haben ein Tonsignal?', 'ampeln_mit_ton'],
+        ['Nächste Bahn?', 'Wann fährt die nächste Bahn?']],
+      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['{Z}: womit am besten?', 'Womit komme ich am besten zu {Z}?', 'vergleich'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?']],
+      stats: [Q_LAST, ['Wo fehlte ein Tonsignal?', 'An welchen Ampeln fehlte mir ein Tonsignal?', 'mine'], ['{Z}: Ampeln mit Ton am Weg?', 'Welche Ampeln auf dem Weg zu {Z} haben ein Tonsignal?', 'weg_check']]
+    },
     hoeren: {
-      start: [['Störungen jetzt?', 'Gibt es gerade Störungen bei Bus und Bahn?'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?'], ['Notruf ohne Sprechen?', 'Wie setze ich einen Notruf ohne Sprechen ab?']],
-      tips: [['Umleitungen?', 'Gibt es Umleitungen bei Bus und Bahn auf meinen Wegen?'], ['Hilfe für Hörbehinderte?', 'Welche Hilfe gibt es bei der Bahn für hörbehinderte Fahrgäste?'], ['Notruf ohne Sprechen?', 'Wie setze ich einen Notruf ohne Sprechen ab?']],
-      stats: [] },
+      start: [['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?', 'oepnv_stoerungen'], ['{Z}: womit am besten?', 'Womit komme ich am besten zu {Z}?', 'vergleich'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn?']],
+      tips: [['Umleitungen bei Bus und Bahn?', 'Welche Umleitungen gibt es gerade bei Bus und Bahn?', 'oepnv_stoerungen'], ['{Z}: Baustellen am Weg?', 'Gibt es Baustellen auf dem Weg zu {Z}?'], ['Stadttheater für Hörbehinderte?', 'Was gibt es im Stadttheater Bielefeld für hörbehinderte Menschen?']],
+      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine'], ['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen bei Bus und Bahn?', 'oepnv_stoerungen']]
+    },
     lernen: {
-      start: [['Wo bin ich?', 'Wo bin ich?'], ['Wann kommt mein Bus?', 'Wann kommt mein Bus? Bitte in einfacher Sprache.'], ['Wie komme ich hin?', 'Wie komme ich zu meinem Ziel? Bitte in einfacher Sprache.']],
-      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['Was mache ich bei Verspätung?', 'Was mache ich, wenn der Bus zu spät ist? Bitte in einfacher Sprache.'], ['Wer kann mir helfen?', 'Wer kann mir unterwegs helfen? Bitte in einfacher Sprache.']],
-      stats: [] },
+      start: [['Wo bin ich?', 'Wo bin ich?'], ['{Z}: wie komme ich hin?', 'Wie komme ich am besten zu {Z}? Bitte in einfacher Sprache.', 'vergleich'], ['Nächste Bahn?', 'Wann fährt die nächste Bahn? Bitte in einfacher Sprache.']],
+      tips: [['Tipps vorlesen', 'Lies mir die Tipps vor'], ['Fährt mein Bus normal?', 'Gibt es Störungen bei Bus und Bahn? Bitte in einfacher Sprache.', 'oepnv_stoerungen'], ['{Z}: wann los?', 'Wann fahre ich am besten zu {Z} los? Bitte in einfacher Sprache.']],
+      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Womit war ich am schnellsten? Bitte in einfacher Sprache.', 'mine']]
+    },
     ruhe: {
-      start: [['Wann ist es leer?', 'Wann sind Bus und Bahn auf meinen Wegen am leersten?'], ['Ruhiger Weg?', 'Gibt es einen ruhigeren Weg zu meinem Ziel?'], ['Pause unterwegs?', 'Wo kann ich unterwegs eine Pause machen?']],
-      tips: [['Beste ruhige Zeit?', 'Wann ist auf meinen Wegen am wenigsten los?'], ['Ruhiger Weg?', 'Gibt es einen ruhigeren Weg zu meinem Ziel?'], ['Pause unterwegs?', 'Wo kann ich unterwegs eine Pause machen?']],
-      stats: [] }
+      start: [['{Z}: wann ist wenig los?', 'Wann ist auf dem Weg zu {Z} am wenigsten Verkehr?'], ['{Z}: womit am besten?', 'Womit komme ich am entspanntesten zu {Z}?', 'vergleich'], ['WC in der Nähe?', 'Wo ist eine Toilette in der Nähe?']],
+      tips: [['Störungen bei Bus und Bahn?', 'Gibt es gerade Störungen bei Bus und Bahn?', 'oepnv_stoerungen'], ['{Z}: Baustellen am Weg?', 'Gibt es Baustellen auf dem Weg zu {Z}?'], ['Stadttheater barrierefrei?', 'Wie barrierefrei ist das Stadttheater Bielefeld?']],
+      stats: [Q_LAST, ['Womit war ich am schnellsten?', 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', 'mine']]
+    }
   };
+  // Werkzeuge, die der Server kann (aus /api/health); bis zum Server-Update nur die bisherigen Fragen
+  let serverTools = store.get('tools', []);
+  async function loadServerTools() {
+    if (!apiBase()) return;
+    try {
+      const h = await api('/api/health');
+      serverTools = Array.isArray(h.werkzeuge) ? h.werkzeuge : [];
+      store.set('tools', serverTools);
+      askBar(document.body.dataset.view);
+      if (document.body.dataset.view === 'start') renderPlanTeaser();
+    } catch (e) { /* ohne Server: bisherige Fragen */ }
+  }
+  function askExamples(name) {
+    const acc = settings.access.on && ASK_Q[settings.access.type] ? settings.access.type : '';
+    const z = settings.ziele[0] ? settings.ziele[0].name : 'Hauptbahnhof';
+    const ok = (need) => !need || (need === 'mine' ? !!settings.assistStats : serverTools.includes(need));
+    const list = (ASK_Q[acc][name] || []).filter(([, , need]) => ok(need)).slice(0, 3);
+    return { acc, ex: list.map(([l, q]) => [l.replace('{Z}', z), q.replace('{Z}', z)]), needsMine: (ASK_Q[acc][name] || []).some(([, , need]) => need === 'mine') && !settings.assistStats };
+  }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
     const hero = ASK_HERO[name];
@@ -3800,23 +3840,17 @@
       if (hero) {
         if (card.parentNode !== slot) slot.appendChild(card);
         if (w.parentNode !== $('#ask-hero-field')) $('#ask-hero-field').appendChild(w);
-        const mine = !!settings.assistStats;
-        const acc = settings.access.on && ASK_ACC[settings.access.type] ? settings.access.type : null;
-        let ex = (hero.always || []).concat(mine && hero.mine ? hero.mine : hero.ex);
-        if (acc) {
-          // Verlauf: Profilfrage braucht die eigenen Fahrten; Heute und Tipps: nur Fragen zum Profil
-          ex = name === 'stats' ? (hero.always || []).concat(mine ? ASK_ACC[acc].stats : [], mine ? hero.mine : hero.ex).slice(0, 3) : ASK_ACC[acc][name];
-        }
+        const { acc, ex, needsMine } = askExamples(name);
         card.classList.toggle('acc', !!acc);
         $('#ask-hero-prof').hidden = !acc;
         $('#ask-hero-prof span').textContent = acc ? 'Für dich: ' + ACCESS_LABEL[acc] : '';
         $('#ask-hero-title').textContent = hero.title;
         $('#ask-hero-sub').textContent = hero.sub;
         $('#ask-ex').innerHTML = ex.map(([label, q]) => `<button type="button" class="ask-ex-chip" data-askex="${esc(q)}">${esc(label)}</button>`).join('');
-        $('#ask-allow').hidden = mine || !hero.mine || (acc && name !== 'stats');
+        $('#ask-allow').hidden = !needsMine || name === 'start';
       } else if (slot && w.parentNode !== slot) slot.appendChild(w);
-      const accEx = hero && settings.access.on && ASK_ACC[settings.access.type] && name !== 'stats' ? ASK_ACC[settings.access.type][name][0][0] : '';
-      $('#ask-inp').placeholder = 'Frag Flowtown: ' + (accEx || (settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
+      const first = hero ? askExamples(name).ex.find(([l]) => l !== Q_LAST[0]) : null;
+      $('#ask-inp').placeholder = 'Frag Flowtown: ' + (first ? first[0] : (settings.assistStats && ASK_EX_MINE[name]) || ASK_EX[name]);
     }
     $('#ask-mic').hidden = !SR;
     $('#ask-hero').hidden = !(on && hero);
@@ -3865,11 +3899,60 @@
   // ---------- Heute: Verkehrsmittel, eigene Wege, beste Abfahrtszeit ----------
   const heuteOn = () => !$('#view-start').hidden || !$('#view-plan').hidden;
   // Heute, Karte „Wohin?“: die eigenen Ziele zum direkten Antippen, Planen öffnet eine eigene Seite
+  // Heute: „Womit heute am besten?“ für ein gespeichertes Ziel. Nur auf Knopfdruck, wie die Ziel-Prüfung:
+  // Ziel und Standort (auf etwa 100 m) gehen an den Server, der Auto, Bus und Bahn, Rad und Fuß vergleicht, mit Profil.
+  const bestRes = {};
+  let bestZiel = null;
+  const BEST_NAME = { auto: 'Auto', oepnv: 'Bus & Bahn', rad: 'Rad', fuss: 'Zu Fuß' };
+  const BEST_MODE = { auto: 'auto', oepnv: 'bahn', rad: 'rad', fuss: 'fuss' };
+  function bestRow(o, rec) {
+    const bits = [];
+    if (o.verkehrsmittel === 'auto') { bits.push(`${o.dauer_min} min mit Parken`); if (o.verzoegerung_min >= 3) bits.push(`${o.verzoegerung_min} min Stau`); if (o.ausweichroute) bits.push(`Ausweichroute ${o.ausweichroute.dauer_min} min${o.ausweichroute.ueber && o.ausweichroute.ueber.length ? ' über ' + o.ausweichroute.ueber.join(', ') : ''}`); if (o.behindertenparkplatz) bits.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
+    if (o.verkehrsmittel === 'oepnv') { bits.push(`ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}`); if (o.umstiege) bits.push(`${o.umstiege}× umsteigen`); if (o.stufenlos) bits.push('stufenlos: ' + o.stufenlos); }
+    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') bits.push(`${o.dauer_min} min, ${fmtNum(o.km, 1)} km`);
+    if (o.hindernisse && o.hindernisse.length) bits.push(o.hindernisse.slice(0, 2).join(', '));
+    if (o.gemeldet && o.gemeldet.length) bits.push('gemeldet: ' + o.gemeldet.map((x) => x.art).slice(0, 2).join(', '));
+    if (o.meldungen && o.meldungen.length) bits.push(o.meldungen[0]);
+    if (!o.geeignet) bits.unshift(settings.access.on ? 'nicht für dein Profil' : 'eher nicht');
+    return `<button type="button" class="best-row${rec ? ' rec' : ''}${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}<span class="best-an"> · an ${esc(o.ankunft)}</span></b><span>${esc(bits.join(' · '))}</span></span>${rec ? '<span class="best-tag">Empfehlung</span>' : ''}</button>`;
+  }
+  function bestHtml() {
+    if (!apiBase() || !serverTools.includes('vergleich') || !settings.ziele.length) return '';
+    const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0];
+    const r = bestRes[z.id];
+    const chips = settings.ziele.length > 1 ? `<div class="vf-chips" role="group" aria-label="Ziel für den Vergleich">${settings.ziele.slice(0, 6).map((x) => `<button type="button" class="vf-chip${x.id === z.id ? ' on' : ''}" data-best-ziel="${x.id}" aria-pressed="${x.id === z.id}">${esc(x.name)}</button>`).join('')}</div>` : '';
+    let body;
+    if (!r) body = `<button type="button" class="btn best-go" data-best="go">${ic('spark')}<span>Womit heute am besten zu „${esc(z.name)}“?</span></button><p class="small muted best-note">Vergleicht Auto, Bus und Bahn, Rad und zu Fuß${settings.access.on ? ', passend zu deinem Profil' : ''}. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>`;
+    else if (r.loading) body = '<p class="small muted">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß …</p>';
+    else if (r.error) body = `<p class="small">${esc(r.error)}</p><button type="button" class="btn quiet" data-best="go">Noch einmal versuchen</button>`;
+    else {
+      const d = r.data, e = d.empfehlung;
+      const rows = d.optionen.slice().sort((a, b) => (a.verkehrsmittel === e.verkehrsmittel ? -1 : b.verkehrsmittel === e.verkehrsmittel ? 1 : 0) || (a.geeignet === b.geeignet ? 0 : a.geeignet ? -1 : 1) || String(a.ankunft).localeCompare(String(b.ankunft)));
+      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div><p class="small muted">Stand ${esc(d.jetzt)} Uhr · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
+    }
+    return `<div class="best">${chips}<div id="best-body" aria-live="polite">${body}</div></div>`;
+  }
+  async function runBest() {
+    const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0];
+    if (!z) return;
+    bestRes[z.id] = { loading: true };
+    renderPlanTeaser();
+    try {
+      const pos = await myStart();
+      if (!pos) throw new Error('Ohne deinen Standort kann Flowtown nicht vergleichen. Bitte den Standortzugriff erlauben.');
+      const q = new URLSearchParams({ from: pos.map((x) => x.toFixed(3)).join(','), to: `${Number(z.lat).toFixed(4)},${Number(z.lon).toFixed(4)}`, profil: settings.access.on ? settings.access.type : '' });
+      const d = await api('/api/vergleich?' + q);
+      bestRes[z.id] = { t: Date.now(), data: d };
+      if (voiceOn()) speak(`Zum Ziel ${z.name} am besten ${GROUP_WITH[d.empfehlung.verkehrsmittel]}. ${d.empfehlung.grund.split(';')[0]}.`, { now: true });
+    } catch (e) { bestRes[z.id] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Flowtown-Server.' : e.message }; }
+    renderPlanTeaser();
+  }
   function renderPlanTeaser() {
     const el = $('#plan-teaser');
-    el.innerHTML = apiBase() && settings.ziele.length
+    const best = bestHtml();
+    el.innerHTML = best || (apiBase() && settings.ziele.length
       ? `<div class="vf-chips" role="group" aria-label="Deine Ziele">${settings.ziele.map((z) => `<button type="button" class="vf-chip" data-plan-ziel="${z.id}">${esc(z.name)}</button>`).join('')}</div>`
-      : '';
+      : '');
     $('#btn-plan span').textContent = settings.ziele.length ? 'Weg planen' : 'Erstes Ziel anlegen';
   }
   function openPlan(id) {
@@ -5007,7 +5090,7 @@
     const out = anomalyList(list);
     if (!out.length) return null;
     const first = out[0];
-    return { prio: 0, icon: 'alert', cls: 'amber', title: 'Auffällig auf deinen Wegen', cat: 'Ampel', num: durText(first.e.wait), act: `<button type="button" class="btn quiet tip-go" data-peek="p" data-name="${esc(labelFor(first.e))}" data-lat="${first.e.lat}" data-lon="${first.e.lon}">${ic('map')}Auf der Karte</button>`,
+    return { prio: 0, icon: 'alert', cls: 'amber', title: 'Auffällige Ampel auf deinem Weg', cat: 'Ampel', num: durText(first.e.wait), act: `<button type="button" class="btn quiet tip-go" data-peek="p" data-name="${esc(labelFor(first.e))}" data-lat="${first.e.lat}" data-lon="${first.e.lon}">${ic('map')}Auf der Karte</button>`,
       short: `${esc(labelFor(first.e))}: ${durText(first.e.wait)} gewartet, sonst Ø ${durText(first.usual)}.`,
       html: `<ul class="facts">${out.slice(0, 3).map((x) => `<li>${ic('light')}<span>${dayLabel(x.e.t)} · ${placeFor(x.e)}</span><b>${durText(x.e.wait)}</b></li>`).join('')}</ul>
         <p class="small muted">Sonst Ø ${out.slice(0, 3).map((x) => durText(x.usual)).join(' bzw. ')}. Baustelle, Sperrung oder Stau?</p>` };
@@ -5076,7 +5159,7 @@
     const share = top.reduce((x, y) => x + y.wait, 0) / ag.wait;
     const what = top.length === 1 ? 'eine Ampel' : `${top.length} Ampeln`;
     const tpts = top.map((x) => `${x.sample.lat},${x.sample.lon}`).join(';');
-    return { prio: 2, icon: 'hourglass', cls: 'bad', title: 'Deine größten Zeitfresser', cat: 'Ampeln', num: fmtPct(share),
+    return { prio: 2, icon: 'hourglass', cls: 'bad', title: 'Wo du Zeit verlierst', cat: 'Ampeln', num: fmtPct(share),
       act: `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="Deine größten Zeitfresser" data-meta="${top.length} Ampeln mit der meisten Wartezeit" data-pts="${tpts}">${ic('map')}Auf der Karte</button>`,
       short: `${fmtPct(share)} deiner Wartezeit an Ampeln entfallen auf ${what}.`,
       html: `<p>${fmtPct(share)} deiner Wartezeit an Ampeln entfallen auf ${what}:</p><ul class="facts">${top.map((x) => { const o = othersAt(x.signal, x.h); return `<li>${ic('light')}<span>${placeFor(x.sample)}${x.h != null ? `<span class="others">Richtung ${esc(dirShort(x.h))}</span>` : ''}${o ? `<span class="others">Andere (${o.n}): ${fmtPct(o.share)} mit Halt, Ø ${durText(o.avg)}</span>` : ''}</span><b>${durText(x.wait)}</b></li>`; }).join('')}</ul>` };
@@ -5122,7 +5205,7 @@
     if (!cs.length) return null;
     const halts = cs.reduce((x, c) => x + c.halts, 0);
     if (halts < 0.05) return null;
-    return { prio: 5, icon: 'euro', cls: 'amber', title: 'Was dich Ampeln kosten', meta: 'Die letzten 30 Tage, geschätzt', cat: 'Kosten', num: fmtEuro(halts),
+    return { prio: 5, icon: 'euro', cls: 'amber', title: 'Was dich das Warten kostet', meta: 'Die letzten 30 Tage, geschätzt', cat: 'Kosten', num: fmtEuro(halts),
       act: `<button type="button" class="btn quiet tip-go" data-tipgo="stats">${ic('chart')}Im Verlauf ansehen</button>`,
       short: `Ampelhalte kosteten dich etwa ${fmtEuro(halts)}.`,
       html: `<div class="big-line">${ic('euro')}<span><b>${fmtEuro(halts)}</b> für Leerlauf und Anfahren bei ${cs.length} Autofahrt${cs.length === 1 ? '' : 'en'}</span></div>` };
@@ -5136,8 +5219,11 @@
   function computeTips(mode) {
     const list = trips.filter((t) => !t.demo && (!mode || mode === 'alle' || MODE_GROUP[t.mode] === mode));
     const oe = !mode || mode === 'alle' || mode === 'oepnv', rad = !mode || mode === 'alle' || mode === 'rad';
+    // zuerst, was den Weg besser macht (Meldungen, anderes Verkehrsmittel, Abfahrt, Umstieg), dann Ampeln, Fahrweise und Kosten
+    const BUCKET = { Meldung: 0, Rad: 1, Weg: 1, Linie: 1, Umstieg: 1, Zeit: 2, Ampel: 3, Ampeln: 3, Fahrweise: 4, Kosten: 4 };
+    const bk = (x) => (BUCKET[x.cat] != null ? BUCKET[x.cat] : 2);
     return [tipNews(), tipAnomalies(list)].concat(tipRoutes(list), [tipTimeEaters(list), oe ? tipLines(list) : null, oe ? tipTransfers(list) : null, rad ? tipRad(list) : null, tipWindows(list), tipStyle(list), tipCosts(list)])
-      .filter(Boolean).sort((x, y) => x.prio - y.prio);
+      .filter(Boolean).sort((x, y) => bk(x) - bk(y) || x.prio - y.prio);
   }
   // ---------- Tipps für Bus und Bahn: Pünktlichkeit je Linie (Abgleich mit dem Fahrplan) und Umstiege ----------
   const lateMin = (h) => (h[2] - h[1]) / 60000;
@@ -5382,8 +5468,8 @@
     const readBtn = canSpeak && tipsSay.length ? `<button type="button" class="btn quiet tip-go tip-read" data-tipgo="read">${ic('sound')}Lies mir die Tipps vor</button>` : '';
     $('#tips-body').innerHTML = readBtn + profBox + sw + (tips.length ? `<h3 class="eyebrow">Für deine Wege</h3>${first.map(card).join('')}${rest.length ? `<details class="more-box tip-more"${tipOpen != null && tipOpen >= top ? ' open' : ''}><summary>${ic('list')}Weitere Tipps (${rest.length})</summary><div class="tip-list">${rest.map((x, j) => card(x, j + top)).join('')}</div></details>` : ''}`
       : zt.length ? `<h3 class="eyebrow">Schon jetzt für deine Ziele</h3><section class="tip-prof plain">${zt.map(pcard).join('')}</section>`
-      : n && tipMode !== 'alle' ? `<p class="lead-text">${cap(GROUP_WITH[tipMode] || 'damit')} hat Flowtown noch keine eigenen Tipps für dich. Nach ein paar weiteren Fahrten stehen hier Zeitfresser und Alternativen.</p>`
-      : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen stehen hier deine Zeitfresser, die beste Abfahrt und Alternativen mit Rad oder zu Fuß.</p>`)
+      : n && tipMode !== 'alle' ? `<p class="lead-text">${cap(GROUP_WITH[tipMode] || 'damit')} hat Flowtown noch keine eigenen Tipps für dich. Nach ein paar weiteren Fahrten stehen hier Alternativen, Hindernisse und die beste Abfahrt.</p>`
+      : `<p class="lead-text">Nach ein paar Fahrten auf deinen üblichen Wegen steht hier, womit du am besten hinkommst, die beste Abfahrt, Ausweichwege und Hindernisse auf deinen Wegen.</p>`)
       + (!settings.access.on && !pickTop ? profPicker() : '')
       + (() => { const f = faqCards(), k = kiCard(); return (f ? `<div class="tip-acc">${f}</div>` : '') + (k ? `<div class="tip-help"><h3 class="eyebrow">Mehr Hilfe</h3>${k}</div>` : ''); })() + news;
     if (settings.access.on && !faq) loadFaq().then(() => { if (faq && !$('#view-tips').hidden) renderTips(); });
@@ -5854,7 +5940,15 @@
   // ---------- Ereignisse ----------
   $('#btn-start').addEventListener('click', startTrip);
   $('#btn-plan').addEventListener('click', () => openPlan(settings.ziele.length || !apiBase() ? null : 'neu'));
-  $('#plan-teaser').addEventListener('click', (ev) => { const c = ev.target.closest('[data-plan-ziel]'); if (c) openPlan(c.dataset.planZiel); });
+  $('#plan-teaser').addEventListener('click', (ev) => {
+    const c = ev.target.closest('[data-plan-ziel]');
+    if (c) { openPlan(c.dataset.planZiel); return; }
+    const bz = ev.target.closest('[data-best-ziel]');
+    if (bz) { bestZiel = bz.dataset.bestZiel; renderPlanTeaser(); return; }
+    if (ev.target.closest('[data-best="go"]')) { unlockSpeech(); runBest(); return; }
+    const bm = ev.target.closest('[data-best-mode]');
+    if (bm) { const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0]; setModeVoice(BEST_MODE[bm.dataset.bestMode]); if (z) openPlan(z.id); }
+  });
   $('#btn-plan-back').addEventListener('click', () => showView('start'));
   $('#tips-body').addEventListener('click', (ev) => {
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
@@ -6108,6 +6202,7 @@
   $('#inp-power').value = fmtNum(settings.powerPrice, 2);
   $('#app-version').textContent = VERSION;
   $('.proto').textContent = 'Prototyp ' + VERSION;   // zeigt zugleich: das Programm läuft
+  setTimeout(loadServerTools, 1500);
   clusters = buildClusters(signalNodes());
   // Ampelanlagen der Stadt einmal pro Woche holen; nicht während einer Aufzeichnung neu einteilen
   loadLsa().then((ok) => {

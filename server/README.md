@@ -172,6 +172,18 @@ Voraussetzung: `MISTRAL_API_KEY` in `/etc/flowtown.env` (wie für die KI-Einsch�
 
 Testen auf dem Server: `cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs frage "Wo ist die nächste rollstuhlgerechte Toilette?" 52.0214 8.5339 Rollstuhl'` zeigt die Antwort und welche Werkzeuge benutzt wurden.
 
+### Womit am besten? Vergleich und neue Werkzeuge der Assistenz
+
+Ab App-Version 0.88 kann der Server mehr. Die App fragt `/api/health` und zeigt die passenden Beispielfragen und den Knopf „Womit heute am besten?“ erst, wenn der Server sie meldet (`werkzeuge`). Nach dem Aktualisieren (`git pull`, `systemctl restart flowtown`) ist alles sofort da; eine Einrichtung ist nicht nötig.
+
+- `GET /api/vergleich?from=…&to=…&profil=rollstuhl`: vergleicht Auto (mit etwa 5 Minuten fürs Parken), Bus und Bahn, Rad und zu Fuß und gibt eine Empfehlung mit Grund. Mit Profil zählt, was dafür wichtig ist: Hochbahnsteige, Stufen und Kopfsteinpflaster auf dem Fußweg, Behindertenparkplatz am Ziel. Nur auf Knopfdruck; zählt wie eine Ziel-Prüfung (`ZIEL_PER_DAY`) und braucht vier HERE-Abfragen (Auto, Rad, Fuß, Bus und Bahn) plus Ortsnamen für Meldungen.
+- Werkzeuge der Assistenz:
+  - `vergleich`: dasselbe für Fragen wie „Womit komme ich am besten zur Arbeit?“.
+  - `weg_check`: Hindernisse auf dem Fußweg zu einem Ziel (Stufen, Belag, Steigung, hohe Bordsteine, Gleise, Ampeln mit und ohne Tonsignal), Baustellen und gemeldete Hindernisse. Nutzt die Kacheln des Weg-Checks (`fussnetz`); fehlt eine, holt der Server sie und antwortet nach höchstens 6 Sekunden mit dem, was da ist.
+  - `oepnv_stoerungen`: Umleitungen von moBiel und in der App gemeldete defekte Aufzüge.
+  - `ampeln_mit_ton`: Ampeln in der Nähe mit Tonsignal laut OpenStreetMap und den Rückmeldungen nach Fahrten.
+- `meine_auswertung` enthält jetzt auch den Vergleich der eigenen Fahrten nach Verkehrsmittel und die eigenen Ampel-Bewertungen (etwa „Grün zu kurz“).
+
 ### Gemeldete Hindernisse prüfen
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
