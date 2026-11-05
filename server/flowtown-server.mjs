@@ -1828,7 +1828,7 @@ Regeln:
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
 - Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
 - Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Fragen zu einer bestimmten Fahrt (letzte Fahrt, heute früh, gestern) beantwortest du aus „letzte_fahrten“ (die neueste zuerst): Dauer, Gestanden und die Aufteilung übernimmst du wörtlich, ohne zu runden, zu addieren oder umzurechnen; „gestanden_gesamt“ ist die ganze Standzeit, „an_ampeln“ nur der Teil an Ampeln. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.
-- „Womit komme ich am besten, schnellsten oder günstigsten hin?“, „Lohnt sich Rad, Bus oder Auto?“: Werkzeug vergleich. Nenne die Empfehlung mit ihrem Grund und in einem Satz die nächstbeste Möglichkeit. Mit Profil: sag, was für das Profil zählt (stufenlos, Hindernisse, Behindertenparkplatz).
+- „Womit komme ich am besten, schnellsten oder günstigsten hin?“, „Lohnt sich Rad, Bus oder Auto?“, „Wie komme ich umweltfreundlich hin, wie spare ich CO₂ oder Sprit?“: Werkzeug vergleich. Nenne die Empfehlung mit ihrem Grund und in einem Satz die nächstbeste Möglichkeit. Flowtown empfiehlt das umweltfreundlichste Verkehrsmittel, wenn es kaum langsamer ist: Nenne dann die CO₂-Ersparnis gegenüber dem Auto (co2_gespart_g, als „etwa“). Empfiehl das Auto nur, wenn vergleich es empfiehlt, und sag dann, wie viel länger Bus und Bahn oder Rad dauern würden. Mit Profil: sag, was für das Profil zählt (stufenlos, Hindernisse, Behindertenparkplatz).
 - Hindernisse auf einem Weg (Stufen, Treppen, Kopfsteinpflaster, Steigung, hohe Bordsteine, ebener Weg, gemeldete Hindernisse, Ampeln mit Tonsignal unterwegs): Werkzeug weg_check. Nenne die wichtigsten Stellen mit Straße und Länge. Sag dazu, dass die App unter „Wohin?“ einen Weg mit weniger Hindernissen sucht.
 - Störungen, Umleitungen und Ausfälle bei Bus und Bahn, defekte Aufzüge: Werkzeug oepnv_stoerungen. Gemeldete Aufzüge immer mit „bitte vor Ort prüfen“.
 - Ampeln mit Tonsignal in der Nähe eines Orts: Werkzeug ampeln_mit_ton. Sag nie, ob eine Ampel gerade grün ist.
@@ -1836,7 +1836,8 @@ Regeln:
 - Fehlt bei einer Frage zu Weg, Ort oder Vergleich das Ziel, frag in einem freundlichen Satz nach, wohin es gehen soll. Rate kein Ziel.
 - Am Ziel zählt, was dort ist, nicht am Standort: Toilette, Behindertenparkplatz, Zugang und Haltestelle immer für das Ziel nennen (am_ziel aus vergleich und weg_check, sonst ort_info oder orte_in_der_naehe mit dem Ziel als ort).
 - Nach Wegen mit Profil: erst die beste Möglichkeit, dann das Wichtigste auf dem Weg, dann das Wichtigste am Ziel, alles in höchstens drei Sätzen.
-- „Infos zu einem Ort“, „Was erwartet mich dort?“: Werkzeug ort_info.`;
+- „Infos zu einem Ort“, „Was erwartet mich dort?“: Werkzeug ort_info. Sag zuerst, für welchen Ort die Angaben gelten (ort, adresse). Gibt es „auswahl“ oder „gebaeude_auswahl“, nenne zwei, drei davon und frag, welcher gemeint ist; erfinde keine Angaben.
+- Entfernungen gelten immer vom gefundenen Ort aus; nenne sie nur, wenn der Ort eindeutig ist.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
@@ -1899,13 +1900,20 @@ async function assistOrt(name, ctx) {
   const k = hstNorm(n);
   const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === k || hstNorm(x.name).includes(k) || k.includes(hstNorm(x.name)));
   if (z && isFinite(z.lat)) return { name: z.name, pos: [z.lat, z.lon] };
-  const o = bf && (bf.orte || []).find((x) => hstNorm(x.n).includes(k));
-  if (o) return { name: o.n, pos: [o.lat, o.lon] };
+  const orte = (bf && bf.orte) || [];
+  const exact = orte.find((x) => hstNorm(x.n) === k || hstNorm(x.n) === k + 'bielefeld');
+  if (exact) return { name: exact.n, pos: [exact.lat, exact.lon], adresse: exact.adr, gefunden_ueber: 'Bielefeld barrierefrei erleben' };
   const st = tramStops() && tramStops().get(k);
-  if (st) return { name: st.name, pos: st.pos[0] };
-  if (!HERE_KEY) return null;
-  const r = (await findOrt(n + (/bielefeld/i.test(n) ? '' : ', Bielefeld')).catch(() => []))[0];
-  return r ? { name: r.name, pos: [r.lat, r.lon] } : null;
+  if (st) return { name: 'Haltestelle ' + st.name, pos: st.pos[0], gefunden_ueber: 'Stadtbahn-Haltestelle' };
+  // Teil-Treffer: genau ein Gebäude passt, dann dieses; passen mehrere, nicht raten, sondern zur Auswahl stellen
+  const seen = new Set(), hits = orte.filter((x) => hstNorm(x.n).includes(k) && !seen.has(x.id) && seen.add(x.id));
+  if (hits.length === 1) return { name: hits[0].n, pos: [hits[0].lat, hits[0].lon], adresse: hits[0].adr, gefunden_ueber: 'Bielefeld barrierefrei erleben' };
+  const r = HERE_KEY ? (await findOrt(n + (/bielefeld/i.test(n) ? '' : ', Bielefeld')).catch(() => []))[0] : null;
+  if (hits.length > 1) {
+    const pos = r ? [r.lat, r.lon] : [hits[0].lat, hits[0].lon];
+    return { name: r ? r.name : n, pos, adresse: r ? r.sub : undefined, gefunden_ueber: r ? 'Ortssuche (HERE)' : 'Bielefeld barrierefrei erleben, erster Treffer', auswahl: hits.slice(0, 6).map((x) => x.n) };
+  }
+  return r ? { name: r.name, pos: [r.lat, r.lon], adresse: r.sub, gefunden_ueber: 'Ortssuche (HERE)' } : null;
 }
 // Abfahrten laut Fahrplan (Ortszeit Bielefeld), die nächsten 60 Minuten
 function berlinNow() {
@@ -2053,7 +2061,10 @@ function wichtigFuer(typ, check) {
 // ---------- Vergleich: womit komme ich am besten hin? Auto, Bus und Bahn, Rad, zu Fuß, mit Profil ----------
 const uhr = (ms) => new Date(ms).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' });
 const hbsOf = (n) => { const y = hst && hst.liste.find((z) => z.k === hstNorm(n)); return y ? y.hbs : 'keine Angabe'; };
-async function vergleichZiel(from, to, typ) {
+// CO2 je Personenkilometer, grob nach Durchschnittswerten des Umweltbundesamts (gerundet): Auto 160 g, Bus 80 g, Stadtbahn und Zug 60 g
+const CO2_G = { auto: 160, bus: 80, bahn: 60, zug: 60, rad: 0, fuss: 0 };
+const kgText = (g) => (g >= 1000 ? `${(Math.round(g / 100) / 10).toLocaleString('de-DE')} kg` : `${Math.round(g / 10) * 10} g`);
+async function vergleichZiel(from, to, typ, vorrang) {
   const now = Date.now();
   const [ra, rr, rf, ro] = await Promise.allSettled([checkZiel(from, to, 'auto', true), checkZiel(from, to, 'rad', true), checkZiel(from, to, 'fuss', true), checkZielOepnv(from, to)]);
   const mob = ['rollstuhl', 'rollator'].includes(typ);
@@ -2062,6 +2073,7 @@ async function vergleichZiel(from, to, typ) {
     // Parken und Weg vom Parkplatz: geschätzt 5 Minuten, damit das Auto nicht schneller wirkt, als es am Ziel ist
     const v = ra.value, o = { verkehrsmittel: 'auto', dauer_min: Math.round(v.dauer / 60) + 5, parken: 'inklusive etwa 5 Minuten für Parken (geschätzt)', ankunft: now + (v.dauer + 300) * 1000, km: v.km, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)), meldungen: v.items.slice(0, 2).map((it) => it.titel + (it.art ? ' (' + it.art + ')' : '')), geeignet: true };
     if (v.alternative) o.ausweichroute = { dauer_min: Math.round(v.alternative.dauer / 60), ueber: v.alternative.strassen };
+    o.co2_g = Math.round(v.km * CO2_G.auto);
     if (mob) { const near = (bpp && bpp.plaetze || []).map((p) => mAbs(to, [p[0], p[1]])).sort((a, b) => a - b)[0]; o.behindertenparkplatz = near != null && near <= 500 ? `etwa ${Math.round(near / 50) * 50} m vom Ziel` : 'keiner bis 500 m bekannt'; }
     opt.push(o);
   }
@@ -2075,6 +2087,9 @@ async function vergleichZiel(from, to, typ) {
     if (c) {
       const fahrt = c.teile.filter((x) => x.art !== 'fuss');
       const o = { verkehrsmittel: 'oepnv', ab: uhr(Date.parse(c.ab)), an: uhr(Date.parse(c.an)), ankunft: Date.parse(c.an), dauer_min: Math.round((Date.parse(c.an) - now) / 60000), umstiege: c.umstiege, linien: fahrt.map((x) => x.linie + (x.von ? ' ab ' + x.von : '')).slice(0, 3), geeignet: true };
+      // Strecke für die Schätzung: wie mit dem Auto, sonst wie zu Fuß
+      const km = ra.status === 'fulfilled' ? ra.value.km : rf.status === 'fulfilled' ? rf.value.km : 0;
+      o.co2_g = Math.round(km * (fahrt.some((x) => x.art === 'bus') ? CO2_G.bus : CO2_G.bahn));
       if (mob) {
         const hb = fahrt.filter((x) => x.art === 'bahn').flatMap((x) => [hbsOf(x.von), hbsOf(x.nach)]);
         o.stufenlos = hb.includes('nein') ? 'nein, mindestens eine Haltestelle ohne Hochbahnsteig' : hb.length && hb.every((x) => x === 'ja') && fahrt.every((x) => x.art === 'bahn') ? 'ja, alle Haltestellen mit Hochbahnsteig' : 'keine vollständige Angabe';
@@ -2083,24 +2098,34 @@ async function vergleichZiel(from, to, typ) {
       opt.push(o);
     }
   }
-  if (rr.status === 'fulfilled') { const v = rr.value; opt.push({ verkehrsmittel: 'rad', dauer_min: Math.round(v.dauer / 60), ankunft: now + v.dauer * 1000, km: v.km, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: !['rollstuhl', 'rollator', 'sehen'].includes(typ) }); }
+  if (rr.status === 'fulfilled') { const v = rr.value; opt.push({ verkehrsmittel: 'rad', dauer_min: Math.round(v.dauer / 60), ankunft: now + v.dauer * 1000, km: v.km, co2_g: 0, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: !['rollstuhl', 'rollator', 'sehen'].includes(typ) && v.dauer <= 45 * 60 }); }
   if (rf.status === 'fulfilled') {
-    const v = rf.value, o = { verkehrsmittel: 'fuss', dauer_min: Math.round(v.dauer / 60), ankunft: now + v.dauer * 1000, km: v.km, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: v.dauer <= 50 * 60 };
+    const v = rf.value, o = { verkehrsmittel: 'fuss', dauer_min: Math.round(v.dauer / 60), ankunft: now + v.dauer * 1000, km: v.km, co2_g: 0, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: v.dauer <= 40 * 60 };
     if (typ) { const ck = await wegCheck(v.pts, 3000).catch(() => null); const w = wichtigFuer(typ, ck); if (w) { o.hindernisse = w; if (mob && ck.stellen.some((x) => x.c === 'stufen')) o.geeignet = false; } const g = hinweiseAm(v.pts, 25); if (g.length) o.gemeldet = g; }
     opt.push(o);
   }
   if (!opt.length) throw Object.assign(new Error('Für dieses Ziel habe ich gerade keine Strecke gefunden.'), { status: 404 });
   const ok = opt.filter((o) => o.geeignet);
   const pool = ok.length ? ok : opt;
-  const best = pool.slice().sort((a, b) => a.ankunft - b.ankunft)[0];
   const NAME = { auto: 'mit dem Auto', oepnv: 'mit Bus und Bahn', rad: 'mit dem Rad', fuss: 'zu Fuß' };
-  const second = pool.filter((o) => o !== best).sort((a, b) => a.ankunft - b.ankunft)[0];
-  let grund = `am frühesten da, Ankunft gegen ${uhr(best.ankunft)}`;
-  if (second && second.ankunft - best.ankunft <= 5 * 60000) grund += `; ${NAME[second.verkehrsmittel]} ist kaum langsamer`;
+  const ECO = { fuss: 0, rad: 1, oepnv: 2, auto: 3 };
+  const fastest = pool.slice().sort((a, b) => a.ankunft - b.ankunft)[0];
+  // Spielraum: höchstens so viel später wie ein Viertel der schnellsten Reisezeit, mindestens 5, höchstens 15 Minuten
+  const tol = vorrang === 'schnell' ? 3 * 60000 : Math.min(15 * 60000, Math.max(5 * 60000, (fastest.ankunft - now) * 0.25));
+  const best = pool.filter((o) => o.ankunft <= fastest.ankunft + tol).sort((a, b) => ECO[a.verkehrsmittel] - ECO[b.verkehrsmittel] || a.ankunft - b.ankunft)[0] || fastest;
+  const car = opt.find((o) => o.verkehrsmittel === 'auto');
+  const spart = car && best.verkehrsmittel !== 'auto' && car.co2_g > best.co2_g ? car.co2_g - best.co2_g : 0;
+  let grund;
+  if (best === fastest) grund = `am frühesten da, Ankunft gegen ${uhr(best.ankunft)}`;
+  else grund = `nur ${Math.max(1, Math.round((best.ankunft - fastest.ankunft) / 60000))} min später als ${NAME[fastest.verkehrsmittel]}, Ankunft gegen ${uhr(best.ankunft)}`;
+  if (spart) grund += `; spart etwa ${kgText(spart)} CO₂ gegenüber dem Auto`;
+  if (best.verkehrsmittel === 'auto') { const eco = pool.filter((o) => o.verkehrsmittel !== 'auto').sort((a, b) => a.ankunft - b.ankunft)[0]; if (eco) grund += `; ${NAME[eco.verkehrsmittel]} wärst du ${Math.round((eco.ankunft - best.ankunft) / 60000)} min länger unterwegs`; }
   if (best.verkehrsmittel === 'oepnv' && best.stufenlos) grund += `; stufenlos: ${best.stufenlos}`;
   if (best.verkehrsmittel === 'auto' && best.verzoegerung_min >= 5) grund += `; trotz ${best.verzoegerung_min} min Stau`;
   if (typ && opt.some((o) => !o.geeignet)) grund += `; nicht empfohlen für dein Profil: ${opt.filter((o) => !o.geeignet).map((o) => NAME[o.verkehrsmittel]).join(', ')}`;
-  return { jetzt: uhr(now), profil: typ || 'kein Profil', optionen: opt.map((o) => Object.assign({}, o, { ankunft: uhr(o.ankunft) })), empfehlung: { verkehrsmittel: best.verkehrsmittel, grund } };
+  return { jetzt: uhr(now), profil: typ || 'kein Profil', vorrang: vorrang === 'schnell' ? 'schnell ankommen' : 'umweltfreundlich, wenn kaum langsamer',
+    optionen: opt.map((o) => Object.assign({}, o, { ankunft: uhr(o.ankunft), co2: o.co2_g ? 'etwa ' + kgText(o.co2_g) : 'kein CO₂' })), empfehlung: { verkehrsmittel: best.verkehrsmittel, grund, co2_gespart_g: spart || undefined },
+    co2_quelle: 'grobe Schätzung nach Durchschnittswerten des Umweltbundesamts je Personenkilometer' };
 }
 // Ampeln in der Nähe eines Orts, mit Tonsignal ja/nein und den Straßen der Kreuzung
 async function ampelnNahe(pos) {
@@ -2133,8 +2158,15 @@ function zielInfo(pos, name, typ) {
     if (first && first.name && !first.mehrdeutig) {
       const ang = [].concat(...themen.map((t, i) => ((i ? bfOrtDetails(name, t) : first).angaben || []))).slice(0, 14);
       out.gebaeude = { name: first.name, adresse: first.adresse, angaben: ang, hinweise: first.hinweise, stand: first.stand_der_erhebung, quelle: 'Bielefeld barrierefrei erleben' };
-    }
+    } else if (first && first.mehrdeutig) out.gebaeude_auswahl = first.kandidaten;
   }
+  if (!out.gebaeude && bf && (bf.orte || []).length) {
+    const seen = new Set();
+    const nah = bf.orte.filter((x) => !seen.has(x.id) && seen.add(x.id)).map((x) => ({ name: x.n, entfernung_m: mAbs(pos, [x.lat, x.lon]), stufenlos: x.f && x.f.stufenlos === 1 ? 'ja' : x.f && x.f.stufenlos === 0 ? 'nein' : 'keine Angabe', behinderten_wc: x.f && x.f.wc === 1 ? 'ja' : x.f && x.f.wc === 0 ? 'nein' : 'keine Angabe' }))
+      .filter((x) => x.entfernung_m <= 300).sort((a, b) => a.entfernung_m - b.entfernung_m).slice(0, 4).map((x) => Object.assign(x, { entfernung_m: Math.round(x.entfernung_m / 10) * 10 }));
+    if (nah.length) out.barrierefreie_orte_nah = nah;
+  }
+  if (!bf || !(bf.orte || []).length) out.hinweis_daten = 'Die Daten von Bielefeld barrierefrei erleben sind auf dem Server gerade nicht geladen.';
   const wc = (bf && bf.wc || []).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', pos: [w[0], w[1]] }));
   out.rollstuhl_wc = strip(near(wc.filter((w) => w.rollstuhlgerecht === 'ja'), 800)) || 'keines bis 800 m bekannt';
   if (!['rollstuhl', 'rollator'].includes(typ)) out.toilette = strip(near(wc, 600)) || 'keine bis 600 m bekannt';
@@ -2159,7 +2191,7 @@ async function assistTool(name, a, ctx, act) {
     if (!from) return { fehler: 'Kein Standort; bitte einen Startort nennen' };
     const f = from.pos.map((x) => Math.round(x * 1000) / 1000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
     if (name === 'vergleich') {
-      const v = await vergleichZiel(f, t, ctx.typ);
+      const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang);
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
       return Object.assign({ ziel: to.name }, v, { am_ziel: zielInfo(to.pos, to.name, ctx.typ) });
     }
@@ -2187,7 +2219,9 @@ async function assistTool(name, a, ctx, act) {
   if (name === 'ort_info') {
     const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Diesen Ort habe ich nicht gefunden. Bitte genauer nennen, zum Beispiel mit Straße.' };
-    return Object.assign({ ort: o.name, profil: ctx.typ || 'kein Profil' }, zielInfo(o.pos, a.ort, ctx.typ));
+    // mehrdeutig: keine Entfernungen von einem geratenen Punkt, sondern nachfragen
+    if (o.auswahl) return { gesucht: a.ort, mehrdeutig: true, auswahl: o.auswahl, hinweis: 'Mehrere Orte passen. Frag, welcher gemeint ist, und nenne zwei oder drei davon.' };
+    return Object.assign({ ort: o.name, adresse: o.adresse, gefunden_ueber: o.gefunden_ueber, profil: ctx.typ || 'kein Profil' }, zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ));
   }
   if (name === 'ampeln_mit_ton') {
     const o = await assistOrt(a.ort, ctx);
@@ -2306,7 +2340,7 @@ async function assist(body) {
   const k = body.kontext || {};
   const pos = Array.isArray(k.pos) && k.pos.length === 2 && inBox(Number(k.pos[0]), Number(k.pos[1]), 0.3) ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau
   const auswertung = assistStatsClean(k.auswertung);
-  const ctx = { pos, auswertung, typ: profilTyp(k), ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
+  const ctx = { pos, auswertung, typ: profilTyp(k), vorrang: k.vorrang === 'schnell' || /schnellsten|am schnellsten|eilig/i.test(frage) ? 'schnell' : '', ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
   const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
@@ -2425,7 +2459,7 @@ const server = http.createServer(async (req, res) => {
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       const from = coord(url.searchParams.get('from'), 3), to = coord(url.searchParams.get('to'), 4);
       const typ = profilTyp({ profil_typ: url.searchParams.get('profil') });
-      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ) }), origin);
+      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ, url.searchParams.get('vorrang') === 'schnell' ? 'schnell' : ''), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ) }), origin);
     }
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);

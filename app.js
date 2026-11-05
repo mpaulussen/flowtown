@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.89.0';
+  const VERSION = '0.90.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1805,7 +1805,7 @@
       const k = stemKey(frage);
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
-      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '',
+      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '', vorrang: vorrangSchnell() ? 'schnell' : '',
         unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
@@ -3770,7 +3770,7 @@
   const accWith = () => ({ rollstuhl: 'mit Rollstuhl', rollator: 'mit Rollator oder Gehhilfe', sehen: 'und siehst schlecht', hoeren: 'und hörst schlecht', lernen: '', ruhe: 'und brauchst Ruhe' }[settings.access.on ? settings.access.type : ''] || '');
   const ASK_HERO = {
     start: { title: 'KI, die mit dir spricht', sub: () => (settings.access.on && accWith() ? `Du bist heute wieder unterwegs, ${accWith()}? Sag mir, wohin. Ich prüfe den Weg und was dich dort erwartet.` : 'Ich helfe dir gerne, deinen besten Weg zu finden. Sag mir einfach, wohin du willst.') },
-    tips: { title: 'KI-Tipps für deine Wege', sub: () => 'Frag, was sich lohnt: Rad, Bus und Bahn oder Auto, die beste Abfahrt und was dich am Ziel erwartet.' },
+    tips: { title: 'KI-Tipps für deine Wege', sub: () => 'Frag, was sich lohnt und die Umwelt schont: Rad, Bus und Bahn oder Auto, die beste Abfahrt und was dich am Ziel erwartet.' },
     stats: { title: 'KI-Analyse deiner Fahrten', sub: () => 'Frag, womit du am schnellsten warst, wo du Zeit verlierst und was dir unterwegs aufgefallen ist.' }
   };
   // Gespräche: Eröffnung und die Frage, in die die Antwort ({x}) eingesetzt wird
@@ -3779,7 +3779,8 @@
     const D = {
       weg: { open: settings.access.on && accWith() ? `Du bist heute wieder unterwegs, ${accWith()}. Wohin möchtest du? Ich suche den besten Weg, prüfe ihn und sage dir, was dich dort erwartet.` : 'Ich helfe dir gerne, deinen besten Weg zu finden. Wohin möchtest du?',
         tpl: 'Wie komme ich jetzt am besten zu {x}? Vergleiche die Möglichkeiten, prüfe den Weg und sag mir, was mich am Ziel erwartet.' },
-      vergleich: { open: 'Ich vergleiche für dich Auto, Bus und Bahn, Rad und zu Fuß. Wohin soll es gehen?', tpl: 'Was lohnt sich für den Weg zu {x}: Rad, Bus und Bahn, Auto oder zu Fuß? Nenn mir die Optionen.' },
+      vergleich: { open: 'Ich vergleiche für dich Auto, Bus und Bahn, Rad und zu Fuß, auch beim CO₂. Wohin soll es gehen?', tpl: 'Was lohnt sich für den Weg zu {x}: Rad, Bus und Bahn, Auto oder zu Fuß? Nenn mir die Optionen und was davon CO₂ spart.' },
+      oeko: { open: 'Wohin fährst du oft? Ich zeige dir, wie du dorthin CO₂ und Sprit sparst, ohne viel Zeit zu verlieren.', tpl: 'Wie komme ich umweltfreundlich zu {x}, und wie viel CO₂ spare ich gegenüber dem Auto?' },
       ort: { open: 'Sag mir, für welchen Ort du Infos willst. Ein Name, ein Gebäude oder eine Adresse genügt.', tpl: 'Was muss ich über {x} wissen? Zugang, Toilette, Parken und die nächste Haltestelle.' },
       stufenlos: { open: `Wohin möchtest du? Ich prüfe den Weg auf Stufen und Hindernisse und sage dir, was dich am Ziel erwartet.`, tpl: `Ich bin unterwegs ${accWith() || 'mit Rollstuhl'}. Wie komme ich stufenlos zu {x}? Prüfe den Weg und sag mir, was mich dort erwartet: Zugang, rollstuhlgerechtes WC, Behindertenparkplatz, Haltestelle mit Hochbahnsteig.` },
       wc: { open: 'Wo willst du hin? Ich suche das rollstuhlgerechte WC dort, wo du hinwillst, nicht hier.', tpl: 'Wo ist ein rollstuhlgerechtes WC bei {x}, und wie komme ich stufenlos hin?' },
@@ -3798,7 +3799,7 @@
   const ASK_Q = {
     '': {
       start: [{ l: 'Finde meinen besten Weg', i: 'weg' }, { l: 'Rad, Bus oder Auto: was lohnt sich?', i: 'vergleich', n: 'vergleich' }, Q_ORT, Q_STOER],
-      tips: [{ l: 'Rad, Bus oder Auto: was lohnt sich?', i: 'vergleich', n: 'vergleich' }, { l: 'Wann fahre ich am besten los?', i: 'abfahrt' }, { l: 'Was kann ich besser machen?', q: 'Was kann ich auf meinen Wegen besser machen?', n: 'mine' }, { l: 'Park + Ride?', q: 'Wo gibt es Park + Ride in meiner Nähe?' }],
+      tips: [{ l: 'Wie spare ich CO₂ und Sprit?', i: 'oeko', n: 'vergleich' }, { l: 'Rad, Bus oder Auto: was lohnt sich?', i: 'vergleich', n: 'vergleich' }, { l: 'Wann fahre ich am besten los?', i: 'abfahrt' }, { l: 'Was kann ich besser machen?', q: 'Was kann ich auf meinen Wegen besser machen?', n: 'mine' }, { l: 'Park + Ride?', q: 'Wo gibt es Park + Ride in meiner Nähe?' }],
       stats: [Q_LAST, Q_MINE, { l: 'Womit war ich am schnellsten?', q: 'Mit welchem Verkehrsmittel war ich auf meinen Wegen am schnellsten?', n: 'mine' }, { l: 'Finde meinen besten Weg', i: 'weg' }]
     },
     rollstuhl: {
@@ -3947,6 +3948,7 @@
     if (o.hindernisse && o.hindernisse.length) bits.push(o.hindernisse.slice(0, 2).join(', '));
     if (o.gemeldet && o.gemeldet.length) bits.push('gemeldet: ' + o.gemeldet.map((x) => x.art).slice(0, 2).join(', '));
     if (o.meldungen && o.meldungen.length) bits.push(o.meldungen[0]);
+    if (o.co2) bits.push(o.co2_g ? `CO₂ ${o.co2}` : 'ohne CO₂');
     if (!o.geeignet) bits.unshift(settings.access.on ? 'nicht für dein Profil' : 'eher nicht');
     return `<button type="button" class="best-row${rec ? ' rec' : ''}${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}<span class="best-an"> · an ${esc(o.ankunft)}</span></b><span>${esc(bits.join(' · '))}</span></span>${rec ? '<span class="best-tag">Empfehlung</span>' : ''}</button>`;
   }
@@ -3956,17 +3958,19 @@
     const r = bestRes[z.id];
     const chips = `<div class="vf-chips" role="group" aria-label="Ziel für den Vergleich">${settings.ziele.slice(0, 5).map((x) => `<button type="button" class="vf-chip${x.id === z.id ? ' on' : ''}" data-best-ziel="${x.id}" aria-pressed="${x.id === z.id}">${esc(x.name)}</button>`).join('')}<button type="button" class="vf-chip add" data-best-other="1">Anderes Ziel …</button></div>`;
     let body;
-    if (!r) body = `<button type="button" class="btn best-go" data-best="go">${ic('spark')}<span>Womit heute am besten zu „${esc(z.name)}“?</span></button><p class="small muted best-note">Vergleicht Auto, Bus und Bahn, Rad und zu Fuß${settings.access.on ? ', passend zu deinem Profil' : ''}. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>`;
+    if (!r) body = `<button type="button" class="btn best-go" data-best="go">${ic('spark')}<span>Womit heute am besten zu „${esc(z.name)}“?</span></button><p class="small muted best-note">Vergleicht Auto, Bus und Bahn, Rad und zu Fuß${settings.access.on ? ', passend zu deinem Profil' : ''}, mit CO₂. Ist eine umweltfreundliche Möglichkeit kaum langsamer, empfiehlt Flowtown sie. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>`;
     else if (r.loading) body = '<p class="small muted">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß …</p>';
     else if (r.error) body = `<p class="small">${esc(r.error)}</p><button type="button" class="btn quiet" data-best="go">Noch einmal versuchen</button>`;
     else {
       const d = r.data, e = d.empfehlung;
       const rows = d.optionen.slice().sort((a, b) => (a.verkehrsmittel === e.verkehrsmittel ? -1 : b.verkehrsmittel === e.verkehrsmittel ? 1 : 0) || (a.geeignet === b.geeignet ? 0 : a.geeignet ? -1 : 1) || String(a.ankunft).localeCompare(String(b.ankunft)));
       const am = d.am_ziel ? amZielText(d.am_ziel) : '';
-      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
+      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · CO₂ grob geschätzt nach Werten des Umweltbundesamts · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
     }
     return `<div class="best">${chips}<div id="best-body" aria-live="polite">${body}</div></div>`;
   }
+  // nur wer allein „Schneller ankommen“ gewählt hat, bekommt das Schnellste; sonst das Umweltfreundlichste, wenn es kaum langsamer ist
+  const vorrangSchnell = () => goals().includes('schnell') && !goals().includes('stadt') && !goals().includes('rad');
   // was am Ziel zählt, nach Profil, in einem Satz
   function amZielText(a) {
     const t = settings.access.on ? settings.access.type : '', out = [];
@@ -3991,7 +3995,7 @@
     try {
       const pos = await myStart();
       if (!pos) throw new Error('Ohne deinen Standort kann Flowtown nicht vergleichen. Bitte den Standortzugriff erlauben.');
-      const q = new URLSearchParams({ from: pos.map((x) => x.toFixed(3)).join(','), to: `${Number(z.lat).toFixed(4)},${Number(z.lon).toFixed(4)}`, profil: settings.access.on ? settings.access.type : '', name: z.name });
+      const q = new URLSearchParams({ from: pos.map((x) => x.toFixed(3)).join(','), to: `${Number(z.lat).toFixed(4)},${Number(z.lon).toFixed(4)}`, profil: settings.access.on ? settings.access.type : '', name: z.name, vorrang: vorrangSchnell() ? 'schnell' : '' });
       const d = await api('/api/vergleich?' + q);
       bestRes[z.id] = { t: Date.now(), data: d };
       if (voiceOn()) speak(`Zum Ziel ${z.name} am besten ${GROUP_WITH[d.empfehlung.verkehrsmittel]}. ${d.empfehlung.grund.split(';')[0]}.`, { now: true });
