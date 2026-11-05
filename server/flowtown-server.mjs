@@ -2336,6 +2336,54 @@ function assistStatsClean(a) {
     tipps: (Array.isArray(a.tipps) ? a.tipps : []).slice(0, 5).map((t) => clip(t, 200).replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen'))
   };
 }
+// ---------- Geprüfte Beispiele: korrigierte Antworten aus der Teststrecke ----------
+// Tabelle (Google Tabellen als CSV veröffentlicht: BEISPIELE_CSV_URL, sonst DATA_DIR/beispiele.csv) mit den Spalten
+// Frage, Profil, Antwort, Bewertung, Korrigierte Antwort. Zählt eine Zeile mit korrigierter Antwort oder Bewertung „gut“.
+// Zu jeder neuen Frage gehen die ähnlichsten drei als Vorbild für Aufbau, Ton und Länge an die KI, nie als Fakten.
+const BEISPIELE_URL = process.env.BEISPIELE_CSV_URL || '';
+const BEISPIELE_CSV = path.join(DATA_DIR, 'beispiele.csv');
+const BSP_STOP = new Set('ich du er sie es wir ihr mir mich dir dich der die das den dem des ein eine einen einem einer und oder aber auch noch schon jetzt hier dort gibt gibts gibt’s ist sind bin war wie was wo wann wer womit welche welcher welches mit ohne bei zu zum zur von vom nach am im in an auf für über unter ob bitte sag nenn mal gerade mein meine meinen meinem kann können soll'.split(' '));
+const bspWords = (t) => new Set(String(t || '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-zäöü0-9 ]+/g, ' ').split(/\s+/).filter((w) => w.length > 2 && !BSP_STOP.has(w)).map((w) => w.replace(/(en|er|e|n|s)$/, '')));
+let beispiele = [];
+function readBeispiele(text) {
+  const rows = parseCsv(text);
+  if (!rows.length) return [];
+  const head = rows[0].map((h) => h.trim().toLowerCase());
+  const col = (re) => head.findIndex((h) => re.test(h));
+  const cF = col(/^frage/), cP = col(/^profil/), cA = col(/^antwort/), cB = col(/^bewertung/), cK = col(/korrig/);
+  if (cF < 0 || (cA < 0 && cK < 0)) throw new Error('Spalten „Frage“ und „Antwort“ oder „Korrigierte Antwort“ fehlen');
+  const out = [];
+  for (const r of rows.slice(1)) {
+    const frage = (r[cF] || '').trim(), korr = cK >= 0 ? (r[cK] || '').trim() : '', bew = cB >= 0 ? (r[cB] || '').trim().toLowerCase() : '';
+    const antwort = korr || (/^(gut|richtig|ok|passt|ja)/.test(bew) ? (r[cA] || '').trim() : '');
+    if (!frage || !antwort || /^(falsch|schlecht|nein)/.test(bew) && !korr) continue;
+    out.push({ frage: clip(frage, 300), profil: profilTyp({ profil_typ: cP >= 0 ? (r[cP] || '').trim() : '' }), antwort: clip(antwort, 500), w: bspWords(frage) });
+  }
+  return out;
+}
+async function refreshBeispiele() {
+  let text;
+  if (BEISPIELE_URL) {
+    const res = await fetch(BEISPIELE_URL, { headers: { 'User-Agent': 'Flowtown/1.0' }, redirect: 'follow' });
+    if (!res.ok) throw new Error('Tabelle nicht erreichbar: HTTP ' + res.status);
+    text = await res.text();
+    if (/^\s*<!doctype html|<html/i.test(text)) throw new Error('Der Link liefert eine Webseite statt CSV. In Google Tabellen: Datei > Freigeben > Im Web veröffentlichen > Format CSV');
+  } else if (fs.existsSync(BEISPIELE_CSV)) text = fs.readFileSync(BEISPIELE_CSV, 'utf8');
+  else return 'keine Quelle (BEISPIELE_CSV_URL oder beispiele.csv)';
+  beispiele = readBeispiele(text);
+  return `${beispiele.length} geprüfte Beispiele`;
+}
+function beispieleTick() { refreshBeispiele().then((m) => console.log('Beispiele:', m)).catch((e) => console.error('Beispiele:', e.message)); }
+function beispieleFuer(frage, typ) {
+  const w = bspWords(frage);
+  if (!w.size || !beispiele.length) return [];
+  return beispiele.map((b) => {
+    let both = 0;
+    for (const x of w) if (b.w.has(x)) both++;
+    const sc = both / (w.size + b.w.size - both) + (b.profil && b.profil === typ ? 0.15 : 0) - (b.profil && typ && b.profil !== typ ? 0.1 : 0);
+    return { b, sc, both };
+  }).filter((x) => x.both >= 1 && (x.both >= 2 || w.size <= 3) && x.sc >= 0.15).sort((a, b) => b.sc - a.sc).slice(0, 3).map((x) => x.b);
+}
 async function assist(body) {
   if (!MISTRAL_KEY) throw Object.assign(new Error('Die Assistenz ist auf dem Server noch nicht eingerichtet.'), { status: 503 });
   const frage = clip(body.frage, 300);
@@ -2348,14 +2396,16 @@ async function assist(body) {
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
   const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
-  const messages = [{ role: 'system', content: ASSIST_SYSTEM + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage }];
+  const bsp = beispieleFuer(frage, ctx.typ);
+  const vorbild = bsp.length ? '\nGeprüfte Beispiele der Redaktion zu ähnlichen Fragen. Übernimm daraus Aufbau, Ton, Länge und was wichtig ist; die Fakten (Zeiten, Entfernungen, Angaben) aber nur aus den Werkzeugen von jetzt, nie aus den Beispielen:\n' + bsp.map((b) => `Frage${b.profil ? ' (Profil ' + b.profil + ')' : ''}: ${b.frage}\nGute Antwort: ${b.antwort}`).join('\n') : '';
+  const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage }];
   const act = {}, used = [];
   for (let round = 0; round < 4; round++) {
     const m = await mistralChat(messages);
     const calls = m.tool_calls || [];
     if (!calls.length) {
       const antwort = clip(String(m.content || '').replace(/[*#_`]/g, ''), 600) || 'Dazu habe ich gerade keine Antwort.';
-      return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used };
+      return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length };
     }
     messages.push({ role: 'assistant', content: m.content || '', tool_calls: calls });
     for (const c of calls.slice(0, 3)) {
@@ -2392,7 +2442,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info'], ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -2609,23 +2659,59 @@ if (cli === 'faq') {
   loadFahrplan();
   (async () => {
     await refreshHst().catch(() => null);
+    await refreshBeispiele().catch(() => null);
     const [q, la, lo, prof] = process.argv.slice(3);
     try { const r = await assist({ frage: q, kontext: { pos: la && lo ? [Number(la), Number(lo)] : null, profil: prof || '', verkehrsmittel: 'fuss' } }); console.log(r.antwort); console.log('Werkzeuge:', r.werkzeuge.join(', ') || '–', r.aktion ? '| Aktion: ' + JSON.stringify(r.aktion) : ''); }
     catch (e) { console.error(e.message); }
     process.exit(0);
   })();
+} else if (cli === 'testlauf') {
+  // Teststrecke: alle Fragen aus server/testfragen.csv (oder einer eigenen Datei) an die Assistenz, Antworten als Tabelle zum Korrigieren
+  //   node flowtown-server.mjs testlauf [datei.csv]
+  loadFahrplan();
+  (async () => {
+    await refreshHst().catch(() => null);
+    await refreshBeispiele().catch(() => null);
+    const src = process.argv[3] || path.join(path.dirname(new URL(import.meta.url).pathname), 'testfragen.csv');
+    const rows = parseCsv(fs.readFileSync(src, 'utf8'));
+    const head = rows[0].map((h) => h.trim().toLowerCase()), ci = (n) => head.indexOf(n);
+    const q = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
+    const out = ['Nr;Thema;Profil;Frage;Antwort;Werkzeuge;Beispiele genutzt;Sekunden;Bewertung;Korrigierte Antwort;Notiz'];
+    for (const r of rows.slice(1)) {
+      const nr = r[ci('nr')], thema = r[ci('thema')] || '', prof = (r[ci('profil')] || '').trim(), frage = (r[ci('frage')] || '').trim();
+      const la = Number(r[ci('breite')]), lo = Number(r[ci('länge')] != null ? r[ci('länge')] : r[ci('laenge')]);
+      if (!frage) continue;
+      const t0 = Date.now();
+      let antwort, werkzeuge = '', nb = 0;
+      try { const x = await assist({ frage, kontext: { pos: isFinite(la) && isFinite(lo) && la && lo ? [la, lo] : null, profil_typ: prof, profil: prof, verkehrsmittel: 'fuss' } }); antwort = x.antwort; werkzeuge = x.werkzeuge.join(', '); nb = x.beispiele || 0; }
+      catch (e) { antwort = 'FEHLER: ' + e.message; }
+      const sek = Math.round((Date.now() - t0) / 100) / 10;
+      console.log(`${nr} ${thema}: ${antwort.slice(0, 100)}${antwort.length > 100 ? ' …' : ''}  [${werkzeuge || 'ohne Werkzeug'}]`);
+      out.push([nr, thema, prof, frage, antwort, werkzeuge, nb, String(sek).replace('.', ','), '', '', ''].map(q).join(';'));
+      await new Promise((res) => setTimeout(res, 1200));   // Mistral und HERE nicht drängeln
+    }
+    const dir = path.join(DATA_DIR, 'testlauf');
+    fs.mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `testlauf-${new Date().toISOString().slice(0, 16).replace(/[:T]/g, '-')}.csv`);
+    fs.writeFileSync(file, '\ufeff' + out.join('\r\n') + '\r\n');
+    console.log(`\n${out.length - 1} Antworten in ${file}`);
+    process.exit(0);
+  })();
+} else if (cli === 'beispiele') {
+  refreshBeispiele().then((m) => { console.log(m); for (const b of beispiele.slice(0, 5)) console.log(' -', b.frage.slice(0, 70), '→', b.antwort.slice(0, 60)); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'barrierefrei') {
   refreshBf().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, fahrplan, barrierefrei, haltestellen, parkplaetze, stadtdaten, frage, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, testlauf [datei], beispiele, fahrplan, barrierefrei, haltestellen, parkplaetze, stadtdaten, frage, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
   setTimeout(() => radTick().then(fussTick), 20000); setInterval(() => radTick().then(fussTick), 1800e3);
   setTimeout(bfTick, 10000); setInterval(bfTick, 900e3);
   setTimeout(faqTick, 5000); setInterval(faqTick, 3600e3);
+  setTimeout(beispieleTick, 4000); setInterval(beispieleTick, 3600e3);
   setTimeout(hstTick, 3000); setInterval(hstTick, 3600e3);
   setTimeout(bppTick, 40000); setInterval(bppTick, 3600e3);
   setTimeout(lsaTick, 15000); setInterval(lsaTick, 3600e3);

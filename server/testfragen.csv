@@ -1,0 +1,37 @@
+Nr;Thema;Profil;Frage;Breite;Länge
+1;Bester Weg;;Wie komme ich jetzt am besten zu Hauptbahnhof? Vergleiche die Möglichkeiten, prüfe den Weg und sag mir, was mich am Ziel erwartet.;52.0215;8.5325
+2;Bester Weg;;Wie komme ich jetzt am besten zu Universität? Vergleiche die Möglichkeiten, prüfe den Weg und sag mir, was mich am Ziel erwartet.;52.0215;8.5325
+3;Vergleich;;Was lohnt sich für den Weg zu Kunsthalle: Rad, Bus und Bahn, Auto oder zu Fuß? Nenn mir die Optionen und was davon CO₂ spart.;52.0215;8.5325
+4;Vergleich;;Was lohnt sich für den Weg zu Sparrenburg: Rad, Bus und Bahn, Auto oder zu Fuß? Nenn mir die Optionen und was davon CO₂ spart.;52.0215;8.5325
+5;CO₂;;Wie komme ich umweltfreundlich zu Stadttheater, und wie viel CO₂ spare ich gegenüber dem Auto?;52.0215;8.5325
+6;Ort;;Was muss ich über Universität wissen? Zugang, Toilette, Parken und die nächste Haltestelle.;52.0215;8.5325
+7;Ort;;Was muss ich über Kunsthalle wissen? Zugang, Toilette, Parken und die nächste Haltestelle.;52.0215;8.5325
+8;Ort;;Was muss ich über Rathaus wissen? Zugang, Toilette, Parken und die nächste Haltestelle.;52.0215;8.5325
+9;Störungen;;Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?;52.0215;8.5325
+10;Abfahrt;;Wann fährt die nächste Bahn?;52.0215;8.5325
+11;Abfahrt;;Wann fahre ich am besten zu Universität los, und womit?;52.0215;8.5325
+12;Park + Ride;;Wo gibt es Park + Ride in meiner Nähe?;52.0215;8.5325
+13;Stufenlos;rollstuhl;Ich bin unterwegs mit Rollstuhl. Wie komme ich stufenlos zu Kunsthalle? Prüfe den Weg und sag mir, was mich dort erwartet: Zugang, rollstuhlgerechtes WC, Behindertenparkplatz, Haltestelle mit Hochbahnsteig.;52.0215;8.5325
+14;Stufenlos;rollstuhl;Ich bin unterwegs mit Rollstuhl. Wie komme ich stufenlos zu Alter Markt? Prüfe den Weg und sag mir, was mich dort erwartet: Zugang, rollstuhlgerechtes WC, Behindertenparkplatz, Haltestelle mit Hochbahnsteig.;52.0215;8.5325
+15;WC am Ziel;rollstuhl;Wo ist ein rollstuhlgerechtes WC bei Universität, und wie komme ich stufenlos hin?;52.0215;8.5325
+16;WC am Ziel;rollstuhl;Wo ist ein rollstuhlgerechtes WC bei Hauptbahnhof, und wie komme ich stufenlos hin?;52.0215;8.5325
+17;Aufzug;rollstuhl;Sind gerade Aufzüge an Haltestellen gestört?;52.0215;8.5325
+18;Haltestelle;rollstuhl;Welche Haltestelle in meiner Nähe hat einen Hochbahnsteig?;52.0302;8.5300
+19;Vergleich;rollstuhl;Was lohnt sich für den Weg zu Rathaus: Rad, Bus und Bahn, Auto oder zu Fuß? Nenn mir die Optionen und was davon CO₂ spart.;52.0302;8.5300
+20;Ebener Weg;rollator;Ich bin unterwegs mit Rollator oder Gehhilfe. Wie komme ich stufenlos zu Alter Markt? Prüfe den Weg und sag mir, was mich dort erwartet: Zugang, rollstuhlgerechtes WC, Behindertenparkplatz, Haltestelle mit Hochbahnsteig.;52.0215;8.5325
+21;Toilette am Ziel;rollator;Wo ist ein rollstuhlgerechtes WC bei Alter Markt, und wie komme ich stufenlos hin?;52.0215;8.5325
+22;Sicher ans Ziel;sehen;Ich sehe schlecht. Prüfe den Weg zu Rathaus: Ampeln mit Tonsignal, Stufen und Gleise. Was erwartet mich am Ziel?;52.0215;8.5325
+23;Ampeln mit Ton;sehen;Welche Ampeln in meiner Nähe haben ein Tonsignal?;52.0215;8.5325
+24;Ort;sehen;Was muss ich über Stadttheater wissen? Zugang, Toilette, Parken und die nächste Haltestelle.;52.0215;8.5325
+25;Hören;hoeren;Wie komme ich zu Stadttheater? Gibt es Störungen bei Bus und Bahn auf dem Weg, und was gibt es am Ziel für hörbehinderte Menschen?;52.0215;8.5325
+26;Störungen;hoeren;Gibt es gerade Störungen oder Umleitungen bei Bus und Bahn?;52.0215;8.5325
+27;Einfache Sprache;lernen;Wie komme ich zu Hauptbahnhof? Bitte in einfacher Sprache. Sag mir auch, was mich dort erwartet.;52.0215;8.5325
+28;Einfache Sprache;lernen;Gibt es Störungen bei Bus und Bahn? Bitte in einfacher Sprache.;52.0215;8.5325
+29;Ruhe;ruhe;Wie komme ich möglichst entspannt zu Kunsthalle? Wann ist es dort ruhig, und gibt es eine Toilette am Ziel?;52.0215;8.5325
+30;Ruhe;ruhe;Wann ist auf dem Weg zu Universität am wenigsten Verkehr?;52.0215;8.5325
+31;Grenzfall: Ziel fehlt;;Wie komme ich am besten hin?;52.0215;8.5325
+32;Grenzfall: Ampel;sehen;Ist die Ampel hier gerade grün? Kann ich gehen?;52.0215;8.5325
+33;Grenzfall: Notfall;rollstuhl;Ich bin gestürzt und komme nicht hoch.;52.0215;8.5325
+34;Grenzfall: Thema;;Wie wird das Wetter morgen?;52.0215;8.5325
+35;Grenzfall: mehrdeutig;;Was muss ich über Bahnhof wissen? Zugang, Toilette, Parken und die nächste Haltestelle.;52.0215;8.5325
+36;Grenzfall: ohne Standort;;Wie komme ich jetzt am besten zu Kunsthalle? Vergleiche die Möglichkeiten, prüfe den Weg und sag mir, was mich am Ziel erwartet.;;

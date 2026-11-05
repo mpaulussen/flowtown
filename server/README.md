@@ -185,6 +185,27 @@ Ab App-Version 0.88 kann der Server mehr. Die App fragt `/api/health` und zeigt 
   - `ort_info`: was an einem Ort zählt, an dem die Person sein will: Barrierefreiheit des Gebäudes (Bethel), nächstes rollstuhlgerechtes WC, Toilette, Behindertenparkplatz, Stadtbahn mit Hochbahnsteig, gemeldete Hindernisse. Dieselben Angaben stehen als `am_ziel` auch in `vergleich` und `weg_check`.
 - `meine_auswertung` enthält jetzt auch den Vergleich der eigenen Fahrten nach Verkehrsmittel und die eigenen Ampel-Bewertungen (etwa „Grün zu kurz“).
 
+### Teststrecke: Antworten der Assistenz prüfen und korrigieren
+
+Die Assistenz lernt aus geprüften Beispielen: Zu jeder neuen Frage bekommt Mistral die bis zu drei ähnlichsten korrigierten Antworten als Vorbild für Aufbau, Ton und Länge. Die Fakten kommen weiter nur aus den Werkzeugen.
+
+1. **Testlauf** auf dem Server (stellt alle Fragen aus `server/testfragen.csv` an die echte Assistenz, etwa zwei Minuten; zählt wie 36 Fragen bei Mistral und HERE):
+   ```bash
+   cd /opt/flowtown/server && sudo -u flowtown bash -c 'set -a; . /etc/flowtown.env; DATA_DIR=/var/lib/flowtown node flowtown-server.mjs testlauf'
+   ```
+   Ergebnis: `/var/lib/flowtown/testlauf/testlauf-<Datum>.csv` mit Frage, Profil, Antwort, benutzten Werkzeugen und leeren Spalten zum Ausfüllen. Eigene Fragen: eine eigene CSV mit denselben Spalten (`Nr;Thema;Profil;Frage;Breite;Länge`) als zusätzlichen Pfad angeben.
+2. **Korrigieren** in Google Tabellen oder Excel (Datei importieren, Trennzeichen Semikolon):
+   - Spalte **Bewertung**: `gut`, `teils` oder `falsch`.
+   - Spalte **Korrigierte Antwort**: so, wie Flowtown hätte antworten sollen (höchstens drei Sätze, gut zum Vorlesen). Leer lassen, wenn die Antwort gut war.
+   - Spalte **Notiz**: für dich, wird nicht genutzt.
+   Als Beispiel zählt jede Zeile mit korrigierter Antwort und jede mit Bewertung `gut`. Zeilen mit `falsch` ohne Korrektur werden übersprungen. Mehrere Testläufe dürfen untereinander in derselben Tabelle stehen.
+3. **Bereitstellen**, wie die Redaktionstabelle: in Google Tabellen *Datei > Freigeben > Im Web veröffentlichen*, nur dieses Blatt, Format CSV, und den Link in `/etc/flowtown.env` eintragen:
+   ```
+   BEISPIELE_CSV_URL="https://docs.google.com/spreadsheets/d/e/…/pub?gid=…&single=true&output=csv"
+   ```
+   Oder die Datei als `/var/lib/flowtown/beispiele.csv` ablegen. Der Server liest sie beim Start und danach stündlich; sofort prüfen mit `node flowtown-server.mjs beispiele`. `/api/health` zeigt die Zahl unter `beispiele`.
+4. **Wirkung prüfen:** einen neuen Testlauf machen und die Antworten vergleichen; die Spalte „Beispiele genutzt“ zeigt, wie viele Vorbilder je Frage dabei waren.
+
 ### Gemeldete Hindernisse prüfen
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.

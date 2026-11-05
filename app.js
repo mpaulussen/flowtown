@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.90.0';
+  const VERSION = '0.90.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3864,7 +3864,9 @@
     const form = $('#assist .assist-form');
     if (z.length && form) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Oder eines deiner Ziele">${z.map((x) => `<button type="button" class="vf-chip" data-intentans="${esc(x.name)}">${esc(x.name)}</button>`).join('')}</div>`);
     const inp = $('#assist-inp');
-    if (inp) { inp.placeholder = k === 'ort' ? 'Ort, Gebäude oder Adresse …' : 'Ziel: Ort, Adresse oder Einrichtung …'; inp.focus({ preventScroll: true }); }
+    // nur mit Maus oder Tastatur gleich ins Feld; auf dem Handy öffnete das die Tastatur über der App, auch beim Sprechen
+    const touch = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (inp) { inp.placeholder = k === 'ort' ? 'Ort, Gebäude oder Adresse …' : 'Ziel: Ort, Adresse oder Einrichtung …'; if (!touch && !voiceOn()) inp.focus({ preventScroll: true }); }
     if (voiceOn()) speak(d.open, { now: true, force: true, onend: () => { if (!$('#assist').hidden && pendingIntent) listenAfter('Ich höre zu …'); } });
   }
   function askBar(name) {
