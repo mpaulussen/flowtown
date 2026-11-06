@@ -699,6 +699,8 @@ async function checkZiel(from, to, mode, nav) {
     it.titel = clip(road && town ? (rd.num ? `${road} bei ${town}` : `${road}, ${town}`) : road || town || it.text || 'Meldung', 60);
   }));
   for (const it of items) { if (!it.titel) it.titel = clip(roadAt(it.at).num || roadAt(it.at).name || it.text || 'Meldung', 60); it.km = Math.round(cum[it.at] / 1000); delete it.at; }
+  // doppelte Meldungen (gleiche Art, gleicher Name, gleicher Kilometer) nur einmal
+  { const dup = new Set(); for (let k = items.length - 1; k >= 0; k--) { const key = items[k].art + '|' + items[k].titel + '|' + items[k].km; if (dup.has(key)) items.splice(k, 1); else dup.add(key); } }
   // Abfahrtsleiste (nur Auto): jetzt plus vier Zeiten, mit HEREs Vorhersage
   let abfahrt = null;
   if (mode === 'auto' && !nav) {
