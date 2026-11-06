@@ -519,7 +519,7 @@ const txt = (v) => (v == null ? '' : typeof v === 'string' ? v : v.value || '');
 async function hereRoute(from, to, mode, opts) {
   const q = new URLSearchParams({ transportMode: mode === 'rad' ? 'bicycle' : mode === 'fuss' ? 'pedestrian' : 'car', origin: from.join(','), destination: to.join(','), apiKey: HERE_KEY });
   if (opts.full && mode === 'fuss') { q.set('return', 'summary,polyline,actions,instructions'); q.set('spans', 'names'); q.set('lang', 'de-DE'); }
-  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents,actions,instructions'); q.set('spans', 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
+  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents,actions,instructions'); q.set('spans', mode === 'auto' ? 'routeNumbers,names,incidents,dynamicSpeedInfo' : 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
   else q.set('return', 'summary');
   if (opts.at) q.set('departureTime', opts.at);
   const j = await getJson(`${ROUTER_URL}?${q}`, 12000);
@@ -542,7 +542,8 @@ async function hereRoute(from, to, mode, opts) {
         for (const s of x.spans || []) {
           const num = (s.routeNumbers || []).map((n) => txt(n).replace(/\s+/g, '')).find(Boolean) || '';
           const name = (s.names || []).map(txt).find(Boolean) || '';
-          spans.push({ i: base + (Number(s.offset) || 0), num, name, inc: Array.isArray(s.incidents) ? s.incidents : [] });
+          const dy = s.dynamicSpeedInfo;
+          spans.push({ i: base + (Number(s.offset) || 0), num, name, inc: Array.isArray(s.incidents) ? s.incidents : [], v: dy && Number(dy.trafficSpeed) > 0 && Number(dy.baseSpeed) > 0 ? [Number(dy.trafficSpeed), Number(dy.baseSpeed)] : null });
           if (num && !roads.includes(num)) roads.push(num);
         }
         if (Array.isArray(x.incidents)) {
@@ -602,6 +603,31 @@ function slots(now) {
   return [0, 1, 2, 3].map((k) => new Date(t.getTime() + k * 30 * 60000));
 }
 const zielCache = new Map();   // kurzer Zwischenspeicher gegen Doppel-Tipps, 3 Minuten
+// zusammenhängende Abschnitte mit Stau (unter 45 % der freien Geschwindigkeit) oder zähem Verkehr (unter 70 %)
+const fmtKm = (m) => (m >= 1000 ? `${String(Math.round(m / 100) / 10).replace('.', ',')} km` : `${Math.round(m / 100) * 100} m`);
+function flowStretches(spans, cum) {
+  const out = [];
+  let cur = null;
+  const end = (k) => (k + 1 < spans.length ? spans[k + 1].i : cum.length - 1);
+  const close = () => {
+    if (!cur) return;
+    const len = cum[cur.i1] - cum[cur.i0], art = cur.tt * 0.45 > cur.tb ? 'stau' : 'zaeh';
+    // Stau ab 500 m, zäh ab 1,5 km; jeweils mindestens eine Minute länger
+    if (cur.delay >= 60 && len >= (art === 'stau' ? 500 : 1500)) out.push({ i0: cur.i0, i1: cur.i1, art, delay: Math.round(cur.delay), vt: len / cur.tt, vb: len / cur.tb });
+    cur = null;
+  };
+  spans.forEach((sp, k) => {
+    const len = Math.max(0, cum[end(k)] - cum[sp.i]);
+    const slow = sp.v && sp.v[1] > 5 && sp.v[0] < sp.v[1] * 0.7;
+    if (slow && len > 0) {
+      if (cur && cum[sp.i] - cum[cur.i1] > 400) close();
+      cur = cur || { i0: sp.i, i1: sp.i, tt: 0, tb: 0, delay: 0 };
+      cur.i1 = end(k); cur.tt += len / sp.v[0]; cur.tb += len / sp.v[1]; cur.delay += len / sp.v[0] - len / sp.v[1];
+    } else if (cur && len > 400) close();
+  });
+  close();
+  return out;
+}
 const RAMPE = /Sperrung einer Anschlussstelle|Auffahrt|Ausfahrt|Abfahrt|Rampe|\bVon A\d+:/i;
 async function checkZiel(from, to, mode, nav) {
   const key = [from, to, mode, nav ? 'n' : ''].join('|');
@@ -647,6 +673,14 @@ async function checkZiel(from, to, mode, nav) {
       items.push(Object.assign({}, it, { at, titel: fromAb ? abTitle(it.titel) : null }));
     }
   });
+  // 2b. Stau und zäher Verkehr aus der aktuellen Geschwindigkeit je Abschnitt (wie die roten Abschnitte in Karten-Apps), auch ohne Meldung
+  if (mode === 'auto') for (const st of flowStretches(main.spans, cum)) {
+    const km0 = cum[st.i0], km1 = cum[st.i1];
+    // schon als Stau gemeldet (Autobahn GmbH, HERE)? Dann nur dort ergänzen, wo noch nichts steht
+    if (items.some((it) => ['stau', 'zaeh', 'sperrung', 'unfall'].includes(it.art) && it.at != null && cum[it.at] >= km0 - 1500 && cum[it.at] <= km1 + 1500)) continue;
+    items.push({ id: 'fl' + st.i0, quelle: 'HERE', art: st.art, at: st.i0, delay: st.delay,
+      text: `${st.art === 'stau' ? 'Stau' : 'Zähfließender Verkehr'} auf etwa ${fmtKm(km1 - km0)}, im Schnitt ${Math.round(st.vt * 3.6)} statt ${Math.round(st.vb * 3.6)} km/h`, pts: thin(P.slice(st.i0, st.i1 + 1)) });
+  }
   // 3. Baustellen der Stadt: Punkte bis 40 m neben der Strecke; zu Fuß mit dem Hinweis für den Fußverkehr
   for (const it of lage.stadt.items || []) {
     if (seen.has(it.id) || !keep(it.art)) continue;
@@ -658,7 +692,7 @@ async function checkZiel(from, to, mode, nav) {
   // Straße und Ort benennen: „A2 bei Kamen“, sortiert nach Schwere und Lage
   const RANK = { sperrung: 0, stau: 1, unfall: 2, zaeh: 3, baustelle: 4, warnung: 5 };
   items.sort((a, b) => RANK[a.art] - RANK[b.art] || a.at - b.at);
-  await Promise.all(items.slice(0, 8).map(async (it) => {
+  await Promise.all(items.slice(0, 12).map(async (it) => {
     if (it.titel) return;
     const rd = roadAt(it.at), town = await placeNear(P[it.at]);
     const road = rd.num || rd.name || '';
