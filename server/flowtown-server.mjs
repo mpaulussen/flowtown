@@ -602,6 +602,7 @@ function slots(now) {
   return [0, 1, 2, 3].map((k) => new Date(t.getTime() + k * 30 * 60000));
 }
 const zielCache = new Map();   // kurzer Zwischenspeicher gegen Doppel-Tipps, 3 Minuten
+const RAMPE = /Sperrung einer Anschlussstelle|Auffahrt|Ausfahrt|Abfahrt|Rampe|\bVon A\d+:/i;
 async function checkZiel(from, to, mode, nav) {
   const key = [from, to, mode, nav ? 'n' : ''].join('|');
   const hit = zielCache.get(key);
@@ -633,6 +634,12 @@ async function checkZiel(from, to, mode, nav) {
     for (const it of r.value) {
       if (seen.has(it.id) || !keep(it.art)) continue;
       const fromAb = n >= nJobs;
+      // gesperrte Auf- und Abfahrten oder Rampen von einer anderen Autobahn sperren nicht die Strecke selbst:
+      // nur nennen, wenn sie am Anfang oder Ende der Strecke liegen (dort fährt man auf oder ab)
+      if (fromAb && it.art === 'sperrung' && RAMPE.test((it.titel || '') + ' ' + (it.text || '')) && !/vollsperrung/i.test((it.titel || '') + ' ' + (it.text || ''))) {
+        const a0 = onRoute(it, P, 60);
+        if (a0 == null || (cum[a0] > 3000 && cum[cum.length - 1] - cum[a0] > 3000)) continue;
+      }
       if (fromAb && main.incs && !['sperrung', 'stau'].includes(it.art)) continue;   // Baustellen meldet HERE schon auf der Strecke
       const at = onRoute(it, P, fromAb && it.pts.length === 1 ? 60 : 30);
       if (at == null) continue;
@@ -2099,12 +2106,13 @@ const CO2_G = { auto: 160, bus: 80, bahn: 60, zug: 60, rad: 0, fuss: 0 };
 const kgText = (g) => (g >= 1000 ? `${(Math.round(g / 100) / 10).toLocaleString('de-DE')} kg` : `${Math.round(g / 10) * 10} g`);
 async function vergleichZiel(from, to, typ, vorrang) {
   const now = Date.now();
-  const [ra, rr, rf, ro] = await Promise.allSettled([checkZiel(from, to, 'auto', true), checkZiel(from, to, 'rad', true), checkZiel(from, to, 'fuss', true), checkZielOepnv(from, to)]);
+  const luft = mAbs(from, to), weit = (m) => Promise.reject(new Error('zu weit'));
+  const [ra, rr, rf, ro] = await Promise.allSettled([checkZiel(from, to, 'auto', true), luft > 60000 ? weit() : checkZiel(from, to, 'rad', true), luft > 25000 ? weit() : checkZiel(from, to, 'fuss', true), checkZielOepnv(from, to)]);
   const mob = ['rollstuhl', 'rollator'].includes(typ);
   const opt = [];
   if (ra.status === 'fulfilled') {
     // Parken und Weg vom Parkplatz: geschätzt 5 Minuten, damit das Auto nicht schneller wirkt, als es am Ziel ist
-    const v = ra.value, o = { verkehrsmittel: 'auto', dauer_min: Math.round(v.dauer / 60) + 5, parken: 'inklusive etwa 5 Minuten für Parken (geschätzt)', ankunft: now + (v.dauer + 300) * 1000, km: v.km, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)), meldungen: v.items.slice(0, 2).map((it) => it.titel + (it.art ? ' (' + it.art + ')' : '')), geeignet: true };
+    const v = ra.value, o = { verkehrsmittel: 'auto', dauer_min: Math.round(v.dauer / 60) + 5, parken: 'inklusive etwa 5 Minuten für Parken (geschätzt)', ankunft: now + (v.dauer + 300) * 1000, km: v.km, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)), meldungen: v.items.slice(0, 2).map((it) => it.titel + (it.art ? ' (' + it.art + ')' : '') + (it.km != null && v.km > 20 ? ', nach etwa ' + it.km + ' km' : '')), geeignet: true };
     if (v.alternative) o.ausweichroute = { dauer_min: Math.round(v.alternative.dauer / 60), ueber: v.alternative.strassen };
     o.co2_g = Math.round(v.km * CO2_G.auto);
     if (mob) { const near = (bpp && bpp.plaetze || []).map((p) => mAbs(to, [p[0], p[1]])).sort((a, b) => a - b)[0]; o.behindertenparkplatz = near != null && near <= 500 ? `etwa ${Math.round(near / 50) * 50} m vom Ziel` : 'keiner bis 500 m bekannt'; }

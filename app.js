@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.91.3';
+  const VERSION = '0.91.4';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4214,12 +4214,13 @@
     } else if (real.length) html += `<p class="wk-none small muted">Diese Woche noch keine Fahrt.</p>`;
     // 2) Auf deinem Weg: Fahrzeit, Wartezeit an Ampeln, Stau und Störungen zusammen
     const items = [];   // { dot, art, name, right, act }
-    let delay = 0, nHits = 0;
+    let delay = 0, nHits = 0, nLines = 0;
     if (group === 'oepnv' && lageOn() && mbItems().mine.some((it) => mbState(it) === 'aktiv')) {
       const act = mbItems().mine.filter((it) => mbState(it) === 'aktiv'); nHits = act.length;
       act.slice(0, 3).forEach((x) => items.push({ dot: 'amber', art: 'Störung', name: x.titel, right: mbLines(x), act: 'data-weg="mobiel"' }));
     } else if (lageOn() && lageCache) {
       const { lines, hits } = myLage(group);
+      nLines = lines.length;
       hits.forEach((x) => { delay += x.delay || 0; }); nHits = hits.length;
       hits.slice(0, 3).forEach((x) => items.push({ dot: LAGE_CLS[x.art] === 'red' ? 'red' : 'amber', art: cap(LAGE_LABEL[x.art]), name: x.titel, right: delayText(x.delay) }));
       if (hits.length > 3) items.push({ dot: 'amber', art: '', name: `und ${hits.length - 3} weitere Meldung${hits.length > 4 ? 'en' : ''}`, right: '' });
@@ -4233,14 +4234,15 @@
     if (delay >= 60) nums.push([`+${Math.round(delay / 60)} min`, 'durch Stau']);
     const state = nHits ? (red ? 'red' : 'amber') : lageOn() && lageCache ? 'green' : 'grey';
     const badge = nHits ? `${nHits} Meldung${nHits === 1 ? '' : 'en'}` : lageOn() && lageCache ? 'frei' : lageOn() ? 'lädt …' : '';
-    if (ownRoute || items.length || lageOn()) {
+    // „frei“ nur, wenn es eigene Wege gibt, auf denen geprüft wurde
+    if (ownRoute || items.length || (lageOn() && nLines)) {
       const title = ownRoute ? 'Dein häufigster Weg' : 'Auf deinen Wegen';
       const list = items.length ? `<ul class="lw-list">${items.map((x) => `<li><span class="dot ${x.dot}"></span><span class="lw-name">${x.art ? `<b>${esc(x.art)}</b> · ` : ''}${esc(x.name)}</span>${x.right ? `<span class="lw-right">${esc(x.right)}</span>` : ''}</li>`).join('')}</ul>` : '';
       const mb = items.some((x) => x.act);
       const more = items.length ? `<button type="button" class="lw-more" ${mb ? 'data-weg="mobiel"' : `data-weg="lage" aria-expanded="${vfOpen}"`}>${list}<span class="lw-go">${mb ? 'Zu den Abfahrten' : vfOpen ? 'Weniger anzeigen' : 'Einzelheiten und Karte'}${ic('chevron', 'wrow-go')}</span></button>` : '';
       html += `<div class="lw ${state}"><div class="lw-head"><span class="lw-title">${title}</span>${badge ? `<span class="lw-badge">${badge}</span>` : ''}</div>`
         + (nums.length ? `<div class="lw-nums">${nums.map(([v, l]) => `<span><b>${v}</b><span>${l}</span></span>`).join('')}</div>` : '')
-        + (!items.length && lageOn() && lageCache ? `<p class="lw-ok small">Keine Störungen, kein Stau, keine Baustellen auf deinen Wegen.</p>` : '')
+        + (!items.length && lageOn() && lageCache && nLines ? `<p class="lw-ok small">Keine Störungen, kein Stau, keine Baustellen auf deinen Wegen in Bielefeld.</p>` : '')
         + more + '</div>';
       say.push(`${title}: ${badge === 'frei' ? 'frei' : badge}. ${nums.map(([v, l]) => `${v} ${l}`).join(', ')}${nums.length ? '.' : ''} ${items.map((x) => `${x.art ? x.art + ': ' : ''}${x.name}${x.right ? ', ' + x.right : ''}.`).join(' ')}`);
     }
