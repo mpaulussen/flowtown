@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.91.1';
+  const VERSION = '0.91.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4043,8 +4043,10 @@
   function openPlan(id) {
     zielEdit = false;
     if (id) { zielOpen = id; if (id !== 'neu') { const z = settings.ziele.find((x) => x.id === id); if (z) checkZiel(z); } }
+    else if (!zielOpen) zielOpen = 'neu';
     showView('plan');
-    if (zielOpen === 'neu') { const i = $('#inp-ziel'); if (i) i.focus(); }
+    // Tastatur nicht von selbst öffnen (Handy): erst, wenn man ins Feld tippt
+    if (zielOpen === 'neu' && !window.matchMedia('(pointer: coarse)').matches) { const i = $('#inp-ziel'); if (i) i.focus(); }
   }
   const MODE_GROUP = { auto: 'auto', rad: 'rad', bus: 'oepnv', bahn: 'oepnv', zug: 'oepnv', fuss: 'fuss' };
   const GROUP_WITH = { auto: 'mit dem Auto', rad: 'mit dem Rad', oepnv: 'mit Bus und Bahn', fuss: 'zu Fuß' };
@@ -4600,6 +4602,8 @@
   // ---------- Vor der Fahrt: Lage auf den eigenen Wegen und gespeicherte Ziele, über dem Start-Knopf ----------
   // Ziele liegen nur auf dem Gerät. Geprüft wird nur auf Knopfdruck; der Start geht auf etwa 1 km gerundet an den Server.
   const ZIEL_MAX = 8;
+  const zielUsed = (z) => z.u || parseInt(String(z.id).slice(1), 36) || 0;   // zuletzt geprüft, sonst angelegt
+  const zielOldest = () => settings.ziele.reduce((a, z) => (!a || zielUsed(z) < zielUsed(a) ? z : a), null);
   let pendingPlan = null;
   let vfOpen = false, zielOpen = null, zielEdit = false, ortList = null, ortQ = '', ortMsg = '';
   const zielRes = {};   // Ziel-ID|Verkehrsmittel → { t, data } | { loading } | { error }
@@ -4652,7 +4656,7 @@
   function wohinSection(group) {
     const can = zielFor(group);
     const chips = settings.ziele.map((z) => `<button type="button" class="vf-chip${zielOpen === z.id ? ' on' : ''}" data-ziel="${z.id}" aria-expanded="${zielOpen === z.id}"${can ? '' : ' disabled'}>${esc(z.name)}</button>`).join('')
-      + (settings.ziele.length < ZIEL_MAX ? `<button type="button" class="vf-chip add${zielOpen === 'neu' ? ' on' : ''}" data-ziel="neu" aria-expanded="${zielOpen === 'neu'}"${can ? '' : ' disabled'}>+ Ziel</button>` : '');
+      + `<button type="button" class="vf-chip add${zielOpen === 'neu' ? ' on' : ''}" data-ziel="neu" aria-expanded="${zielOpen === 'neu'}"${can ? '' : ' disabled'}>+ Ziel</button>`;
     // offenes Ziel nach einem Wechsel des Verkehrsmittels gleich neu prüfen
     const openZ = can && zielOpen && zielOpen !== 'neu' && !zielEdit ? settings.ziele.find((z) => z.id === zielOpen) : null;
     if (openZ && !zielRes[zKey(openZ, group)]) { checkZiel(openZ); return null; }
@@ -4666,6 +4670,7 @@
       : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '';
     return `<div class="vf-panel"><form class="vf-form" data-vf="suche"><label class="sr-only" for="inp-ziel">Ziel: Ort, Adresse oder Einrichtung</label><input id="inp-ziel" type="search" placeholder="Ort, Adresse oder z. B. Uni Bielefeld" autocomplete="off" enterkeyhint="search" value="${esc(ortQ)}"><button class="btn" type="submit">Suchen</button></form>
       ${ortMsg ? `<p class="small muted" role="status">${esc(ortMsg)}</p>` : ''}${list}
+      ${settings.ziele.length >= ZIEL_MAX ? `<p class="small muted">Du hast schon ${ZIEL_MAX} Ziele. Ein neues ersetzt „${esc(zielOldest().name)}“, das du am längsten nicht genutzt hast. Ziele löschen: lange auf ein Ziel drücken.</p>` : ''}
       <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit; die Strecke für die Navigation bleibt nur bis zum Ende der Fahrt im Speicher. Beim Losfahren mit Ziel holt die App die Strecke einmal ab deinem genauen Standort (auf etwa 10 m), damit die Navigation dort beginnt.</p></div>`;
   }
   function zielPanel(z, group) {
@@ -4979,6 +4984,7 @@
   async function checkZiel(z, force) {
     const group = MODE_GROUP[selectedMode()];
     const key = zKey(z, group);
+    z.u = Date.now(); store.set('settings', settings);
     const old = zielRes[key];
     if (!force && old && old.data && Date.now() - old.t < 300000) return;
     zielRes[key] = { loading: true };
@@ -5035,8 +5041,9 @@
     renderVorfahrt();
   }
   function addZiel(o) {
-    const z = { id: 'z' + Date.now().toString(36), name: o.name.split(',')[0].slice(0, 30), sub: o.sub || '', lat: o.lat, lon: o.lon };
+    const z = { id: 'z' + Date.now().toString(36), name: o.name.split(',')[0].slice(0, 30), sub: o.sub || '', lat: o.lat, lon: o.lon, u: Date.now() };
     if (o.bf) z.bf = o.bf;
+    while (settings.ziele.length >= ZIEL_MAX) { const old = zielOldest(); settings.ziele = settings.ziele.filter((x) => x !== old); }
     settings.ziele.push(z); store.set('settings', settings);
     ortList = null; ortQ = ''; ortMsg = '';
     zielOpen = z.id; zielEdit = false;
