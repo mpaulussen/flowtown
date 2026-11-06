@@ -182,8 +182,10 @@
     </section>
     <section class="entry plan-card" id="plan-card" aria-labelledby="h-plan">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-route"/></svg></span><div><h3 id="h-plan" class="go-h">Wohin?</h3><p class="go-sub">Plane deinen Weg.</p></div></div>
+      <form id="plan-form" class="vf-form plan-form" role="search"><label class="sr-only" for="plan-q">Wohin? Ort, Adresse oder Einrichtung</label><input id="plan-q" type="search" placeholder="Ort oder Adresse" autocomplete="off" enterkeyhint="search"><button class="btn plan-search" type="submit">Suchen</button></form>
+      <p class="small plan-note">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß, mit CO₂. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>
       <div id="plan-teaser"></div>
-      <button id="btn-plan" class="btn big plan-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>
+      <button id="btn-plan" class="btn big plan-go quiet-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>
     </section>
     <div id="acc-tips" class="acc-tips" hidden></div>
     <div class="fuer-dich" id="fuer-dich" hidden></div>

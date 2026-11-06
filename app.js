@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.91.2';
+  const VERSION = '0.91.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3983,13 +3983,12 @@
     return `<button type="button" class="best-row${rec ? ' rec' : ''}${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}<span class="best-an"> · an ${esc(o.ankunft)}</span></b><span>${esc(bits.join(' · '))}</span></span>${rec ? '<span class="best-tag">Empfehlung</span>' : ''}</button>`;
   }
   function bestHtml() {
-    if (!apiBase() || !serverTools.includes('vergleich') || !settings.ziele.length) return '';
-    const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0];
-    const r = bestRes[z.id];
-    const chips = `<div class="vf-chips" role="group" aria-label="Ziel für den Vergleich">${settings.ziele.slice(0, 5).map((x) => `<button type="button" class="vf-chip${x.id === z.id ? ' on' : ''}" data-best-ziel="${x.id}" aria-pressed="${x.id === z.id}">${esc(x.name)}</button>`).join('')}<button type="button" class="vf-chip add" data-best-other="1">Anderes Ziel …</button></div>`;
+    if (!apiBase() || !serverTools.includes('vergleich')) return '';
+    const z = settings.ziele.find((x) => x.id === bestZiel);
+    const r = z && bestRes[z.id];
+    if (!r) return '';
     let body;
-    if (!r) body = `<button type="button" class="btn best-go" data-best="go">${ic('spark')}<span>Womit heute am besten zu „${esc(z.name)}“?</span></button><p class="small muted best-note">Vergleicht Auto, Bus und Bahn, Rad und zu Fuß${settings.access.on ? ', passend zu deinem Profil' : ''}, mit CO₂. Ist eine umweltfreundliche Möglichkeit kaum langsamer, empfiehlt Flowtown sie. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>`;
-    else if (r.loading) body = '<p class="small muted">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß …</p>';
+    if (r.loading) body = '<p class="small muted">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß …</p>';
     else if (r.error) body = `<p class="small">${esc(r.error)}</p><button type="button" class="btn quiet" data-best="go">Noch einmal versuchen</button>`;
     else {
       const d = r.data, e = d.empfehlung;
@@ -3997,7 +3996,7 @@
       const am = d.am_ziel ? amZielText(d.am_ziel) : '';
       body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · CO₂ grob geschätzt nach Werten des Umweltbundesamts · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
     }
-    return `<div class="best">${chips}<div id="best-body" aria-live="polite">${body}</div></div>`;
+    return `<div class="best"><div id="best-body" aria-live="polite">${body}</div></div>`;
   }
   // nur wer allein „Schneller ankommen“ gewählt hat, bekommt das Schnellste; sonst das Umweltfreundlichste, wenn es kaum langsamer ist
   const vorrangSchnell = () => goals().includes('schnell') && !goals().includes('stadt') && !goals().includes('rad');
@@ -4018,7 +4017,7 @@
     return out.join(' · ');
   }
   async function runBest() {
-    const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0];
+    const z = settings.ziele.find((x) => x.id === bestZiel);
     if (!z) return;
     bestRes[z.id] = { loading: true };
     renderPlanTeaser();
@@ -4032,13 +4031,36 @@
     } catch (e) { bestRes[z.id] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Flowtown-Server.' : e.message }; }
     renderPlanTeaser();
   }
+  // Heute: Suchfeld „Wohin?“, darunter die Treffer, dann der Vergleich „Womit am besten?“ für das gewählte Ziel
+  let planList = null, planMsg = '';
   function renderPlanTeaser() {
     const el = $('#plan-teaser');
-    const best = bestHtml();
-    el.innerHTML = best || (apiBase() && settings.ziele.length
-      ? `<div class="vf-chips" role="group" aria-label="Deine Ziele">${settings.ziele.map((z) => `<button type="button" class="vf-chip" data-plan-ziel="${z.id}">${esc(z.name)}</button>`).join('')}</div>`
-      : '');
-    $('#btn-plan span').textContent = settings.ziele.length ? 'Weg planen' : 'Erstes Ziel anlegen';
+    $('#plan-form').hidden = !apiBase();
+    if (planMsg || planList) {
+      el.innerHTML = (planMsg ? `<p class="small muted" role="status">${esc(planMsg)}</p>` : '')
+        + (planList ? (planList.length ? `<ul class="vf-orte">${planList.map((o, i) => `<li><button type="button" class="vf-ort" data-plan-ort="${i}"><b>${esc(o.name)}</b>${o.sub ? `<span class="small muted">${esc(o.sub)}</span>` : ''}</button></li>`).join('')}</ul>` : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '');
+    } else el.innerHTML = bestHtml();
+    $('#btn-plan span').textContent = settings.ziele.length ? 'Deine Ziele und Wege' : 'Weg planen';
+  }
+  async function planSearch(q) {
+    planMsg = 'Suche …'; planList = null; renderPlanTeaser();
+    await loadBf().catch(() => null);
+    const near = await ortNear(), local = /bielefeld/i.test(q) || !near ? bfSearch(q) : [];
+    try { planList = local.concat(((await api('/api/ort?q=' + encodeURIComponent(q) + near)).orte || []).filter((o) => !local.some((l) => dist(l, o) < 80))); planMsg = ''; }
+    catch (e) { planList = local.length ? local : null; planMsg = local.length ? '' : (e.message === 'Failed to fetch' ? 'Keine Verbindung zum Flowtown-Server.' : e.message); }
+    renderPlanTeaser();
+  }
+  // gewählter Treffer: als Ziel merken (ein schon gespeichertes an derselben Stelle nehmen), dann gleich vergleichen
+  function planPick(o) {
+    let z = settings.ziele.find((x) => dist(x, o) < 80);
+    if (z) { z.u = Date.now(); store.set('settings', settings); } else {
+      z = { id: 'z' + Date.now().toString(36), name: o.name.split(',')[0].slice(0, 30), sub: o.sub || '', lat: o.lat, lon: o.lon, u: Date.now() };
+      if (o.bf) z.bf = o.bf;
+      while (settings.ziele.length >= ZIEL_MAX) { const old = zielOldest(); settings.ziele = settings.ziele.filter((x) => x !== old); }
+      settings.ziele.push(z); store.set('settings', settings);
+    }
+    planList = null; planMsg = ''; $('#plan-q').value = '';
+    if (serverTools.includes('vergleich')) { bestZiel = z.id; unlockSpeech(); runBest(); } else openPlan(z.id);
   }
   function openPlan(id) {
     zielEdit = false;
@@ -6041,7 +6063,14 @@
   // ---------- Ereignisse ----------
   $('#btn-start').addEventListener('click', startTrip);
   $('#btn-plan').addEventListener('click', () => openPlan(settings.ziele.length || !apiBase() ? null : 'neu'));
+  $('#plan-form').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    const q = $('#plan-q').value.trim();
+    if (q.length >= 2) { $('#plan-q').blur(); planSearch(q); }
+  });
   $('#plan-teaser').addEventListener('click', (ev) => {
+    const po = ev.target.closest('[data-plan-ort]');
+    if (po && planList) { planPick(planList[Number(po.dataset.planOrt)]); return; }
     const c = ev.target.closest('[data-plan-ziel]');
     if (c) { openPlan(c.dataset.planZiel); return; }
     const bz = ev.target.closest('[data-best-ziel]');
@@ -6049,7 +6078,7 @@
     if (ev.target.closest('[data-best="go"]')) { unlockSpeech(); runBest(); return; }
     if (ev.target.closest('[data-best-other]')) { unlockSpeech(); startIntent('vergleich'); return; }
     const bm = ev.target.closest('[data-best-mode]');
-    if (bm) { const z = settings.ziele.find((x) => x.id === bestZiel) || settings.ziele[0]; setModeVoice(BEST_MODE[bm.dataset.bestMode]); if (z) openPlan(z.id); }
+    if (bm) { const z = settings.ziele.find((x) => x.id === bestZiel); setModeVoice(BEST_MODE[bm.dataset.bestMode]); if (z) openPlan(z.id); }
   });
   $('#btn-plan-back').addEventListener('click', () => showView('start'));
   $('#tips-body').addEventListener('click', (ev) => {

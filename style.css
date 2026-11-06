@@ -1299,3 +1299,13 @@ html,body{touch-action:manipulation}
 .assist-pick{margin:4px 0 2px}
 .best-am{margin:0;display:flex;gap:8px;align-items:flex-start;font-size:15px;line-height:1.4;color:var(--w-vor-ink,#173f66)}
 .best-am .ic{width:20px;height:20px;flex:none;margin-top:2px}
+
+/* Heute, „Wohin?“: Suchfeld direkt in der Karte */
+.plan-form{margin-top:12px}
+.plan-form input{border:0;box-shadow:0 0 0 1.5px #c5d6ea inset;background:var(--surface);font-size:17px;min-height:50px;border-radius:14px;padding:10px 14px}
+.plan-form input:focus-visible{outline:3px solid var(--plan);outline-offset:2px}
+.plan-form .plan-search{min-height:50px;border-radius:14px;background:var(--plan);border-color:var(--plan);color:#fff;padding:0 18px}
+.plan-note{margin:8px 0 0;color:color-mix(in srgb,var(--w-vor-ink) 75%,var(--fg))}
+.plan-card #plan-teaser{margin-top:12px}
+.plan-card .vf-ort{background:var(--surface);border-color:transparent;box-shadow:var(--shadow)}
+.plan-card .btn.plan-go.quiet-go{background:transparent;color:var(--plan);border:1.5px solid #c5d6ea;box-shadow:none}
