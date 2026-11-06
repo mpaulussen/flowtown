@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.91.0';
+  const VERSION = '0.91.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1966,6 +1966,8 @@
       const what = zm[1].replace(/\s(mit dem|mit der|zu ?fu(ß|ss)|bitte)(\s.*)?$/, '').trim();
       if (!apiBase()) { speak('Zum Planen braucht Flowtown den Server.', { now: true, force: true }); return true; }
       let z = matchZiel(what);
+      // in einer anderen Stadt meint „zum Hauptbahnhof“ den dortigen, nicht das gespeicherte Ziel in Bielefeld
+      if (z && await ortNear()) { const p = rec && rec.last ? [rec.last.lat, rec.last.lon] : lastStart; if (p && dist({ lat: p[0], lon: p[1] }, z) > 30000) z = null; }
       if (!z) {
         speak(`Ich suche ${what}.`, { now: true, force: true });
         try {

@@ -735,7 +735,7 @@ function ortItem(x) {
   const name = place ? x.title : a.street ? `${a.street}${a.houseNumber ? ' ' + a.houseNumber : ''}, ${a.city || ''}` : a.city || a.label || x.title;
   const what = place && x.categories && x.categories[0] ? x.categories[0].name : '';
   const where = place ? [a.street ? `${a.street}${a.houseNumber ? ' ' + a.houseNumber : ''}` : '', a.city] : [a.postalCode, a.city !== name ? a.city : '', a.state];
-  return { name: clip(name, 50), sub: clip([what].concat(where, a.countryName !== 'Deutschland' ? a.countryName : '').filter(Boolean).join(' · '), 70), lat: r5(x.position.lat), lon: r5(x.position.lng) };
+  return { name: clip(name, 50), sub: clip([what].concat(where, a.countryName !== 'Deutschland' ? a.countryName : '').filter(Boolean).join(' · '), 70), stadt: a.city || '', lat: r5(x.position.lat), lon: r5(x.position.lng) };
 }
 async function findOrt(q, near) {
   const at = near ? near.map((x) => Number(x).toFixed(2)).join(',') : ORT_MITTE;
@@ -1815,7 +1815,7 @@ function sendStadt2(req, res, origin) {
 const ASSIST_PER_DAY = Number(process.env.ASSIST_PER_DAY || 60);
 const assistAllowed = limiter(ASSIST_PER_DAY);
 const mAbs = (a, b) => Math.round(Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1]) * 68500));
-const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App für Wege in Bielefeld (Auto, Rad, zu Fuß, Bus und Stadtbahn), mit Schwerpunkt Barrierefreiheit.
+const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App aus Bielefeld für Wege mit Auto, Rad, zu Fuß, Bus und Bahn, mit Schwerpunkt Barrierefreiheit. Wege in andere Städte und Wege in anderen Städten gehören dazu.
 Regeln:
 - Antworte auf Deutsch und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
 - Rückfragen im Gespräch: Antworte nur auf das, was neu gefragt ist. Wiederhole nichts, was du im Verlauf schon gesagt hast (Name, Adresse, Dauer, Linien, schon genannte Merkmale), außer die Person fragt ausdrücklich noch einmal danach. Keine Einleitung, die den Ort oder die Strecke erneut vorstellt; fang direkt mit dem Neuen an.
@@ -1825,8 +1825,9 @@ Regeln:
 - Sag nie, ob eine Ampel gerade grün ist oder ob man jetzt gehen, queren oder fahren kann. Das entscheidet die Person am Signal selbst.
 - Entfernungen runden (etwa 200 Meter), Zeiten als Uhrzeit oder in Minuten.
 - Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
-- Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
-- Ist die Person außerhalb von Bielefeld (Kontext standort), hilfst du trotzdem: Wege, Verkehrsmittel-Vergleich mit CO₂, Staus und Sperrungen auf der Strecke gibt es überall. Barrierefreiheit von Gebäuden, Toiletten, Behindertenparkplätze, Fahrplan, Störungen von moBiel und Tonsignale an Ampeln gibt es nur für Bielefeld; sag das offen.
+- Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit beantwortest du nicht; sag kurz, wobei du helfen kannst.
+- Ziele in anderen Städten (etwa „Mönchengladbach Hauptbahnhof“) sind erlaubt: Gib den Ort mit Stadtnamen an das Werkzeug weiter und ersetze ihn nie durch einen Ort in Bielefeld.
+- Ist die Person oder das Ziel außerhalb von Bielefeld, hilfst du trotzdem: Wege, Verkehrsmittel-Vergleich mit CO₂, Staus und Sperrungen auf der Strecke gibt es überall. Barrierefreiheit von Gebäuden, Toiletten, Behindertenparkplätze, Fahrplan, Störungen von moBiel und Tonsignale an Ampeln gibt es nur für Bielefeld; sag das offen.
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
 - Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
 - Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Fragen zu einer bestimmten Fahrt (letzte Fahrt, heute früh, gestern) beantwortest du aus „letzte_fahrten“ (die neueste zuerst): Dauer, Gestanden und die Aufteilung übernimmst du wörtlich, ohne zu runden, zu addieren oder umzurechnen; „gestanden_gesamt“ ist die ganze Standzeit, „an_ampeln“ nur der Teil an Ampeln. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.
@@ -1878,7 +1879,7 @@ const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'abfahrten_in_der_naehe', description: 'Die nächsten Abfahrten laut Fahrplan an den Haltestellen am nächsten beim Standort oder bei einem Ort, ohne dass die Person eine Haltestelle nennen muss.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' }, nur: { type: 'string', enum: ['stadtbahn', 'bus', 'alle'] } } } } },
   { type: 'function', function: { name: 'ort_info', description: 'Was an einem Ort zählt, an dem die Person sein will (nicht am Standort): Barrierefreiheit des Gebäudes laut Bielefeld barrierefrei erleben, nächstes rollstuhlgerechtes WC und Toilette, Behindertenparkplatz, nächste Stadtbahn-Haltestelle mit Hochbahnsteig, gemeldete Hindernisse.', parameters: { type: 'object', properties: {
-    ort: { type: 'string', description: 'Name, Gebäude oder Adresse in Bielefeld' } }, required: ['ort'] } } },
+    ort: { type: 'string', description: 'Name, Gebäude oder Adresse; in einer anderen Stadt mit Stadtnamen' } }, required: ['ort'] } } },
   { type: 'function', function: { name: 'ampeln_mit_ton', description: 'Ampeln in der Nähe eines Orts mit Angabe, ob sie ein Tonsignal für blinde Menschen haben, und den Straßen der Kreuzung.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' } } } } }
 ];
@@ -1934,7 +1935,13 @@ async function assistOrt(name, ctx) {
   const starts = hits.filter((x) => hstNorm(x.n).startsWith(k));
   const one = hits.length === 1 ? hits[0] : starts.length === 1 ? starts[0] : null;
   if (one) return { name: one.n, pos: [one.lat, one.lon], adresse: one.adr, gefunden_ueber: 'Bielefeld barrierefrei erleben' };
-  const r = HERE_KEY ? (await findOrt(n + (/bielefeld/i.test(n) ? '' : ', Bielefeld')).catch(() => []))[0] : null;
+  let r = null;
+  if (HERE_KEY) {
+    const plain = /bielefeld/i.test(n) ? null : (await findOrt(n).catch(() => []))[0];
+    // „Mönchengladbach Hauptbahnhof“: Der Treffer liegt in der genannten Stadt, also gilt er
+    if (plain && plain.stadt && !/bielefeld/i.test(plain.stadt) && hstNorm(n).includes(hstNorm(plain.stadt))) return { name: plain.name, pos: [plain.lat, plain.lon], adresse: plain.sub, gefunden_ueber: 'Ortssuche (HERE)' };
+    r = (await findOrt(n + (/bielefeld/i.test(n) ? '' : ', Bielefeld')).catch(() => []))[0] || null;
+  }
   if (hits.length > 1) {
     const pos = r ? [r.lat, r.lon] : [hits[0].lat, hits[0].lon];
     return { name: r ? r.name : n, pos, adresse: r ? r.sub : undefined, gefunden_ueber: r ? 'Ortssuche (HERE)' : 'Bielefeld barrierefrei erleben, erster Treffer', auswahl: hits.slice(0, 6).map((x) => x.n) };
