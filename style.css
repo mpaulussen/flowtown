@@ -1309,3 +1309,7 @@ html,body{touch-action:manipulation}
 .plan-card #plan-teaser{margin-top:12px}
 .plan-card .vf-ort{background:var(--surface);border-color:transparent;box-shadow:var(--shadow)}
 .plan-card .btn.plan-go.quiet-go{background:transparent;color:var(--plan);border:1.5px solid #c5d6ea;box-shadow:none}
+
+/* Ausweichroute in der Planung */
+.vf-alt{display:flex;flex-direction:column;gap:8px}
+.vf-alt .btn{align-self:flex-start}

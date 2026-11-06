@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.91.4';
+  const VERSION = '0.92.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1069,8 +1069,9 @@
     rec = newRecording(mode);
     if (pendingPlan) {   // Fahrt mit Ziel: Name und geplante Zeit bleiben an der Fahrt, die Koordinaten nur bis zum Ende der Aufzeichnung
       rec.target = { lat: pendingPlan.lat, lon: pendingPlan.lon };
-      rec.trip.plan = Object.assign({}, pendingPlan); delete rec.trip.plan.lat; delete rec.trip.plan.lon; delete rec.trip.plan.nav;
-      rec.nav = navBuild(pendingPlan.nav, pendingPlan.dauer);   // Strecke und Abbiegehinweise: nur bis zum Ende der Aufzeichnung im Speicher
+      rec.trip.plan = Object.assign({}, pendingPlan); delete rec.trip.plan.lat; delete rec.trip.plan.lon; delete rec.trip.plan.nav; delete rec.trip.plan.via;
+      rec.nav = navBuild(pendingPlan.nav, pendingPlan.dauer);
+      if (rec.nav && pendingPlan.via) rec.nav.via = pendingPlan.via;   // Ausweichroute: beim Neuberechnen über diesen Punkt   // Strecke und Abbiegehinweise: nur bis zum Ende der Aufzeichnung im Speicher
       pendingPlan = null;
     }
     if (settings.access.on) rec.trip.access = settings.access.type;   // Wartezeiten mit Einschränkung getrennt auswertbar
@@ -1297,11 +1298,15 @@
     if (!N || !g || !rec.target || !rec.last || Date.now() - N.reAt < 60000 || !apiBase()) return;
     N.reAt = Date.now();
     const from = [rec.last.lat, rec.last.lon].map((x) => x.toFixed(4));
+    // Ausweichroute: über den Zwischenpunkt, solange er noch vor einem liegt
+    let via = N.via || null;
+    if (via) { const vp = navProject(N, { lat: via[0], lon: via[1] }, 0, N.pts.length - 1); if (vp.d < 300 && N.joined && N.along > vp.along - 300) via = null; }
     try {
-      const d = await api(`/api/ziel?from=${from.join(',')}&to=${rec.target.lat},${rec.target.lon}&mode=${g}&nav=1`);
+      const d = await api(`/api/ziel?from=${from.join(',')}&to=${rec.target.lat},${rec.target.lon}&mode=${g}&nav=1${via ? '&via=' + via.join(',') : ''}`);
       if (!rec || !d.nav) return;
       const old = rec.nav;
       rec.nav = navBuild(d.nav, d.dauer);
+      if (via) rec.nav.via = via;
       rec.nav.checked = true; rec.nav.reAt = Date.now();
       driveMapRoute();
       if (!quiet && old && old.joined) speak('Neue Strecke berechnet.', { now: true });
@@ -2436,7 +2441,7 @@
     const halts = trip.events.filter((e) => e.type === 'halt' && e.signal);
     const passes = trip.events.filter((e) => e.type === 'pass').length;
     const atStop = trip.events.filter((e) => e.type === 'halt' && e.atStop).length;
-    const other = trip.events.filter((e) => e.type === 'halt' && !e.signal && !e.atStop).length;
+    const otherEv = trip.events.filter((e) => e.type === 'halt' && !e.signal && !e.atStop), other = otherEv.length, otherWait = otherEv.reduce((a, e) => a + (e.wait || 0), 0);
     const wait = halts.reduce((a, e) => a + e.wait, 0);
     const trs = trip.transfers || [];
     // Kennzahlen als kurze Marken statt Satz
@@ -2447,7 +2452,7 @@
       pill('check', `${passes} ohne Halt`, 'green'),
       atStop ? pill('pin', `${atStop} an Haltestellen`) : '',
       trs.length ? pill('walk', `${trs.length} Umstieg${trs.length === 1 ? '' : 'e'} · ${durText(trs.reduce((x, r) => x + r.wait, 0))}`) : '',
-      other ? pill('info', `${other} ohne Ampel`) : ''
+      other ? pill('info', `${other}× Stau oder Halt ohne Ampel${otherWait >= 30000 ? ' · ' + durText(otherWait) : ''}`) : ''
     ].join('');
     ensureFahrplan(trip);
     renderReviewHead(trip, halts, passes, wait);
@@ -3972,7 +3977,7 @@
   const BEST_MODE = { auto: 'auto', oepnv: 'bahn', rad: 'rad', fuss: 'fuss' };
   function bestRow(o, rec) {
     const bits = [];
-    if (o.verkehrsmittel === 'auto') { bits.push(`${o.dauer_min} min mit Parken`); if (o.verzoegerung_min >= 3) bits.push(`${o.verzoegerung_min} min Stau`); if (o.ausweichroute) bits.push(`Ausweichroute ${o.ausweichroute.dauer_min} min${o.ausweichroute.ueber && o.ausweichroute.ueber.length ? ' über ' + o.ausweichroute.ueber.join(', ') : ''}`); if (o.behindertenparkplatz) bits.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
+    if (o.verkehrsmittel === 'auto') { bits.push(`${o.dauer_min} min mit Parken`); if (o.verzoegerung_min >= 3) bits.push(`${o.verzoegerung_min} min Stau`); if (o.ausweichroute) bits.push(`Ausweichroute ${o.ausweichroute.dauer_min} min${o.ausweichroute.ueber && o.ausweichroute.ueber.length ? ' über ' + o.ausweichroute.ueber.join(', ') : ''}${o.ausweichroute.ohne_stau && o.ausweichroute.ohne_stau.length ? ', ohne Stau ' + o.ausweichroute.ohne_stau.join(', ') : ''}`); if (o.behindertenparkplatz) bits.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
     if (o.verkehrsmittel === 'oepnv') { bits.push(`ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}`); if (o.umstiege) bits.push(`${o.umstiege}× umsteigen`); if (o.stufenlos) bits.push('stufenlos: ' + o.stufenlos); }
     if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') bits.push(`${o.dauer_min} min, ${fmtNum(o.km, 1)} km`);
     if (o.hindernisse && o.hindernisse.length) bits.push(o.hindernisse.slice(0, 2).join(', '));
@@ -4697,6 +4702,15 @@
       ${settings.ziele.length >= ZIEL_MAX ? `<p class="small muted">Du hast schon ${ZIEL_MAX} Ziele. Ein neues ersetzt „${esc(zielOldest().name)}“, das du am längsten nicht genutzt hast. Ziele löschen: lange auf ein Ziel drücken.</p>` : ''}
       <p class="small muted">${ic('shield')} Für die Prüfung gehen das Ziel und dein ungefährer Standort (auf etwa 1 km gerundet, zu Fuß auf etwa 100 m) an den Flowtown-Server und an HERE. Gespeichert wird dort nichts, deine Ziele bleiben auf dem Handy. Fährst du mit Ziel los, merkt sich die Fahrt nur dessen Namen und die geplante Zeit; die Strecke für die Navigation bleibt nur bis zum Ende der Fahrt im Speicher. Beim Losfahren mit Ziel holt die App die Strecke einmal ab deinem genauen Standort (auf etwa 10 m), damit die Navigation dort beginnt.</p></div>`;
   }
+  // Ausweichroute: schneller, oder kaum langsamer und ohne den Stau auf der Strecke
+  function altHtml(d) {
+    const a = d.alternative, mehr = a.mehr_min != null ? a.mehr_min : Math.round((a.dauer - d.dauer) / 60);
+    const zeit = mehr <= -2 ? `etwa ${-mehr} min schneller` : mehr >= 2 ? `etwa ${mehr} min länger` : 'etwa gleich schnell';
+    const km = a.km && d.km ? Math.round(a.km - d.km) : 0;
+    const bits = [zeit, km >= 2 ? `${km} km mehr` : km <= -2 ? `${-km} km weniger` : '', a.ohne && a.ohne.length ? 'ohne Stau: ' + a.ohne.join(', ') : '', a.stau_min >= 2 ? `dort etwa ${a.stau_min} min Stau` : ''].filter(Boolean);
+    return `<div class="vf-alt"><p class="tip">${ic('route')}<span><b>Ausweichroute${a.strassen && a.strassen.length ? ' über ' + esc(a.strassen.join(', ')) : ''}</b>: ${esc(bits.join(' · '))}</span></p>`
+      + (a.nav ? `<button type="button" class="btn quiet" data-vf="go-alt">${ic('route')}Ausweichroute fahren</button>` : '') + '</div>';
+  }
   function zielPanel(z, group) {
     if (!z) return '';
     const head = `<div class="vf-phead"><b>${esc(z.name)}</b>${canSpeak ? `<button type="button" class="vf-x vf-say" data-vf="say" aria-label="Vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
@@ -4714,7 +4728,7 @@
     const rows = items.length
       ? `<ul class="lg-list">${items.slice(0, 4).map((it) => lageRow(it.art, btn(it), [it.km != null ? `nach ${it.km} km` : '', LAGE_LABEL[it.art], delayText(it.delay), it.richtungText && !/Richtung/.test(it.titel) ? it.richtungText : ''].filter(Boolean).map(esc).join(' · '), extra(it))).join('')}</ul>${items.length > 4 ? `<p class="small muted">und ${items.length - 4} weitere, alle auf der Karte</p>` : ''}`
       : `<p class="vf-line ok">${ic('check')}<span>Keine Meldungen entlang der Strecke</span></p>`;
-    const alt = d.alternative ? `<p class="tip">${ic('route')}<span>Ausweichen${d.alternative.strassen.length ? ' über ' + esc(d.alternative.strassen.join(', ')) : ''}: etwa ${Math.round((d.dauer - d.alternative.dauer) / 60)} min schneller</span></p>` : '';
+    const alt = d.alternative ? altHtml(d) : '';
     let bars = '';
     if (d.abfahrt && d.abfahrt.length > 1) {
       const ds = d.abfahrt.map((a) => a.dauer), lo = Math.min(...ds), hi = Math.max(...ds);
@@ -5166,6 +5180,16 @@
         if (first) setModeUI(first.art);
       } else pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km, nav: d.nav || null,
         meldungen: d.items.slice(0, 3).map((it) => ({ titel: it.titel, art: it.art, km: it.km })) };
+      zielOpen = null;
+      startTrip();
+      return;
+    }
+    else if (act === 'go-alt' && z) {
+      const r = zielRes[zKey(z, MODE_GROUP[selectedMode()])], a = r && r.data && r.data.alternative;
+      if (!a || !a.nav) return;
+      const ohne = a.ohne || [];
+      pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: r.data.t, dauer: a.dauer, basis: a.dauer, km: a.km, nav: a.nav, via: a.via || null, ausweich: true,
+        meldungen: r.data.items.filter((it) => !ohne.includes(it.titel)).slice(0, 3).map((it) => ({ titel: it.titel, art: it.art, km: it.km })) };
       zielOpen = null;
       startTrip();
       return;

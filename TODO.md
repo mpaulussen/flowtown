@@ -46,7 +46,10 @@ Mittlerer Aufwand:
 
 ## F. Andere Städte (nach der Testfahrt Bielefeld – Mönchengladbach)
 Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Speicher Vorrang, Ortssuche und Assistenz am Standort, Hinweis „keine Daten außerhalb von Bielefeld“.
-- [ ] F1 Erfahrungen der Testfahrt auswerten (Notizen, Fahrt im Verlauf)
+- [x] F1 Testfahrt Bielefeld – Mönchengladbach (6.11.) ausgewertet: Aufzeichnung lückenlos bis auf 82 s, Ampeln in Bielefeld und Mönchengladbach erkannt, auf der Autobahn keine Ampelsuche. Stau A2 Bönen richtig vorhergesagt (aber +2 statt gut +5 min). Gefahren wurde über A2, Oberhausen, Moers, Krefeld statt A40 und A52: beide Staus umfahren, 22 km mehr.
+- [x] F1a Ausweichroute bei Stau (0.92.0): bis zu drei Alternativen, Vorschlag, wenn eine kaum langsamer ist und den Stau umfährt; „Ausweichroute fahren“, Navigation bleibt beim Neuberechnen darauf
+- [x] F1b Stau aus dem fließenden Verkehr (HERE, Geschwindigkeit je Abschnitt); Halte ohne Ampel in der Fahrt als „Stau oder Halt ohne Ampel“ mit Dauer
+- [ ] F1c Nach weiteren Fahrten prüfen: Verzögerung im Stau eher unterschätzt; Grenzen für Stau und zäh anpassen
 - [ ] F2 Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal aus OpenStreetMap auch außerhalb von Bielefeld (am Ziel)
 - [ ] F3 Fahrplan für andere Verbünde (DELFI-Daten für ganz Deutschland, für Mönchengladbach VRR und NEW)
 - [ ] F4 Quellen je Stadt sammeln (Open Data der Stadt, Barrierefrei-Datenbanken wie Wheelmap)

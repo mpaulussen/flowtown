@@ -519,7 +519,7 @@ const txt = (v) => (v == null ? '' : typeof v === 'string' ? v : v.value || '');
 async function hereRoute(from, to, mode, opts) {
   const q = new URLSearchParams({ transportMode: mode === 'rad' ? 'bicycle' : mode === 'fuss' ? 'pedestrian' : 'car', origin: from.join(','), destination: to.join(','), apiKey: HERE_KEY });
   if (opts.full && mode === 'fuss') { q.set('return', 'summary,polyline,actions,instructions'); q.set('spans', 'names'); q.set('lang', 'de-DE'); }
-  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents,actions,instructions'); q.set('spans', mode === 'auto' ? 'routeNumbers,names,incidents,dynamicSpeedInfo' : 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (mode !== 'rad') q.set('alternatives', '1'); }
+  else if (opts.full) { q.set('return', 'summary,polyline,typicalDuration,incidents,actions,instructions'); q.set('spans', mode === 'auto' ? 'routeNumbers,names,incidents,dynamicSpeedInfo' : 'routeNumbers,names,incidents'); q.set('lang', 'de-DE'); if (opts.via) q.append('via', opts.via.join(',') + '!passThrough=true'); else if (mode !== 'rad') q.set('alternatives', mode === 'auto' ? '3' : '1'); }
   else q.set('return', 'summary');
   if (opts.at) q.set('departureTime', opts.at);
   const j = await getJson(`${ROUTER_URL}?${q}`, 12000);
@@ -628,12 +628,38 @@ function flowStretches(spans, cum) {
   close();
   return out;
 }
+// Ausweichroute: deutlich schneller (10 min), oder bei Stau auf der Strecke eine kaum langsamere, die den Stau umfährt
+// (so wie Karten-Apps um einen Stau herumführen). Zwischenpunkt „via“: Stelle der Ausweichroute, die am weitesten von der Strecke weg liegt
+function pickAlt(main, alts, stauAt) {
+  const stauMin = stauAt.reduce((a, x) => a + (Number(x.it.delay) || 0), 0) / 60;
+  let best = null;
+  for (const a of alts) {
+    if (!a || a.pts.length < 2) continue;
+    const ohne = stauAt.filter((x) => x.p && nearRoute(x.p, a.pts).d > 300).map((x) => x.it);
+    const ohneMin = ohne.reduce((s, it) => s + (Number(it.delay) || 0), 0) / 60;
+    const mehr = (a.dauer - main.dauer) / 60;
+    const ok = mehr <= -10 || (ohne.length && (ohneMin >= 3 || stauMin >= 5) && mehr <= Math.max(5, main.dauer / 60 * 0.05));
+    if (!ok) continue;
+    const score = mehr - ohneMin;
+    if (!best || score < best.score) best = { a, ohne, mehr, score };
+  }
+  if (!best) return null;
+  const a = best.a, ac = [0];
+  for (let k = 1; k < a.pts.length; k++) ac.push(ac[k - 1] + segDist(a.pts[k], a.pts[k - 1], a.pts[k - 1]));
+  let far = { d: -1, p: null };
+  for (let k = 0; k < a.pts.length; k += Math.max(1, Math.floor(a.pts.length / 300))) { const d = nearRoute(a.pts[k], main.pts).d; if (d > far.d) far = { d, p: a.pts[k] }; }
+  const stau = flowStretches(a.spans, ac).filter((x) => x.art === 'stau').reduce((s, x) => s + x.delay, 0);
+  return { dauer: a.dauer, km: Math.round(a.m / 100) / 10, mehr_min: Math.round(best.mehr), strassen: a.roads.filter((r) => !main.roads.includes(r)).slice(0, 4),
+    ohne: best.ohne.map((it) => it.titel).filter(Boolean).slice(0, 3), stau_min: Math.round(stau / 60),
+    via: far.p && far.d > 500 ? [r5(far.p[0]), r5(far.p[1])] : null,
+    nav: a.pts.length <= 5000 && a.acts.length ? { pts: a.pts.map((q) => [Math.round(q[0] * 1e5) / 1e5, Math.round(q[1] * 1e5) / 1e5]), schritte: a.acts } : null };
+}
 const RAMPE = /Sperrung einer Anschlussstelle|Auffahrt|Ausfahrt|Abfahrt|Rampe|\bVon A\d+:/i;
-async function checkZiel(from, to, mode, nav) {
-  const key = [from, to, mode, nav ? 'n' : ''].join('|');
+async function checkZiel(from, to, mode, nav, via) {
+  const key = [from, to, mode, nav ? 'n' : '', via || ''].join('|');
   const hit = zielCache.get(key);
   if (hit && Date.now() - hit.t < 180000) return hit.v;
-  const [main, ...alts] = await hereRoute(from, to, mode, { full: true });
+  const [main, ...alts] = await hereRoute(from, to, mode, { full: true, via });
   if (!main || main.pts.length < 2) throw Object.assign(new Error('Keine Strecke gefunden'), { status: 404 });
   const P = main.pts;
   const cum = [0];
@@ -698,6 +724,8 @@ async function checkZiel(from, to, mode, nav) {
     const road = rd.num || rd.name || '';
     it.titel = clip(road && town ? (rd.num ? `${road} bei ${town}` : `${road}, ${town}`) : road || town || it.text || 'Meldung', 60);
   }));
+  // Mitte jeder Stau-Stelle (am Anfang liegt sie oft noch neben einer Ausweichroute)
+  const stauAt = items.filter((it) => ['stau', 'sperrung', 'unfall'].includes(it.art)).map((it) => ({ it, p: Array.isArray(it.pts) && it.pts.length ? it.pts[Math.floor(it.pts.length / 2)] : P[it.at] }));
   for (const it of items) { if (!it.titel) it.titel = clip(roadAt(it.at).num || roadAt(it.at).name || it.text || 'Meldung', 60); it.km = Math.round(cum[it.at] / 1000); delete it.at; }
   // doppelte Meldungen (gleiche Art, gleicher Name, gleicher Kilometer) nur einmal
   { const dup = new Set(); for (let k = items.length - 1; k >= 0; k--) { const key = items[k].art + '|' + items[k].titel + '|' + items[k].km; if (dup.has(key)) items.splice(k, 1); else dup.add(key); } }
@@ -708,13 +736,13 @@ async function checkZiel(from, to, mode, nav) {
     const later = await Promise.allSettled(ts.map((t) => hereRoute(from, to, mode, { at: t.toISOString() })));
     abfahrt = [{ t: null, dauer: main.dauer }].concat(later.map((r, k) => (r.status === 'fulfilled' && r.value[0] ? { t: ts[k].toISOString(), dauer: r.value[0].dauer } : null)).filter(Boolean));
   }
-  const alt = alts.find((a) => main.dauer - a.dauer >= 600);
+  const alt = pickAlt(main, alts, stauAt);
   const v = {
     t: Date.now(), mode, dauer: main.dauer, basis: main.basis, km: Math.round(main.m / 100) / 10, strassen: main.roads.slice(0, 6),
     pts: thin2(main.pts, 160), items, abfahrt,
     // für die Navigation in der App: volle Strecke (auf etwa 1 m gerundet) und die Abbiegehinweise; bleibt nur im Speicher der App
     nav: main.pts.length <= 5000 && main.acts.length ? { pts: main.pts.map((p) => [Math.round(p[0] * 1e5) / 1e5, Math.round(p[1] * 1e5) / 1e5]), schritte: main.acts } : null,
-    alternative: alt ? { dauer: alt.dauer, strassen: alt.roads.filter((r) => !main.roads.includes(r)).slice(0, 3) } : null
+    alternative: alt
   };
   zielCache.set(key, { t: Date.now(), v });
   if (zielCache.size > 200) zielCache.delete(zielCache.keys().next().value);
@@ -2149,7 +2177,7 @@ async function vergleichZiel(from, to, typ, vorrang) {
   if (ra.status === 'fulfilled') {
     // Parken und Weg vom Parkplatz: geschätzt 5 Minuten, damit das Auto nicht schneller wirkt, als es am Ziel ist
     const v = ra.value, o = { verkehrsmittel: 'auto', dauer_min: Math.round(v.dauer / 60) + 5, parken: 'inklusive etwa 5 Minuten für Parken (geschätzt)', ankunft: now + (v.dauer + 300) * 1000, km: v.km, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)), meldungen: v.items.slice(0, 2).map((it) => it.titel + (it.art ? ' (' + it.art + ')' : '') + (it.km != null && v.km > 20 ? ', nach etwa ' + it.km + ' km' : '')), geeignet: true };
-    if (v.alternative) o.ausweichroute = { dauer_min: Math.round(v.alternative.dauer / 60), ueber: v.alternative.strassen };
+    if (v.alternative) o.ausweichroute = { dauer_min: Math.round(v.alternative.dauer / 60) + 5, ueber: v.alternative.strassen, ohne_stau: v.alternative.ohne, km: v.alternative.km };
     o.co2_g = Math.round(v.km * CO2_G.auto);
     if (mob) { const near = (bpp && bpp.plaetze || []).map((p) => mAbs(to, [p[0], p[1]])).sort((a, b) => a - b)[0]; o.behindertenparkplatz = near != null && near <= 500 ? `etwa ${Math.round(near / 50) * 50} m vom Ziel` : 'keiner bis 500 m bekannt'; }
     opt.push(o);
@@ -2384,7 +2412,8 @@ async function assistTool(name, a, ctx, act) {
     const v = await checkZiel(f, t, mode);
     return { ziel: to.name, verkehrsmittel: mode, dauer_min: Math.round(v.dauer / 60), km: Math.round(v.km * 10) / 10, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)),
       meldungen: (v.items || []).slice(0, 3).map((it) => ({ art: it.art, titel: it.titel || '', hinweis: it.text || '' })),
-      beste_abfahrt: v.abfahrt && v.abfahrt.length > 1 ? v.abfahrt.reduce((b, x) => (x.dauer < b.dauer ? x : b)) : null };
+      beste_abfahrt: v.abfahrt && v.abfahrt.length > 1 ? v.abfahrt.reduce((b, x) => (x.dauer < b.dauer ? x : b)) : null,
+      ausweichroute: v.alternative ? { ueber: v.alternative.strassen, mehr_min: v.alternative.mehr_min, km: v.alternative.km, ohne_stau: v.alternative.ohne } : undefined };
   }
   if (name === 'verkehrslage') {
     const o = await assistOrt(a.ort, ctx);
@@ -2645,7 +2674,8 @@ const server = http.createServer(async (req, res) => {
       const nav = url.searchParams.get('nav') === '1' && mode !== 'oepnv';
       const from = coord(url.searchParams.get('from'), nav || (mode === 'oepnv' && url.searchParams.get('ab') === 'halt') ? 4 : mode === 'fuss' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
-      return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode, nav), origin);
+      const via = mode === 'auto' && url.searchParams.get('via') ? coord(url.searchParams.get('via'), 4) : null;   // Ausweichroute in der Navigation halten
+      return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode, nav, via), origin);
     }
     if (req.method === 'POST' && p.startsWith('/api/pilot/')) {
       if (!pilotAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Übertragungen möglich.' }, origin);
