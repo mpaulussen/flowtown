@@ -737,10 +737,11 @@ function ortItem(x) {
   const where = place ? [a.street ? `${a.street}${a.houseNumber ? ' ' + a.houseNumber : ''}` : '', a.city] : [a.postalCode, a.city !== name ? a.city : '', a.state];
   return { name: clip(name, 50), sub: clip([what].concat(where, a.countryName !== 'Deutschland' ? a.countryName : '').filter(Boolean).join(' · '), 70), lat: r5(x.position.lat), lon: r5(x.position.lng) };
 }
-async function findOrt(q) {
+async function findOrt(q, near) {
+  const at = near ? near.map((x) => Number(x).toFixed(2)).join(',') : ORT_MITTE;
   const [disc, geo] = await Promise.allSettled([
-    getJson(`${DISCOVER_URL}?${new URLSearchParams({ q, at: ORT_MITTE, in: ORT_LAENDER, limit: '5', lang: 'de-DE', apiKey: HERE_KEY })}`),
-    getJson(`${GEOCODE_URL}?${new URLSearchParams({ q, limit: '3', lang: 'de-DE', in: ORT_LAENDER, apiKey: HERE_KEY })}`)
+    getJson(`${DISCOVER_URL}?${new URLSearchParams({ q, at, in: ORT_LAENDER, limit: '5', lang: 'de-DE', apiKey: HERE_KEY })}`),
+    getJson(`${GEOCODE_URL}?${new URLSearchParams(Object.assign({ q, limit: '3', lang: 'de-DE', in: ORT_LAENDER, apiKey: HERE_KEY }, near ? { at } : {}))}`)
   ]);
   if (disc.status === 'rejected' && geo.status === 'rejected') throw geo.reason;
   const all = [].concat(disc.status === 'fulfilled' ? disc.value.items || [] : [], geo.status === 'fulfilled' ? geo.value.items || [] : []);
@@ -1825,6 +1826,7 @@ Regeln:
 - Entfernungen runden (etwa 200 Meter), Zeiten als Uhrzeit oder in Minuten.
 - Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
 - Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit in Bielefeld beantwortest du nicht; sag kurz, wobei du helfen kannst.
+- Ist die Person außerhalb von Bielefeld (Kontext standort), hilfst du trotzdem: Wege, Verkehrsmittel-Vergleich mit CO₂, Staus und Sperrungen auf der Strecke gibt es überall. Barrierefreiheit von Gebäuden, Toiletten, Behindertenparkplätze, Fahrplan, Störungen von moBiel und Tonsignale an Ampeln gibt es nur für Bielefeld; sag das offen.
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
 - Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
 - Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Fragen zu einer bestimmten Fahrt (letzte Fahrt, heute früh, gestern) beantwortest du aus „letzte_fahrten“ (die neueste zuerst): Dauer, Gestanden und die Aufteilung übernimmst du wörtlich, ohne zu runden, zu addieren oder umzurechnen; „gestanden_gesamt“ ist die ganze Standzeit, „an_ampeln“ nur der Teil an Ampeln. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.
@@ -1910,6 +1912,13 @@ function bfOrtDetails(name, thema) {
 async function assistOrt(name, ctx) {
   const n = String(name || '').trim();
   if (!n || /^(hier|standort|mein standort|in der nähe)$/i.test(n)) return ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
+  // unterwegs in einer anderen Stadt: dort suchen, nicht in Bielefeld (außer Bielefeld wird genannt)
+  if (ctx.aussen && !/bielefeld/i.test(n)) {
+    const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === hstNorm(n));
+    if (z && isFinite(z.lat)) return { name: z.name, pos: [z.lat, z.lon] };
+    const r = HERE_KEY ? (await findOrt(n, ctx.pos).catch(() => []))[0] : null;
+    return r ? { name: r.name, pos: [r.lat, r.lon], adresse: r.sub, gefunden_ueber: 'Ortssuche (HERE)' } : null;
+  }
   // „Universität Bielefeld“, „die Uni“: Zusatz Bielefeld und Artikel weglassen, damit Haltestelle und Gebäude gefunden werden
   const nq = n.replace(/(^|[\s,])(in\s+)?bielefeld\b/ig, ' ').replace(/^\s*(die|der|das|zur|zum|zu)\s+/i, '').replace(/^\s*uni\s*$/i, 'Universität').replace(/^\s*(bahnhof|hbf)\s*$/i, 'Hauptbahnhof').replace(/\s+/g, ' ').trim() || n;
   const k = hstNorm(nq);
@@ -2164,7 +2173,10 @@ async function ampelnNahe(pos) {
 }
 // ---------- Am Ziel: was dort zählt (nicht am Standort): Gebäude laut Bethel, WC, Behindertenparkplatz, Haltestelle, Meldungen ----------
 const ZIEL_THEMA = { rollstuhl: ['zugang', 'aufzug', 'wc'], rollator: ['zugang', 'aufzug', 'wc'], sehen: ['sehen', 'zugang'], hoeren: ['hoeren'], lernen: ['einfach'], ruhe: ['service', 'wc'] };
+const ausserhalb = (pos) => !!pos && !inBox(pos[0], pos[1], 0.05);
+const AUSSEN_HINWEIS = 'Der Ort liegt außerhalb von Bielefeld. Dazu hat Flowtown keine Angaben zu Barrierefreiheit, Toiletten, Behindertenparkplätzen, Haltestellen, Fahrplan und Ampeln mit Tonsignal. Sag das offen; behaupte nicht, dass es dort nichts gibt.';
 function zielInfo(pos, name, typ) {
+  if (ausserhalb(pos)) return { hinweis: AUSSEN_HINWEIS };
   const near = (list, max) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(pos, x.pos) })).filter((x) => x.entfernung_m <= max).sort((a, b) => a.entfernung_m - b.entfernung_m)[0];
   const strip = (x) => { if (!x) return undefined; const o = Object.assign({}, x); delete o.pos; o.entfernung_m = Math.round(o.entfernung_m / 10) * 10; return o; };
   const out = {};
@@ -2201,6 +2213,11 @@ function zielInfo(pos, name, typ) {
 }
 async function assistTool(name, a, ctx, act) {
   a = a || {};
+  // Daten, die es nur für Bielefeld gibt
+  if (['abfahrten_in_der_naehe', 'ampeln_mit_ton', 'verkehrslage', 'hinweise', 'orte_in_der_naehe'].includes(name)) {
+    const o = a.ort ? await assistOrt(a.ort, ctx) : ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
+    if (o && ausserhalb(o.pos)) return { bei: o.name, hinweis: AUSSEN_HINWEIS + (name === 'verkehrslage' ? ' Staus und Sperrungen auf einer Strecke prüft das Werkzeug weg.' : '') };
+  }
   if (name === 'ort_barrierefreiheit') return bfOrtDetails(a.name, a.thema);
   if (name === 'vergleich' || name === 'weg_check') {
     if (!HERE_KEY) return { fehler: 'Dafür braucht der Server den HERE-Schlüssel' };
@@ -2425,10 +2442,11 @@ async function assist(body) {
   const frage = clip(body.frage, 300);
   if (!frage) throw Object.assign(new Error('Keine Frage'), { status: 400 });
   const k = body.kontext || {};
-  const pos = Array.isArray(k.pos) && k.pos.length === 2 && inBox(Number(k.pos[0]), Number(k.pos[1]), 0.3) ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau
+  const pos = Array.isArray(k.pos) && k.pos.length === 2 && Number(k.pos[0]) > 35 && Number(k.pos[0]) < 72 && Number(k.pos[1]) > -12 && Number(k.pos[1]) < 35 ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau; auch unterwegs in anderen Städten (Europa)
   const auswertung = assistStatsClean(k.auswertung);
   const ctx = { pos, auswertung, typ: profilTyp(k), vorrang: k.vorrang === 'schnell' || /schnellsten|am schnellsten|eilig/i.test(frage) ? 'schnell' : '', ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
-  const kontext = { standort: pos ? 'bekannt (auf 100 m gerundet)' : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
+  ctx.aussen = ausserhalb(pos);
+  const kontext = { standort: pos ? (ctx.aussen ? 'bekannt, außerhalb von Bielefeld (auf 100 m gerundet)' : 'bekannt (auf 100 m gerundet)') : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
   const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
@@ -2566,7 +2584,8 @@ const server = http.createServer(async (req, res) => {
         const q = (url.searchParams.get('q') || '').trim().slice(0, 80);
         if (q.length < 2) return send(res, 400, { fehler: 'Bitte einen Ort eingeben.' }, origin);
         if (!ortAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Suchen möglich.' }, origin);
-        return send(res, 200, { orte: await findOrt(q) }, origin);
+        const nr = url.searchParams.get('near') ? coord(url.searchParams.get('near'), 2) : null;   // außerhalb von Bielefeld: Standort auf etwa 1 km
+        return send(res, 200, { orte: await findOrt(q, nr) }, origin);
       }
       // Start auf etwa 1 km gerundet; bei Bus und Bahn darf er eine gewählte Haltestelle sein (öffentlicher Ort, genau)
       // zu Fuß auf etwa 100 m gerundet: Fußwege sind kurz, ein Start 1 km daneben ergäbe einen anderen Weg

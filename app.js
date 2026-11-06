@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.90.1';
+  const VERSION = '0.91.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -97,7 +97,15 @@
   let clusters = [];   // wird beim Start aus den gespeicherten Ampeln aufgebaut
   let alias = {};      // 'c' + Signalstandort -> Kreuzung, damit ältere Fahrten zur aktuellen Einteilung passen
   let clusterById = {};
-  const saveTrips = () => store.set('trips', trips);
+  const saveTrips = () => {
+    if (store.set('trips', trips)) return true;
+    // Speicher voll (etwa nach einer langen Fahrt durch viele Städte): Ampeldaten weit weg verwerfen, die Fahrten sind wichtiger
+    for (let k = 0; k < 4 && trimSignals(rec && rec.last); k++) {
+      store.set('signals', signalCache);
+      if (store.set('trips', trips)) { clusters = buildClusters(signalNodes()); return true; }
+    }
+    return false;
+  };
 
   // ---------- Geometrie ----------
   const toR = Math.PI / 180;
@@ -304,7 +312,7 @@
         signalCache.areas = signalCache.areas.filter((a) => dist(a, p) > 1000);
         // ohne eine einzige Ampel (auf dem Land möglich, oder ein Aussetzer): nur einen Tag als geladen merken
         signalCache.areas.push({ lat: round5(p.lat), lon: round5(p.lon), r: AREA_RADIUS, fetched: Date.now() - (n ? 0 : 29 * 864e5) });
-        store.set('signals', signalCache);
+        saveSignals(p);
         clusters = buildClusters(signalNodes());
         updateSignalsInfo();
         // Halte aus Fahrten, bei denen die Ampeldaten fehlten, jetzt zuordnen
@@ -313,6 +321,22 @@
       } catch (e) { lastErr = e; }
     }
     throw lastErr || new Error('Ampeldaten nicht erreichbar');
+  }
+  // Speicher voll: die Hälfte der Ampel-Gebiete, die am weitesten vom Standort liegen, samt ihren Punkten verwerfen
+  function trimSignals(p) {
+    const areas = signalCache.areas.slice();
+    if (areas.length < 2) return false;
+    const ref = p && isFinite(p.lat) ? p : areas[areas.length - 1];
+    areas.sort((a, b) => dist(a, ref) - dist(b, ref));
+    const keep = areas.slice(0, Math.ceil(areas.length / 2));
+    const inKeep = (v) => keep.some((a) => Math.abs(a.lat - v[0]) < 0.07 && dist(a, { lat: v[0], lon: v[1] }) <= a.r + 300);
+    for (const k of ['nodes', 'stops']) for (const id in signalCache[k]) if (!inKeep(signalCache[k][id])) { delete signalCache[k][id]; delete signalCache.acc[id]; delete signalCache.dir[id]; }
+    signalCache.areas = keep;
+    return true;
+  }
+  function saveSignals(p) {
+    for (let k = 0; k < 4; k++) { if (store.set('signals', signalCache)) return true; if (!trimSignals(p)) break; }
+    return false;
   }
   function updateSignalsInfo() {
     const n = clusters.length;
@@ -992,6 +1016,8 @@
   function maybeFetchSignals(p, first) {
     if (rec.trip.demo) return;
     if (areaCovers(p)) return;
+    // über etwa 80 km/h (Autobahn, Schnellstraße) gibt es keine Ampeln: erst laden, wenn es wieder langsamer wird
+    if (!first && (rec.st.lastVs || 0) > 22) return;
     const now = Date.now();
     if (!first && now - rec.lastFetchAt < 60000) return;
     rec.lastFetchAt = now;
@@ -1943,7 +1969,7 @@
       if (!z) {
         speak(`Ich suche ${what}.`, { now: true, force: true });
         try {
-          const o = ((await api('/api/ort?q=' + encodeURIComponent(what))).orte || [])[0];
+          const o = ((await api('/api/ort?q=' + encodeURIComponent(what) + await ortNear())).orte || [])[0];
           if (!o) { speak(`${what} habe ich nicht gefunden.`, { now: true, force: true }); return true; }
           sayAfterZiel = 'neu';
           addZiel(o);
@@ -2244,7 +2270,7 @@
       return;
     }
     trips.push(trip);
-    saveTrips();
+    if (!saveTrips()) alert('Der Speicher auf dem Gerät ist voll, die Fahrt konnte nicht gespeichert werden. Lösche unter Verlauf ältere Fahrten.');
     flushWir(trip);
     syncPilot();
     openReview(trip);
@@ -4934,11 +4960,19 @@
     }
     return `<div class="vf-hist"><h4 class="vf-h4">Aus deinen Fahrten</h4><p class="small">${esc(line)}</p></div>`;
   }
+  let lastStart = null;
   function myStart() {
     return new Promise((resolve) => {
       if (!('geolocation' in navigator)) return resolve(null);
-      navigator.geolocation.getCurrentPosition((p) => resolve([p.coords.latitude, p.coords.longitude]), () => resolve(null), { enableHighAccuracy: false, maximumAge: 600000, timeout: 8000 });
+      navigator.geolocation.getCurrentPosition((p) => { lastStart = [p.coords.latitude, p.coords.longitude]; resolve(lastStart); }, () => resolve(null), { enableHighAccuracy: false, maximumAge: 600000, timeout: 8000 });
     });
+  }
+  // nur außerhalb von Bielefeld (über 25 km vom Jahnplatz): der Standort auf etwa 1 km gerundet, damit „Hauptbahnhof“ den dortigen meint
+  async function ortNear() {
+    let p = rec && rec.last ? [rec.last.lat, rec.last.lon] : lastStart;
+    if (!p) p = await Promise.race([myStart(), new Promise((r) => setTimeout(() => r(null), 2500))]);
+    if (!p || dist({ lat: p[0], lon: p[1] }, { lat: 52.0211, lon: 8.5325 }) < 25000) return '';
+    return '&near=' + p.map((x) => Math.round(x * 100) / 100).join(',');
   }
   async function checkZiel(z, force) {
     const group = MODE_GROUP[selectedMode()];
@@ -4992,8 +5026,9 @@
   async function searchOrt(q) {
     ortQ = q; ortMsg = 'Suche …'; ortList = null; renderVorfahrt();
     await loadBf().catch(() => null);
-    const local = bfSearch(q);
-    try { ortList = local.concat(((await api('/api/ort?q=' + encodeURIComponent(q))).orte || []).filter((o) => !local.some((l) => dist(l, o) < 80))); ortMsg = ''; }
+    // außerhalb von Bielefeld zuerst die Treffer vor Ort, nicht die Orte von Bethel
+    const near = await ortNear(), local = /bielefeld/i.test(q) || !near ? bfSearch(q) : [];
+    try { ortList = local.concat(((await api('/api/ort?q=' + encodeURIComponent(q) + near)).orte || []).filter((o) => !local.some((l) => dist(l, o) < 80))); ortMsg = ''; }
     catch (e) { ortList = local.length ? local : null; ortMsg = local.length ? '' : e.message; }
     renderVorfahrt();
   }
