@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.92.1';
+  const VERSION = '0.92.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -75,6 +75,9 @@
   const OVERPASS = ['https://overpass-api.de/api/interpreter'];   // FOSSGIS e.V., Deutschland
 
   // ---------- Speicher ----------
+  // Städte mit eigenem Fahrplan-Auszug auf dem Server (neben Bielefeld); Rahmen Süd, Nord, West, Ost wie auf dem Server
+  const FP_STAEDTE = [{ id: 'moenchengladbach', name: 'Mönchengladbach', box: [51.10, 51.26, 6.30, 6.58] }];
+  const FP_PREFIX = /^(Bielefeld|Mönchengladbach),\s*/;
   const store = {
     get(k, d) { try { const v = localStorage.getItem('ww.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('ww.' + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
@@ -779,6 +782,7 @@
     voiceAhead(p, t);
     navUpdate(p, t, c.accuracy, heading);
     lineOnFix(p, t);
+    if (fpWrong() && !fpLoading && (rec.st.lastVs || 0) < 22) loadFahrplan().catch(() => {});   // in einer anderen Stadt angekommen
     maybeFetchSignals(p, false);
     updateCounters();
   }
@@ -1058,7 +1062,7 @@
   });
 
   function startTrip() {
-    if (!fp && lageOn()) loadFahrplan().catch(() => {});
+    if ((!fp || fpWrong()) && lageOn()) loadFahrplan().catch(() => {});
     const mode = selectedMode();
     settings.mode = mode; store.set('settings', settings);
     applyModeWords(mode);
@@ -1682,7 +1686,7 @@
     const idx = fpStopsNear(p, 400);
     if (!idx.length) return '';
     idx.sort((a, b) => dist(p, { lat: fp.stops[a][2], lon: fp.stops[a][3] }) - dist(p, { lat: fp.stops[b][2], lon: fp.stops[b][3] }));
-    const i = idx[0], st = fp.stops[i], q = { lat: st[2], lon: st[3] }, name = st[1].replace(/^Bielefeld,\s*/, '');
+    const i = idx[0], st = fp.stops[i], q = { lat: st[2], lon: st[3] }, name = st[1].replace(FP_PREFIX, '');
     const tram = fp.kindOf && fp.kindOf[i] && fp.kindOf[i].has(0);
     let lines = [];
     try {
@@ -1728,7 +1732,7 @@
       let heading = null;
       if (rec && rec.samples.length > 2 && (rec.st.lastVs || 0) > 0.8) heading = currentHeading(rec.samples[rec.samples.length - 1]);
       if (heading == null && compass && Date.now() - compass.t < 5000) heading = compass.h;
-      await Promise.all([!areaCovers(p) ? fetchSignals(p).catch(() => null) : null, !fp ? loadFahrplan().catch(() => null) : null]);
+      await Promise.all([!areaCovers(p) ? fetchSignals(p).catch(() => null) : null, !fp || fpWrong() ? loadFahrplan().catch(() => null) : null]);
       let adr = null;
       if (apiBase()) adr = await api(`/api/wo?pos=${p.lat.toFixed(4)},${p.lon.toFixed(4)}${heading != null ? '&h=' + Math.round(heading) : ''}`).catch(() => null);
       const parts = [];
@@ -1941,7 +1945,7 @@
     // Befehle nur, wenn der ganze Satz einer ist; sonst geht die Frage an die Assistenz
     const PRE = '^(?:(?:jetzt|bitte|ich will|ich möchte)\\s+)?(?:(?:mit dem|mit der)\\s+\\S+\\s+|zu ?fu(?:ß|ss)\\s+)?';
     if (/^(?:wann f(?:ä|a)hrt (?:die |der |das )?)?nächste[rn]? (?:bahn|stadtbahn|straßenbahn|bus|zug|abfahrt(?:en)?)\b|^abfahrten\b/.test(c) && !/\b(zum|zur|nach)\b/.test(c)) {
-      if (!fp) await loadFahrplan();
+      if (!fp || fpWrong()) await loadFahrplan();
       if (!fp) { speak('Der Fahrplan ist gerade nicht geladen.', { now: true, force: true }); return true; }
       const kind = /\bbus\b/.test(c) ? 3 : /\bzug\b/.test(c) ? 2 : /bahn/.test(c) ? 0 : null;
       const at = (c.match(/\b(?:ab|von|an der haltestelle|haltestelle|abfahrten)\s+(.+)$/) || [])[1];
@@ -2333,7 +2337,7 @@
     const { tr, base, times, pat, m } = best;
     const a = halts[m[0].hi].tEnd, b = halts[m[m.length - 1].hi].t;
     const amps = t.events.filter((e) => e.type === 'halt' && e.signal && e.t >= a && e.t <= b);
-    return { mode, linie: fpLine(tr[0], tr[6]), ziel: fp.heads[tr[2]].replace(/^Bielefeld,\s*/, ''),
+    return { mode, linie: fpLine(tr[0], tr[6]), ziel: fp.heads[tr[2]].replace(FP_PREFIX, ''),
       halte: (() => { const by = {}; m.forEach(({ hi, j }) => { by[j] = halts[hi].tEnd; }); const out = []; for (let j = m[0].j; j <= m[m.length - 1].j; j++) out.push([fpName(pat[j]), base + times[j] * 60000, by[j] != null ? by[j] : null]); return out; })(),
       amp: amps.reduce((x, e) => x + e.wait, 0), ampN: amps.length };
   }
@@ -3607,7 +3611,7 @@
       const pts = fp.patterns[best[name]].map((si) => [fp.stops[si][2], fp.stops[si][3]]);
       L.polyline(pts, { color: TRAM_COL[i % TRAM_COL.length], weight: 5, opacity: 0.85 }).bindTooltip(`Linie ${esc(name)}`, { sticky: true }).addTo(g);
       for (const si of fp.patterns[best[name]]) {
-        const n = fp.stops[si][1].replace(/^Bielefeld,\s*/, '');
+        const n = fp.stops[si][1].replace(FP_PREFIX, '');
         if (!stopsShown[n]) stopsShown[n] = [fp.stops[si][2], fp.stops[si][3], fp.stops[si][4]];
         else if (fp.stops[si][4] && !stopsShown[n][2]) stopsShown[n][2] = fp.stops[si][4];
       }
@@ -4186,7 +4190,7 @@
     renderPlanTeaser();
     if (lageOn() && Date.now() - lageAt >= 300000) loadLage().then((ok) => { if (ok && heuteOn()) renderToday(); });
     if (group === 'oepnv' && lageOn() && Date.now() - mbAt >= 900000) loadMobiel().then((ok) => { if (ok && heuteOn()) renderToday(); });
-    if (group === 'oepnv' && lageOn() && Date.now() - fpAt >= 6 * 3600e3) loadFahrplan().then(() => { if (heuteOn()) renderVorfahrt(); });
+    if (group === 'oepnv' && lageOn() && (Date.now() - fpAt >= 6 * 3600e3 || fpWrong())) loadFahrplan().then(() => { if (heuteOn()) renderVorfahrt(); });
   }
   function sortedRoutes(group) {
     const now = new Date().getHours();
@@ -4409,21 +4413,38 @@
   }
   // ---------- Bus und Bahn: Abfahrten aus dem Fahrplan (DELFI) ----------
   // Die App lädt den ganzen moBiel-Fahrplan (etwa 150 KB) und rechnet hier. Haltestellen und Standort verlassen das Handy nicht.
-  let fp = null, fpAt = 0, fpLoading = false, fpErr = '', hsAdd = false, hsOpen = null, hsHits = null;
+  let fp = null, fpAt = 0, fpLoading = false, fpErr = '', hsAdd = false, hsOpen = null, hsHits = null, fpTried = '';
+  // Fahrplan der Stadt, in der man gerade ist (Bielefeld, sonst eine Stadt mit eigenem Auszug auf dem Server)
+  function fpStadtNow() {
+    const p = rec && rec.last ? [rec.last.lat, rec.last.lon] : lastStart;
+    const c = p && FP_STAEDTE.find((x) => p[0] >= x.box[0] && p[0] <= x.box[1] && p[1] >= x.box[2] && p[1] <= x.box[3]);
+    return c ? c.id : 'bielefeld';
+  }
+  const fpWrong = () => !!fp && fp.stadt !== fpStadtNow();
+  // Standort für die Wahl des Fahrplans: nur wenn der Zugriff schon erlaubt ist (keine neue Abfrage beim Start), höchstens 2,5 s warten
+  async function fpPosQuick() {
+    if ((rec && rec.last) || lastStart || !('geolocation' in navigator)) return;
+    try { const q = navigator.permissions && await navigator.permissions.query({ name: 'geolocation' }); if (!q || q.state !== 'granted') return; } catch (e) { return; }
+    await Promise.race([myStart(), new Promise((r) => setTimeout(r, 2500))]);
+  }
   async function loadFahrplan() {
-    if (!lageOn() || fpLoading || Date.now() - fpAt < 6 * 3600e3) return false;
-    fpLoading = true;
+    if (!fpLoading) await fpPosQuick();
+    const st = fpStadtNow();
+    if (!lageOn() || fpLoading || (fpTried === st && Date.now() - fpAt < 6 * 3600e3 && (!fp || fp.stadt === st))) return false;
+    fpLoading = true; fpTried = st;
     try {
-      const [d] = await Promise.all([api('/api/fahrplan', { cache: 'no-cache' }), loadHst()]);
+      const [d] = await Promise.all([api('/api/fahrplan' + (st !== 'bielefeld' ? '?stadt=' + st : ''), { cache: 'no-cache' }), loadHst()]);
       // Haltestellen nach Namen zusammenfassen (je Steig ein Eintrag), Haltefolgen je Haltestelle
       const byName = {}, patsOf = {};
-      d.stops.forEach((st, i) => { const n = st[1].replace(/^Bielefeld,\s*/, ''); (byName[n] = byName[n] || []).push(i); });
+      d.stops.forEach((st, i) => { const n = st[1].replace(FP_PREFIX, ''); (byName[n] = byName[n] || []).push(i); });
       d.patterns.forEach((pat, pi) => pat.forEach((si) => { (patsOf[si] = patsOf[si] || new Set()).add(pi); }));
-      fp = Object.assign(d, { byName, patsOf, names: Object.keys(byName).sort((a, b) => a.localeCompare(b, 'de')), svcDay: {} });
+      fp = Object.assign(d, { byName, patsOf, names: Object.keys(byName).sort((a, b) => a.localeCompare(b, 'de')), svcDay: {}, stadt: st });
       fpAt = Date.now(); fpErr = '';
       return true;
     } catch (e) {
-      fpErr = /Noch kein Fahrplan/.test(e.message) ? 'Der Fahrplan ist auf dem Server noch nicht eingerichtet.' : 'Der Fahrplan ist gerade nicht erreichbar.';
+      const sn = (FP_STAEDTE.find((x) => x.id === st) || {}).name;
+      if (fp && fp.stadt !== st) fp = null;   // kein Fahrplan einer anderen Stadt zeigen
+      fpErr = /Noch kein Fahrplan/.test(e.message) ? (sn ? `Für ${sn} ist der Fahrplan auf dem Server noch nicht da.` : 'Der Fahrplan ist auf dem Server noch nicht eingerichtet.') : 'Der Fahrplan ist gerade nicht erreichbar.';
       fpAt = Date.now() - 6 * 3600e3 + 60000;   // in einer Minute noch einmal
       return false;
     } finally { fpLoading = false; }
@@ -4448,7 +4469,7 @@
         for (let k = 0; k < pat.length - 1; k++) {   // an der Endhaltestelle fährt nichts mehr ab
           if (k) t += deltas[k - 1];
           if (t > nowMin + span) break;
-          if (idx.has(pat[k]) && t >= nowMin) out.push({ t, line: fpLine(r, nr), kind: fp.routes[r][1], head: fp.heads[h].replace(/^Bielefeld,\s*/, '') });
+          if (idx.has(pat[k]) && t >= nowMin) out.push({ t, line: fpLine(r, nr), kind: fp.routes[r][1], head: fp.heads[h].replace(FP_PREFIX, '') });
         }
       }
     }
@@ -4459,7 +4480,7 @@
     const [short, k, rt] = fp.routes[r], n = nr ? String(Number(nr)) : '';
     return k !== 2 ? short : rt === 101 ? `ICE ${n}` : rt === 102 && !/^[A-Z]/.test(short) ? `IC ${n}` : short;
   }
-  const fpName = (si) => fp.stops[si][1].replace(/^Bielefeld,\s*/, '');
+  const fpName = (si) => fp.stops[si][1].replace(FP_PREFIX, '');
   // Fahrplan-Halte in der Nähe eines Punkts, wahlweise nur von Linien einer Art (0 StadtBahn, 3 Bus, 2 Zug)
   function fpStopsNear(p, r, k) {
     if (!fp) return [];
@@ -4511,7 +4532,7 @@
   function nearStops() {
     navigator.geolocation.getCurrentPosition((p) => {
       const me = { lat: p.coords.latitude, lon: p.coords.longitude }, best = {};
-      fp.stops.forEach((st) => { const n = st[1].replace(/^Bielefeld,\s*/, ''), d = dist(me, { lat: st[2], lon: st[3] }); if (best[n] == null || d < best[n]) best[n] = d; });
+      fp.stops.forEach((st) => { const n = st[1].replace(FP_PREFIX, ''), d = dist(me, { lat: st[2], lon: st[3] }); if (best[n] == null || d < best[n]) best[n] = d; });
       hsHits = Object.keys(best).filter((n) => best[n] < 1500).sort((a, b) => best[a] - best[b]).slice(0, 5);
       const el = $('#hs-hits'); if (el) el.innerHTML = hsHitList();
     }, () => { const el = $('#hs-hits'); if (el) el.innerHTML = '<p class="small muted">Ohne Standort geht das nicht. Gib den Namen ein.</p>'; }, { enableHighAccuracy: false, timeout: 15000, maximumAge: 300000 });
@@ -4806,7 +4827,7 @@
       fp.tramLines = {};
       for (const t of fp.trips) { const rt = fp.routes[t[0]]; if (rt[1] !== 0) continue; for (const si of fp.patterns[t[1]]) (fp.tramLines[si] = fp.tramLines[si] || new Set()).add(rt[0]); }
     }
-    const name = fp.stops[best][1].replace(/^Bielefeld,\s*/, '');
+    const name = fp.stops[best][1].replace(FP_PREFIX, '');
     const lines = new Set();
     for (const si of fp.byName[name] || [best]) for (const l of fp.tramLines[si] || []) lines.add(l);
     return { name, m: bd, lines: Array.from(lines).sort((a, b) => a.localeCompare(b, 'de', { numeric: true })) };
@@ -4825,7 +4846,7 @@
       if (!best || bd < best.m) best = { p, m: bd };
     }
     if (!best) return '';
-    if (!fp) loadFahrplan().then((ok) => { if (ok && zielOpen === z.id) renderVorfahrt(); });
+    if (!fp || fpWrong()) loadFahrplan().then((ok) => { if (ok && zielOpen === z.id) renderVorfahrt(); });
     const p = best.p, st = tramNear([p[0], p[1]], 600);
     const weiter = st ? `weiter mit der Stadtbahn${st.lines.length ? ` (Linie ${esc(st.lines.join(', '))})` : ''} ab ${esc(st.name)}${st.m > 120 ? ` (${fmtLen(st.m)} zu Fuß)` : ''}` : 'weiter mit der Stadtbahn';
     return `<div class="pr-tip"><p><b>${ic('route')}Park + Ride ${esc(p[3])}</b> liegt an deiner Strecke: ${p[2]} Plätze, ${weiter}. Spart die Parkplatzsuche in der Innenstadt.</p>
@@ -5505,7 +5526,7 @@
       for (const q of places.slice(0, 60)) {
         const idx = fpStopsNear(q, q.z ? 400 : 80, 0);
         for (const i of idx) {
-          const name = fp.stops[i][1].replace(/^Bielefeld,\s*/, '');
+          const name = fp.stops[i][1].replace(FP_PREFIX, '');
           if (checked.has(name)) continue;
           checked.add(name);
           const info = stopInfo([fp.stops[i][2], fp.stops[i][3]], 'bahn');
@@ -5518,7 +5539,7 @@
         let alt = null, ad = 900;
         fp.stops.forEach((st, i) => {
           const d = dist(b, { lat: st[2], lon: st[3] });
-          if (d < ad && d > 30 && fp.kindOf && fp.kindOf[i] && fp.kindOf[i].has(0)) { const inf = stopInfo([st[2], st[3]], 'bahn'); if (inf && inf.ok === 1) { ad = d; alt = { name: st[1].replace(/^Bielefeld,\s*/, ''), d }; } }
+          if (d < ad && d > 30 && fp.kindOf && fp.kindOf[i] && fp.kindOf[i].has(0)) { const inf = stopInfo([st[2], st[3]], 'bahn'); if (inf && inf.ok === 1) { ad = d; alt = { name: st[1].replace(FP_PREFIX, ''), d }; } }
         });
         out.push({ icon: 'tram', head: `Kein Hochbahnsteig: ${b.name}`, text: `${b.z ? `Bei deinem Ziel ${b.z.name}` : 'Auf deinen Wegen'} liegt die Haltestelle ${b.name} ohne stufenlosen Einstieg.${alt ? ` Stufenlos geht es an ${alt.name}, etwa ${roundM(alt.d)} m entfernt.` : ''}${bad.length > 1 ? ` Dazu ${bad.length - 1} weitere.` : ''}`, act: mapBtn('Haltestellen ohne Hochbahnsteig', bad.slice(0, 6)), prio: 2 });
       }

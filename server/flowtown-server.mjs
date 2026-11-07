@@ -394,14 +394,28 @@ async function readMobiel() {
 const DELFI_URL = process.env.DELFI_GTFS_URL || '';
 const FAHRPLAN_AGENCY = process.env.FAHRPLAN_AGENCY || 'moBiel';
 const FAHRPLAN_FILE = path.join(DATA_DIR, 'fahrplan.json');
-let fahrplan = null, fahrplanRun = null;   // { stand, gilt, json (gzip), etag }
+// Weitere Städte aus demselben DELFI-Datensatz: alle Busse und Bahnen, die dort halten (Muster „*“), Stadt- und Regionsrahmen Süd,Nord,West,Ost.
+// Abschalten oder wählen mit FAHRPLAN_STAEDTE in /etc/flowtown.env (kommagetrennt, leer = nur Bielefeld).
+const STADT_FP = {
+  moenchengladbach: { name: 'Mönchengladbach', muster: '*', stadt: '51.10,51.26,6.30,6.58', region: '50.95,51.45,6.00,6.95' }
+};
+const FP_STAEDTE = [{ id: 'bielefeld', name: 'Bielefeld', file: FAHRPLAN_FILE, muster: FAHRPLAN_AGENCY, stadt: '', region: '', box: [51.90, 52.12, 8.38, 8.70] }]
+  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach' : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
+    .map((id) => Object.assign({ id, file: path.join(DATA_DIR, `fahrplan-${id}.json`), box: STADT_FP[id].stadt.split(',').map(Number) }, STADT_FP[id])));
+let fahrplan = null, fahrplanRun = null, fahrplanTry = 0;   // Bielefeld: { stand, gilt, json (gzip), etag }
+const fahrplaene = {};   // je Stadt dasselbe
 function loadFahrplan() {
-  try {
-    const raw = fs.readFileSync(FAHRPLAN_FILE);
-    const d = JSON.parse(raw);
-    fahrplan = { stand: d.stand, gilt: d.gilt, gz: zlib.gzipSync(raw, { level: 9 }), raw, etag: '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"', t: fs.statSync(FAHRPLAN_FILE).mtimeMs };
-  } catch (e) { if (e.code !== 'ENOENT') console.error('Fahrplan:', e.message); }
+  for (const c of FP_STAEDTE) {
+    try {
+      const raw = fs.readFileSync(c.file);
+      const d = JSON.parse(raw);
+      fahrplaene[c.id] = { id: c.id, name: c.name, box: c.box, stand: d.stand, gilt: d.gilt, gz: zlib.gzipSync(raw, { level: 9 }), raw, etag: '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"', t: fs.statSync(c.file).mtimeMs };
+    } catch (e) { if (e.code !== 'ENOENT') console.error(`Fahrplan ${c.name}:`, e.message); }
+  }
+  fahrplan = fahrplaene.bielefeld || null;
 }
+// Stadt mit Fahrplan an einer Stelle (Rahmen Süd, Nord, West, Ost)
+const fpStadtAt = (pos) => (pos ? FP_STAEDTE.find((c) => fahrplaene[c.id] && pos[0] >= c.box[0] && pos[0] <= c.box[1] && pos[1] >= c.box[2] && pos[1] <= c.box[3]) : null);
 async function refreshFahrplan() {
   if (!DELFI_URL) throw new Error('DELFI_GTFS_URL fehlt in /etc/flowtown.env');
   const zip = path.join(DATA_DIR, 'delfi-gtfs.zip');
@@ -410,27 +424,35 @@ async function refreshFahrplan() {
     if (!res.ok || !/zip|octet/.test(res.headers.get('content-type') || '')) throw new Error('Download: HTTP ' + res.status + ' ' + (res.headers.get('content-type') || ''));
     await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(zip));
     const script = path.join(path.dirname(new URL(import.meta.url).pathname), 'fahrplan-bielefeld.py');
-    const out = await new Promise((resolve, reject) => {
-      const p = spawn('python3', [script, zip, FAHRPLAN_FILE, FAHRPLAN_AGENCY]);
+    const run = (c) => new Promise((resolve, reject) => {
+      const p = spawn('python3', [script, zip, c.file, c.muster, c.stadt, c.region]);
       let log = '';
-      p.stdout.on('data', (c) => { log += c; }); p.stderr.on('data', (c) => { log += c; });
+      p.stdout.on('data', (x) => { log += x; }); p.stderr.on('data', (x) => { log += x; });
       p.on('error', (e) => reject(new Error('python3 nicht gefunden: ' + e.message)));
       p.on('close', (code) => (code === 0 ? resolve(log.trim()) : reject(new Error('Auszug: ' + log.trim().slice(-300)))));
     });
+    // nacheinander, damit der Speicher reicht; eine Stadt, die nicht klappt, hält die anderen nicht auf
+    const msgs = [];
+    for (const c of FP_STAEDTE) {
+      try { msgs.push(`${c.name}: ${await run(c)}`); } catch (e) { if (c.id === 'bielefeld') throw e; msgs.push(`${c.name}: ${e.message}`); }
+    }
     loadFahrplan();
     hstTick();
-    return out;
+    return msgs.join(' | ');
   } finally { fs.rmSync(zip, { force: true }); }
 }
 // stündlich prüfen: fehlt der Fahrplan oder ist er älter als 7 Tage, nachts zwischen 3 und 5 Uhr neu holen
 function fahrplanTick() {
   if (!DELFI_URL || fahrplanRun) return;
   const age = fahrplan ? Date.now() - fahrplan.t : Infinity, h = new Date().getHours();
-  if (age === Infinity || (age > 7 * 864e5 && h >= 3 && h < 5)) {
+  // eine neu eingetragene Stadt fehlt noch: einmal am Tag gleich nachholen
+  const fehlt = FP_STAEDTE.some((c) => !fahrplaene[c.id]) && Date.now() - fahrplanTry > 864e5;
+  if (age === Infinity || fehlt || (age > 7 * 864e5 && h >= 3 && h < 5)) {
+    fahrplanTry = Date.now();
     fahrplanRun = refreshFahrplan().then((m) => console.log('Fahrplan:', m)).catch((e) => console.error('Fahrplan:', e.message)).finally(() => { fahrplanRun = null; });
   }
 }
-function sendFahrplan(req, res, origin) {
+function sendFahrplan(req, res, origin, fahrplan) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: fahrplan.etag, Vary: 'Origin, Accept-Encoding' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
   if (req.headers['if-none-match'] === fahrplan.etag) { res.writeHead(304, h); return res.end(); }
@@ -1516,12 +1538,16 @@ const HST_URL = process.env.HALTESTELLEN_CSV_URL || '';
 const HST_CSV = path.join(DATA_DIR, 'haltestellen.csv'), HST_REPO = path.join(path.dirname(new URL(import.meta.url).pathname), 'haltestellen.csv');
 let hst = null, hstRun = null;
 const hstNorm = (n) => String(n || '').toLowerCase().replace(/^(bielefeld|bi-[^,]*),\s*/, '').replace(/ß/g, 'ss').replace(/strasse|str\.?/g, 'str').replace(/[^a-z0-9äöü]/g, '');
-let fpParsed = null;
-function fpData() {
-  if (!fahrplan) return null;
-  if (!fpParsed || fpParsed.etag !== fahrplan.etag) { fpParsed = JSON.parse(fahrplan.raw); fpParsed.etag = fahrplan.etag; }
-  return fpParsed;
+const fpParsedBy = {};
+function fpData(id) {
+  const f = fahrplaene[id || 'bielefeld'];
+  if (!f) return null;
+  const c = fpParsedBy[f.id];
+  if (!c || c.etag !== f.etag) { fpParsedBy[f.id] = JSON.parse(f.raw); fpParsedBy[f.id].etag = f.etag; fpParsedBy[f.id].stadtName = f.name; }
+  return fpParsedBy[f.id];
 }
+// „Bielefeld, Jahnplatz“ → „Jahnplatz“ (auch für die anderen Städte)
+const fpName = (n, d) => String(n || '').replace(new RegExp('^(' + ((d && d.stadtName) || 'Bielefeld') + '|Bi-[^,]*),\\s*', 'i'), '');
 // Stadtbahn-Haltestellen aus dem Fahrplan: Name (ohne „Bielefeld, “) → Bahnsteige
 function tramStops() {
   const d = fpData();
@@ -2055,11 +2081,11 @@ function berlinNow() {
   const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
   return { ymd: f.year + f.month + f.day, min: Number(f.hour) * 60 + Number(f.minute) };
 }
-function serverDepartures(name, kind) {
-  const d = fpData();
+function serverDepartures(name, kind, d) {
+  d = d || fpData();
   if (!d) return [];
   const k = hstNorm(name), idx = new Set();
-  d.stops.forEach((st, i) => { if (hstNorm(st[1]) === k) idx.add(i); });
+  d.stops.forEach((st, i) => { if (hstNorm(fpName(st[1], d)) === k) idx.add(i); });
   const { ymd, min } = berlinNow();
   const prev = (() => { const t = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)) - 864e5); return t.toISOString().slice(0, 10).replace(/-/g, ''); })();
   const out = [];
@@ -2071,7 +2097,7 @@ function serverDepartures(name, kind) {
       if (idx.has(pat[j])) {
         for (const [day, off] of [[ymd, 0], [prev, 1440]]) {
           const at = tm - off;
-          if (at >= min && at <= min + 60 && days.includes(day)) out.push({ in_min: at - min, linie: d.routes[t[0]][0], richtung: String(d.heads[t[2]] || '').replace(/^Bielefeld,\s*/, ''), art: ['Stadtbahn', '', 'Zug', 'Bus'][d.routes[t[0]][1]] || 'Bus' });
+          if (at >= min && at <= min + 60 && days.includes(day)) out.push({ in_min: at - min, linie: d.routes[t[0]][0], richtung: fpName(d.heads[t[2]], d), art: ['Stadtbahn', '', 'Zug', 'Bus'][d.routes[t[0]][1]] || 'Bus' });
         }
       }
       tm += t[5][j] || 0;
@@ -2326,7 +2352,7 @@ async function assistTool(name, a, ctx, act) {
   // Daten, die es nur für Bielefeld gibt
   if (['abfahrten_in_der_naehe', 'ampeln_mit_ton', 'verkehrslage', 'hinweise', 'orte_in_der_naehe'].includes(name)) {
     const o = a.ort ? await assistOrt(a.ort, ctx) : ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
-    if (o && ausserhalb(o.pos)) return { bei: o.name, hinweis: AUSSEN_HINWEIS + (name === 'verkehrslage' ? ' Staus und Sperrungen auf einer Strecke prüft das Werkzeug weg.' : '') };
+    if (o && ausserhalb(o.pos) && !(name === 'abfahrten_in_der_naehe' && fpStadtAt(o.pos))) return { bei: o.name, hinweis: AUSSEN_HINWEIS + (name === 'verkehrslage' ? ' Staus und Sperrungen auf einer Strecke prüft das Werkzeug weg.' : '') };
   }
   if (name === 'ort_barrierefreiheit') return bfOrtDetails(a.name, a.thema);
   if (name === 'vergleich' || name === 'weg_check') {
@@ -2367,15 +2393,16 @@ async function assistTool(name, a, ctx, act) {
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
   if (name === 'abfahrten_in_der_naehe') {
-    const o = await assistOrt(a.ort, ctx), d = fpData();
+    const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Kein Standort; frag, an welcher Haltestelle die Person ist' };
+    const fs0 = fpStadtAt(o.pos), d = fs0 ? fpData(fs0.id) : fpData();
     if (!d) return { fehler: 'Fahrplan nicht geladen' };
     const kind = a.nur === 'stadtbahn' ? 0 : a.nur === 'bus' ? 3 : null;
     const by = new Map();
-    for (const st of d.stops) { const nm = String(st[1]).replace(/^Bielefeld,\s*/, ''), dd = mAbs(o.pos, [st[2], st[3]]); if (dd <= 700 && (!by.has(nm) || dd < by.get(nm))) by.set(nm, dd); }
+    for (const st of d.stops) { const nm = fpName(st[1], d), dd = mAbs(o.pos, [st[2], st[3]]); if (dd <= 700 && (!by.has(nm) || dd < by.get(nm))) by.set(nm, dd); }
     const near = [...by.entries()].sort((x, y) => x[1] - y[1]).slice(0, 4);
     const out = [];
-    for (const [nm, dd] of near) { const ab = serverDepartures(nm, kind).slice(0, 3); if (ab.length) out.push({ haltestelle: nm, entfernung_m: Math.round(dd / 10) * 10, hochbahnsteig: hbsOf(nm), abfahrten: ab }); if (out.length >= 2) break; }
+    for (const [nm, dd] of near) { const ab = serverDepartures(nm, kind, d).slice(0, 3); if (ab.length) out.push({ haltestelle: nm, entfernung_m: Math.round(dd / 10) * 10, hochbahnsteig: fs0 && fs0.id !== 'bielefeld' ? undefined : hbsOf(nm), abfahrten: ab }); if (out.length >= 2) break; }
     return out.length ? { bei: o.name, haltestellen: out } : { bei: o.name, hinweis: 'In der nächsten Stunde keine Abfahrten an Haltestellen bis 700 m' };
   }
   if (name === 'ort_info') {
@@ -2617,7 +2644,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -2667,7 +2694,10 @@ const server = http.createServer(async (req, res) => {
       if (!radKeyOk(k)) return send(res, 400, { fehler: 'Unbekannte Kachel.' }, origin);
       try { return await sendRad(req, res, origin, k); } catch (e) { return send(res, 502, { fehler: 'Radwege gerade nicht abrufbar: ' + e.message }, origin); }
     }
-    if (req.method === 'GET' && p === '/api/fahrplan') return fahrplan ? sendFahrplan(req, res, origin) : send(res, 404, { fehler: 'Noch kein Fahrplan auf dem Server.' }, origin);
+    if (req.method === 'GET' && p === '/api/fahrplan') {
+      const fpx = fahrplaene[(url.searchParams.get('stadt') || 'bielefeld').toLowerCase()];
+      return fpx ? sendFahrplan(req, res, origin, fpx) : send(res, 404, { fehler: 'Noch kein Fahrplan auf dem Server.' }, origin);
+    }
     // „Wo bin ich?“: Adresse am Standort (auf etwa 10 m) und 30 m in Blickrichtung; nichts wird gespeichert
     if (req.method === 'GET' && p === '/api/wo') {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Adressen braucht einen HERE-Schlüssel auf dem Server.' }, origin);

@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 """Fahrplan von moBiel aus dem deutschlandweiten DELFI-Datensatz (GTFS) herausziehen.
 
-Aufruf: python3 fahrplan-bielefeld.py <gtfs.zip> <ziel.json> [Betreiber-Muster]
+Aufruf: python3 fahrplan-bielefeld.py <gtfs.zip> <ziel.json> [Betreiber-Muster] [Stadt S,N,W,O] [Region S,N,W,O]
 
 Liest die ZIP-Datei Zeile für Zeile, ohne sie auszupacken (stop_times.txt allein hat ausgepackt
 etwa 4 GB). Behält die Fahrten der Betreiber, deren Name auf das Muster passt (Standard: moBiel),
-und alle Züge (Nah- und Fernverkehr), die in Bielefeld halten, mit ihren Halten in der Region.
+und alle Züge (Nah- und Fernverkehr), die in der Stadt halten, mit ihren Halten in der Region.
+Muster „*“: alle Busse und Bahnen, die in der Stadt halten, gleich welcher Betreiber (für weitere Städte);
+dann wird stop_times.txt zweimal gelesen, damit nur die Fahrten der Stadt im Speicher sind.
 Schreibt eine kleine JSON-Datei: Haltestellen, Linien, Haltefolgen, Verkehrstage und Abfahrten,
 dazu die Stationen mit Aufzügen, Rolltreppen und Treppen.
 Nur Standardbibliothek, damit es auf jedem Server mit Python 3 läuft.
@@ -34,7 +36,16 @@ def inside(box, lat, lon):
     return box[0] <= lat <= box[1] and box[2] <= lon <= box[3]
 
 
-def stations(z, rows):
+def box(arg, default):
+    if not arg:
+        return default
+    v = tuple(float(x) for x in arg.split(','))
+    if len(v) != 4:
+        sys.exit('Rahmen bitte als Süd,Nord,West,Ost')
+    return v
+
+
+def stations(z, rows, in_city):
     """Stationen mit Wegen im Bauwerk (GTFS pathways): Aufzüge, Rolltreppen, Treppen in Bielefeld.
     Ergebnis je Station: [Name, Breite, Länge, Aufzüge, Rolltreppen, Treppen]; gezählt werden Verbindungen, nicht Geräte."""
     if 'pathways.txt' not in z.namelist():
@@ -43,7 +54,7 @@ def stations(z, rows):
     count = {}
     for p in rows('pathways.txt'):
         a, b = p['from_stop_id'], p['to_stop_id']
-        if not a.startswith('de:05711:'):
+        if a not in in_city and parent(a) not in in_city:
             continue
         mode = {'5': 0, '4': 1, '2': 2}.get(p['pathway_mode'])
         if mode is None:
@@ -64,15 +75,20 @@ def stations(z, rows):
 
 
 def main():
+    global CITY, REGION
     src, dst = sys.argv[1], sys.argv[2]
-    pattern = re.compile(sys.argv[3] if len(sys.argv) > 3 else 'moBiel', re.I)
+    pat = sys.argv[3] if len(sys.argv) > 3 and sys.argv[3] else 'moBiel'
+    alle = pat == '*'
+    pattern = re.compile('.' if alle else pat, re.I)
+    CITY = box(sys.argv[4] if len(sys.argv) > 4 else '', CITY)
+    REGION = box(sys.argv[5] if len(sys.argv) > 5 else '', REGION)
     t0 = time.time()
     z = zipfile.ZipFile(src)
     rows = lambda name: csv.DictReader(io.TextIOWrapper(z.open(name), encoding='utf-8-sig', newline=''))
 
     feed = next(rows('feed_info.txt'), {})
     agency_name = {a['agency_id']: a['agency_name'] for a in rows('agency.txt')}
-    agencies = {k for k, v in agency_name.items() if pattern.search(v)}
+    agencies = set(agency_name) if alle else {k for k, v in agency_name.items() if pattern.search(v)}
     if not agencies:
         sys.exit('Kein Betreiber passt auf ' + pattern.pattern)
 
@@ -91,12 +107,25 @@ def main():
             if inside(CITY, lat, lon):
                 in_city.add(s['stop_id'])
 
+    # Muster „*“: erster Durchlauf durch stop_times, nur die Fahrten merken, die in der Stadt halten
+    keep = None
+    if alle:
+        keep = set()
+        with z.open('stop_times.txt') as f:
+            text = io.TextIOWrapper(f, encoding='utf-8-sig', newline='')
+            head = next(csv.reader([text.readline()]))
+            si = head.index('stop_id')
+            for line in text:
+                v = line.rstrip('\r\n').split(',') if '"' not in line else next(csv.reader([line]))
+                if len(v) > si and v[si] in in_city:
+                    keep.add(v[0])
+
     routes, route_idx, rail_routes = [], {}, set()
     for r in rows('routes.txt'):
         rt = int(r['route_type'] or 3)
         if r['agency_id'] in agencies or rt in RAIL:
             route_idx[r['route_id']] = len(routes)
-            if r['agency_id'] in agencies:
+            if r['agency_id'] in agencies and not (alle and rt in RAIL):
                 routes.append([r['route_short_name'], kind(rt)])
             else:   # Züge: GTFS-Typ (101 ICE, 102 IC/EC) und Betreiber
                 routes.append([r['route_short_name'], 2, rt, agency_name.get(r['agency_id'], '')])
@@ -105,7 +134,7 @@ def main():
     trips, heads, head_idx = {}, [], {}
     for t in rows('trips.txt'):
         ri = route_idx.get(t['route_id'])
-        if ri is None:
+        if ri is None or (keep is not None and t['trip_id'] not in keep):
             continue
         h = t['trip_headsign']
         if h not in head_idx:
@@ -187,7 +216,7 @@ def main():
         'stops': stops, 'routes': [routes[i] for i in used_routes], 'heads': heads, 'patterns': patterns,
         'services': {k: sorted(v) for k, v in days.items() if v and k in used_services}, 'trips': out_trips
     }
-    out['stationen'] = stations(z, rows)
+    out['stationen'] = stations(z, rows, in_city)
     with open(dst + '.tmp', 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     os.replace(dst + '.tmp', dst)
