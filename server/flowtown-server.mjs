@@ -2005,7 +2005,7 @@ const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'oepnv_stoerungen', description: 'Aktuelle Umleitungen und Störungen bei Bus und Stadtbahn von moBiel und gemeldete defekte Aufzüge.', parameters: { type: 'object', properties: {
     linie: { type: 'string', description: 'z. B. 4 oder 25; leer = alle' } } } } },
   { type: 'function', function: { name: 'abfahrten_in_der_naehe', description: 'Die nächsten Abfahrten laut Fahrplan an den Haltestellen am nächsten beim Standort oder bei einem Ort, ohne dass die Person eine Haltestelle nennen muss.', parameters: { type: 'object', properties: {
-    ort: { type: 'string', description: 'leer = Standort' }, nur: { type: 'string', enum: ['stadtbahn', 'bus', 'alle'] } } } } },
+    ort: { type: 'string', description: 'leer = Standort' }, nur: { type: 'string', enum: ['stadtbahn', 'zug', 'bus', 'alle'] } } } } },
   { type: 'function', function: { name: 'ort_info', description: 'Was an einem Ort zählt, an dem die Person sein will (nicht am Standort): Barrierefreiheit des Gebäudes laut Bielefeld barrierefrei erleben, nächstes rollstuhlgerechtes WC und Toilette, Behindertenparkplatz, nächste Stadtbahn-Haltestelle mit Hochbahnsteig, gemeldete Hindernisse.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'Name, Gebäude oder Adresse; in einer anderen Stadt mit Stadtnamen' } }, required: ['ort'] } } },
   { type: 'function', function: { name: 'ampeln_mit_ton', description: 'Ampeln in der Nähe eines Orts mit Angabe, ob sie ein Tonsignal für blinde Menschen haben, und den Straßen der Kreuzung.', parameters: { type: 'object', properties: {
@@ -2397,13 +2397,17 @@ async function assistTool(name, a, ctx, act) {
     if (!o) return { fehler: 'Kein Standort; frag, an welcher Haltestelle die Person ist' };
     const fs0 = fpStadtAt(o.pos), d = fs0 ? fpData(fs0.id) : fpData();
     if (!d) return { fehler: 'Fahrplan nicht geladen' };
-    const kind = a.nur === 'stadtbahn' ? 0 : a.nur === 'bus' ? 3 : null;
+    let kind = a.nur === 'stadtbahn' ? 0 : a.nur === 'zug' ? 2 : a.nur === 'bus' ? 3 : null, artHinweis;
+    // ohne Stadtbahn in der Stadt (etwa Mönchengladbach) heißt „Bahn“ Zug oder S-Bahn
+    if (kind === 0 && !d.routes.some((r) => r[1] === 0)) { kind = 2; artHinweis = `In ${d.stadtName || 'dieser Stadt'} gibt es keine Stadtbahn; Bahn heißt hier Zug oder S-Bahn.`; }
     const by = new Map();
     for (const st of d.stops) { const nm = fpName(st[1], d), dd = mAbs(o.pos, [st[2], st[3]]); if (dd <= 700 && (!by.has(nm) || dd < by.get(nm))) by.set(nm, dd); }
     const near = [...by.entries()].sort((x, y) => x[1] - y[1]).slice(0, 4);
-    const out = [];
-    for (const [nm, dd] of near) { const ab = serverDepartures(nm, kind, d).slice(0, 3); if (ab.length) out.push({ haltestelle: nm, entfernung_m: Math.round(dd / 10) * 10, hochbahnsteig: fs0 && fs0.id !== 'bielefeld' ? undefined : hbsOf(nm), abfahrten: ab }); if (out.length >= 2) break; }
-    return out.length ? { bei: o.name, haltestellen: out } : { bei: o.name, hinweis: 'In der nächsten Stunde keine Abfahrten an Haltestellen bis 700 m' };
+    const suche = (k) => { const res = []; for (const [nm, dd] of near) { const ab = serverDepartures(nm, k, d).slice(0, 3); if (ab.length) res.push({ haltestelle: nm, entfernung_m: Math.round(dd / 10) * 10, hochbahnsteig: fs0 && fs0.id !== 'bielefeld' ? undefined : hbsOf(nm), abfahrten: ab }); if (res.length >= 2) break; } return res; };
+    let out = suche(kind);
+    // nichts mit dieser Art in der Nähe: alle Abfahrten nennen und das sagen
+    if (!out.length && kind != null) { out = suche(null); if (out.length) artHinweis = (artHinweis ? artHinweis + ' ' : '') + 'Mit dieser Art fährt in der nächsten Stunde nichts in der Nähe; das hier sind die anderen Abfahrten.'; }
+    return out.length ? { bei: o.name, haltestellen: out, hinweis: artHinweis } : { bei: o.name, hinweis: (artHinweis ? artHinweis + ' ' : '') + 'In der nächsten Stunde keine Abfahrten an Haltestellen bis 700 m' };
   }
   if (name === 'ort_info') {
     const o = await assistOrt(a.ort, ctx);
