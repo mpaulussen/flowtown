@@ -53,6 +53,9 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [ ] F2 Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal aus OpenStreetMap auch außerhalb von Bielefeld (am Ziel)
 - [ ] F3 Fahrplan für andere Verbünde (DELFI-Daten für ganz Deutschland, für Mönchengladbach VRR und NEW)
 - [ ] F4 Quellen je Stadt sammeln (Open Data der Stadt, Barrierefrei-Datenbanken wie Wheelmap)
+- [x] F5 Öffentliche Toiletten der Stadt Bielefeld (48, davon 23 barrierefrei, mit Öffnungszeiten und Entgelt) in Karte, am Ziel und in der KI (0.92.1). Offen: Lizenz bei der Stadt klären (Open.NRW nennt „andere geschlossene Lizenz“)
+- [ ] F6 Verkehrsinformationen der VIZ.NRW (Staus, Unfälle, Sperrungen, jede Minute) und Umleitungen von Baustellen außerhalb der Autobahnen, beide Datenlizenz Deutschland – Zero, DATEX II über die Mobilithek. Schritte: Konto bei mobilithek.info anlegen, beide Angebote abonnieren (Straßen.NRW muss freigeben), Maschinenzertifikat erzeugen und auf dem Server ablegen, dann Anbindung im Server
+- [ ] F7 Später, je Stadt auf Open.NRW: Behindertenparkplätze (Köln, Düsseldorf, Gelsenkirchen, Neuss, Bochum, Moers), barrierefreie Toiletten (Dortmund, Duisburg, Köln, Münster, Neuss), Ampeln mit Tonsignal (Köln), Aufzüge KVB (Köln), Baustellen (Köln, Dortmund, Duisburg, Münster, Aachen), Parkhaus-Belegung (Köln, Münster, Bonn), Bänke (Bochum, Soest, Neuss); landesweit Soll-Fahrplan NRW (GTFS, CC BY 4.0, Beta) und Leihroller und Leihräder (Dott, VOI, Bolt, Lime, nextbike)
 
 ## G. Entscheidungen
 - [ ] G1 Vorgabe für „Weiter geradeaus“: 10 m wie in der Norm oder 25 m?

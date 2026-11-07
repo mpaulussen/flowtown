@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.92.0';
+  const VERSION = '0.92.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3537,7 +3537,7 @@
     for (const w of bfData.wc || []) {
       if (w[2] !== 1) continue;
       L.circleMarker([w[0], w[1]], { radius: 6, color: '#ffffff', weight: 2, fillColor: '#1d5fa6', fillOpacity: 1 })
-        .bindPopup(`<strong>Rollstuhlgerechte Toilette</strong>${w[3] ? '<br>' + esc(w[3]) : ''}${w[4] ? '<br>mit Euroschlüssel' : ''}<br><span class="muted">Laut OpenStreetMap</span>`).addTo(g);
+        .bindPopup(`<strong>Rollstuhlgerechte Toilette</strong>${w[3] ? '<br>' + esc(w[3]) : ''}${w[8] ? ', ' + esc(w[8]) : ''}${w[5] ? '<br>' + esc(w[5]) : ''}${w[6] ? (/^nein/i.test(w[6]) ? '<br>kostenlos' : /^ja/i.test(w[6]) ? '<br>kostenpflichtig' : '<br>' + esc(w[6])) : ''}${w[4] ? '<br>mit Euroschlüssel' : ''}${w[9] ? '<br>' + esc(w[9]) : ''}<br><span class="muted">${w[7] === 's' ? 'Stadt Bielefeld (Open Data)' : 'Laut OpenStreetMap'}</span>`).addTo(g);
     }
     if (!bpp) await loadBpp();
     for (const p of (bpp && bpp.plaetze) || []) {

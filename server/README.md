@@ -141,6 +141,10 @@ Er liest die Liste beim Start und dann stündlich und nennt im Protokoll jede Ze
 
 **Aufzüge:** Der Fahrplan-Auszug zieht aus DELFI die Wege in Stationen (Aufzüge, Rolltreppen, Treppen), z. B. Hauptbahnhof, Jahnplatz, Nordpark. Die App zeigt dann „✓ Aufzug“. Dafür den Fahrplan einmal neu holen: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown` (dauert einige Minuten).
 
+### Öffentliche Toiletten der Stadt
+
+Der Server holt einmal am Tag die öffentlichen Toiletten der Stadt Bielefeld aus dem Geodienst der Stadt (Open Data „Öffentliche Toiletten“, www.bielefeld01.de): Name, Adresse, Öffnungszeiten, barrierefrei ja oder nein, Entgelt. Sie gehen vor den Toiletten aus OpenStreetMap; eine OSM-Toilette bis 30 m daneben fällt weg. Sie erscheinen auf der Karte, am Ziel und in der Assistenz. Abschalten wie alle Stadtdaten mit `STADT_DATEN=0`. `/api/health` zeigt unter `toilettenStadt` Anzahl und Stand.
+
 ### Behindertenparkplätze
 
 Mit dem Auto zeigt „Wohin?“ beim Ziel die Behindertenparkplätze bis 400 m entfernt. Mit Profil ist der Abschnitt offen, ohne Profil eingeklappt. Auf der Karte erscheinen sie unter „Barrierefrei“ als blaues P.

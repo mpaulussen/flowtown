@@ -1405,7 +1405,7 @@ function bfTick() {
   }
 }
 function sendBf(req, res, origin) {
-  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: bf.wc, lift: bf.lift, faqOrte: bf.faqOrte || null }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
+  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: wcAll(), lift: bf.lift, faqOrte: bf.faqOrte || null }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: bf.etag, Vary: 'Origin, Accept-Encoding' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
   if (req.headers['if-none-match'] === bf.etag) { res.writeHead(304, h); return res.end(); }
@@ -1777,6 +1777,37 @@ async function stadtCsv(dienst, typ) {
     }).filter((o) => o.pos && inBox(o.pos[0], o.pos[1], 0.1));
   } finally { clearTimeout(timer); }
 }
+// Öffentliche Toiletten der Stadt Bielefeld (Open Data): [Breite, Länge, rollstuhlgerecht 1/0/null, Name, Euroschlüssel, Öffnungszeiten, Entgelt, 's', Straße, Anmerkung]
+const SWC_FILE = path.join(DATA_DIR, 'toiletten_stadt.json');
+let swc = null, swcRun = null, swcTry = 0;
+try { swc = JSON.parse(fs.readFileSync(SWC_FILE, 'utf8')); } catch (e) { swc = null; }
+async function refreshSwc() {
+  const rows = await stadtCsv('offentliche_toiletten', 'toiletten_p');
+  if (rows.length < 10) throw new Error(`nur ${rows.length} Toiletten geliefert`);
+  const yn = (v) => (/^ja/i.test(v || '') ? 1 : /^nein/i.test(v || '') ? 0 : null);
+  const list = rows.map((o) => [r5(o.pos[0]), r5(o.pos[1]), yn(o.barfrei), clip(o.einricht || 'Öffentliche Toilette', 40), /euro/i.test((o.anmerkun || '') + ' ' + (o.oeff || '')) ? 1 : 0,
+    clip(o.oeff, 80), clip(o.entgelt, 30), 's', clip(o.str, 40), clip(o.anmerkun, 100)]);
+  swc = { t: Date.now(), quelle: 'Stadt Bielefeld (Open Data)', wc: list };
+  fs.writeFileSync(SWC_FILE + '.tmp', JSON.stringify(swc));
+  fs.renameSync(SWC_FILE + '.tmp', SWC_FILE);
+  if (bf) bf.gz = null;
+  return `${list.length} Toiletten, davon ${list.filter((w) => w[2] === 1).length} barrierefrei`;
+}
+function swcTick() {
+  if (!STADT_ON || swcRun || (swc && Date.now() - swc.t < 864e5) || Date.now() - swcTry < 3600e3) return;
+  swcTry = Date.now();
+  swcRun = refreshSwc().then((m) => console.log('Toiletten der Stadt:', m)).catch((e) => console.error('Toiletten der Stadt:', e.message)).finally(() => { swcRun = null; });
+}
+// alle Toiletten: die der Stadt (mit Öffnungszeiten), dazu OpenStreetMap ohne die, die bis 30 m neben einer der Stadt liegen
+function wcAll() {
+  const st = (swc && swc.wc) || [], osm = (bf && bf.wc) || [];
+  const nah = (a, b) => Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1]) * 68500) < 30;
+  const out = st.map((w) => { if (w[2] != null) return w; const o = osm.find((x) => nah(x, w)); return o && o[2] != null ? [w[0], w[1], o[2]].concat(w.slice(3)) : w; });
+  return out.concat(osm.filter((w) => !st.some((x) => nah(x, w))));
+}
+const wcInfo = (w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt',
+  oeffnungszeiten: w[5] || undefined, entgelt: w[6] ? (/^nein/i.test(w[6]) ? 'kostenlos' : /^ja/i.test(w[6]) ? 'kostenpflichtig' : w[6]) : undefined, hinweis: w[9] || undefined,
+  quelle: w[7] === 's' ? 'Stadt Bielefeld' : 'OpenStreetMap', pos: [w[0], w[1]] });
 // Ampelanlagen: [Breite, Länge, Nummer, Art, Betreiber, Kennung] – Art kp Kreuzung, fu Fußgängerampel, sw Stadtwerke (Stadtbahn), so Sonstige; Betreiber s Stadt, l Straßen.NRW
 const LSA_FILE = path.join(DATA_DIR, 'ampelanlagen.json');
 let lsa = null, lsaRun = null, lsaTry = 0;
@@ -2275,7 +2306,7 @@ function zielInfo(pos, name, typ) {
     if (nah.length) out.barrierefreie_orte_nah = nah;
   }
   if (!bf || !(bf.orte || []).length) out.hinweis_daten = 'Die Daten von Bielefeld barrierefrei erleben sind auf dem Server gerade nicht geladen.';
-  const wc = (bf && bf.wc || []).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', quelle: 'OpenStreetMap', pos: [w[0], w[1]] }))
+  const wc = wcAll().map(wcInfo)
     .concat((bf && bf.orte || []).filter((x) => x.f && x.f.wc === 1).map((x) => ({ name: 'WC im Gebäude ' + x.n, rollstuhlgerecht: 'ja', quelle: 'Bielefeld barrierefrei erleben', pos: [x.lat, x.lon] })));
   out.rollstuhl_wc = strip(near(wc.filter((w) => w.rollstuhlgerecht === 'ja'), 800)) || 'keines bis 800 m bekannt';
   if (!['rollstuhl', 'rollator'].includes(typ)) out.toilette = strip(near(wc, 600)) || 'keine bis 600 m bekannt';
@@ -2367,7 +2398,7 @@ async function assistTool(name, a, ctx, act) {
     const maxM = a.art === 'park_and_ride' ? 20000 : 2000;
     const near = (list) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(o.pos, x.pos) })).filter((x) => x.entfernung_m <= maxM).sort((p, q) => p.entfernung_m - q.entfernung_m).slice(0, 4).map((x) => { delete x.pos; return x; });
     let list = [];
-    if (a.art === 'rollstuhl_toilette' || a.art === 'toilette') list = (bf && bf.wc || []).filter((w) => a.art === 'toilette' || w[2] === 1).map((w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt', quelle: 'OpenStreetMap', pos: [w[0], w[1]] }));
+    if (a.art === 'rollstuhl_toilette' || a.art === 'toilette') list = wcAll().filter((w) => a.art === 'toilette' || w[2] === 1).map(wcInfo);
     if (a.art === 'behindertenparkplatz') list = (bpp && bpp.plaetze || []).map((p) => ({ name: p[3] || 'Behindertenparkplatz', plaetze: p[2] || null, quelle: p[4] === 's' ? 'Stadt Bielefeld' : 'OpenStreetMap', pos: [p[0], p[1]] }));
     if (a.art === 'aufzug') list = (bf && bf.lift || []).map((x) => ({ name: 'Aufzug', pos: [x[0], x[1]] })).concat(((fpData() || {}).stationen || []).filter((st) => st[3] > 0).map((st) => ({ name: 'Aufzug an der Station ' + st[0].replace(/^Bielefeld,\s*/, ''), pos: [st[1], st[2]] })));
     if (a.art === 'park_and_ride') list = (stadt2 && stadt2.pr || []).map((p) => ({ name: 'Park + Ride ' + p[3], adresse: p[4], plaetze: p[2], pos: [p[0], p[1]] }));
@@ -2586,7 +2617,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -2861,6 +2892,7 @@ if (cli === 'faq') {
   setTimeout(hstTick, 3000); setInterval(hstTick, 3600e3);
   setTimeout(bppTick, 40000); setInterval(bppTick, 3600e3);
   setTimeout(lsaTick, 15000); setInterval(lsaTick, 3600e3);
+  setTimeout(swcTick, 20000); setInterval(swcTick, 3600e3);
   setTimeout(stadt2Tick, 25000); setInterval(stadt2Tick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }
