@@ -8,6 +8,7 @@ import zlib from 'node:zlib';
 import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import readline from 'node:readline';
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -1427,7 +1428,7 @@ function bfTick() {
   }
 }
 function sendBf(req, res, origin) {
-  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: wcAll(), lift: bf.lift, faqOrte: bf.faqOrte || null }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
+  if (!bf.gz) { const raw = JSON.stringify({ t: bf.t, quelle: bf.quelle, link: bf.link, orte: bf.orte, wc: wcAll(), lift: ((dl) => (bf.lift || []).filter((l) => !dl.some((d) => Math.hypot((d[0] - l[0]) * 111320, (d[1] - l[1]) * 68500) < 25)).concat(dl))(dbaLifts()), faqOrte: bf.faqOrte || null }); bf.gz = zlib.gzipSync(raw, { level: 9 }); bf.raw = raw; bf.etag = '"' + crypto.createHash('sha1').update(raw).digest('hex').slice(0, 16) + '"'; }
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-cache', ETag: bf.etag, Vary: 'Origin, Accept-Encoding' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
   if (req.headers['if-none-match'] === bf.etag) { res.writeHead(304, h); return res.end(); }
@@ -1834,6 +1835,119 @@ function wcAll() {
 const wcInfo = (w) => ({ name: w[3] || 'Toilette', rollstuhlgerecht: w[2] === 1 ? 'ja' : w[2] === 2 ? 'teilweise' : w[2] === 0 ? 'nein' : 'unbekannt', euroschluessel: w[4] ? 'ja' : 'unbekannt',
   oeffnungszeiten: w[5] || undefined, entgelt: w[6] ? (/^nein/i.test(w[6]) ? 'kostenlos' : /^ja/i.test(w[6]) ? 'kostenpflichtig' : w[6]) : undefined, hinweis: w[9] || undefined,
   quelle: w[7] === 's' ? 'Stadt Bielefeld' : 'OpenStreetMap', pos: [w[0], w[1]] });
+// ---------- Aufzüge und Rolltreppen an DB-Bahnhöfen (DB InfraGO OpenStation, CC0) über die Mobilithek ----------
+// Stammdaten (NeTEx, etwa 300 MB) einmal pro Woche: nur Aufzüge und Rolltreppen mit Bahnhof, Bezeichnung, Lage, Innenbreite.
+// Status (SIRI FM) alle 5 Minuten. Abruf mit dem Maschinenzertifikat über curl (verträgt auch ältere .p12-Dateien).
+// Einrichtung: MOBILITHEK_CERT und MOBILITHEK_CERT_PASS in /etc/flowtown.env; Abo-IDs ändern mit MOBILITHEK_ABO_NETEX und MOBILITHEK_ABO_SIRIFM.
+const MOBI_URL = (process.env.MOBILITHEK_URL || 'https://mobilithek.info:8443/mobilithek/api/v1.0').replace(/\/$/, '');
+const MOBI_CERT = process.env.MOBILITHEK_CERT || '', MOBI_PASS = process.env.MOBILITHEK_CERT_PASS || '';
+const MOBI_ON = !!MOBI_CERT || /^http:\/\/127\./.test(MOBI_URL);
+const MOBI_ABO = { netex: process.env.MOBILITHEK_ABO_NETEX || '1056540005609947136', sirifm: process.env.MOBILITHEK_ABO_SIRIFM || '1056533070466469888' };
+// Abo abholen (Container-Schnittstelle) in eine Datei; das Passwort geht über stdin an curl, nicht in die Prozessliste
+function mobiFetch(abo, file, maxSec) {
+  return new Promise((resolve, reject) => {
+    const q = (v) => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
+    const cfg = [`url = ${q(`${MOBI_URL}/container/subscription?subscriptionID=${abo}`)}`, `output = ${q(file)}`, 'compressed', 'silent', 'show-error', `max-time = ${maxSec || 300}`, 'write-out = "%{http_code}"']
+      .concat(MOBI_CERT && /^https:/.test(MOBI_URL) ? [`cert-type = "P12"`, `cert = ${q(MOBI_CERT + ':' + MOBI_PASS)}`] : []);
+    const p = spawn('curl', ['-K', '-']);
+    let out = '', err = '';
+    p.stdout.on('data', (c) => { out += c; }); p.stderr.on('data', (c) => { err += c; });
+    p.on('error', (e) => reject(new Error('curl nicht gefunden: ' + e.message)));
+    p.on('close', (code) => {
+      const st = Number(out.trim().slice(-3));
+      if (code !== 0) return reject(new Error('curl ' + code + ': ' + err.trim().slice(0, 200)));
+      if (st !== 200) return reject(new Error('Mobilithek HTTP ' + st));
+      resolve(st);
+    });
+    p.stdin.end(cfg.join('\n') + '\n');
+  });
+}
+const DBA_FILE = path.join(DATA_DIR, 'aufzuege_db.json');
+let dba = null, dbaRun = null, dbaTry = 0, dbaStatus = { t: 0, s: {} }, dbsRun = null;
+try { dba = JSON.parse(fs.readFileSync(DBA_FILE, 'utf8')); } catch (e) { dba = null; }
+// NeTEx zeilenweise lesen: Bahnhof (Name, Ort, erste Koordinate), Aufzüge und Rolltreppen, Lage aus dem Einbauort
+async function parseNetex(file) {
+  const rl = readline.createInterface({ input: fs.createReadStream(file, { encoding: 'utf8' }), crlfDelay: Infinity });
+  const eq = {}, stand = { t: '' };
+  let sp = null, cur = null, place = null, m;
+  for await (const line of rl) {
+    if (!stand.t && (m = /<PublicationTimestamp>([^<]+)/.exec(line))) stand.t = m[1];
+    if ((m = /<StopPlace [^>]*id="([^"]+)"/.exec(line))) { sp = { id: m[1], name: '', ort: '', lat: null, lon: null }; cur = place = null; continue; }
+    if (!sp) continue;
+    if (line.includes('</StopPlace>')) { for (const k in eq) if (eq[k].sid === sp.id && eq[k].lat == null && sp.lat != null) { eq[k].lat = sp.lat; eq[k].lon = sp.lon; } sp = null; continue; }
+    if (cur) {
+      if (/<\/(LiftEquipment|EscalatorEquipment)>/.test(line)) { cur = null; continue; }
+      if (!cur.n && (m = /<Name[^>]*>([^<]+)/.exec(line))) cur.n = m[1].trim();
+      else if ((m = /<InternalWidth>([\d.]+)/.exec(line))) cur.w = Number(m[1]);
+      else if ((m = /<WheelchairPassable>(\w+)/.exec(line))) cur.r = m[1] === 'true';
+      continue;
+    }
+    if ((m = /<(LiftEquipment|EscalatorEquipment) [^>]*id="(diid:[^"]+)"/.exec(line))) { cur = eq[m[2]] = Object.assign(eq[m[2]] || {}, { k: m[1] === 'LiftEquipment' ? 'aufzug' : 'rolltreppe', st: sp.name, ort: sp.ort, sid: sp.id }); continue; }
+    if (!sp.name && (m = /<Name[^>]*>([^<]+)/.exec(line))) { sp.name = m[1].trim(); continue; }
+    if (!sp.ort && (m = /<Town[^>]*>([^<]+)/.exec(line))) sp.ort = m[1].trim();
+    if (line.includes('<EquipmentPlace ')) place = { lat: null, lon: null };
+    if ((m = /<Latitude>(-?[\d.]+)/.exec(line))) { const v = Number(m[1]); if (place) place.lat = v; if (sp.lat == null) sp.lat = v; }
+    if ((m = /<Longitude>(-?[\d.]+)/.exec(line))) { const v = Number(m[1]); if (place) place.lon = v; if (sp.lon == null) sp.lon = v; }
+    if (place && place.lat != null && (m = /<(?:Lift|Escalator)EquipmentRef ref="(diid:[^"]+)"/.exec(line))) { const e = eq[m[1]] || (eq[m[1]] = {}); if (e.lat == null) { e.lat = place.lat; e.lon = place.lon; } }
+    if (line.includes('</EquipmentPlace>')) place = null;
+  }
+  // [Kennung, Art, Bahnhof, Ort, Bezeichnung, Breite, Länge, Innenbreite, rollstuhlgerecht]
+  const anlagen = Object.entries(eq).filter(([, e]) => e.k && e.st && e.lat != null)
+    .map(([id, e]) => [id, e.k, clip(e.st, 60), clip(e.ort, 40), clip(e.n || '', 80), r5(e.lat), r5(e.lon), e.w || null, e.r == null ? null : e.r ? 1 : 0]);
+  return { t: Date.now(), stand: stand.t, anlagen };
+}
+async function refreshDba() {
+  const file = path.join(DATA_DIR, 'openstation-netex.xml');
+  try {
+    await mobiFetch(MOBI_ABO.netex, file, 900);
+    const d = await parseNetex(file);
+    if (d.anlagen.length < (/^http:\/\/127\./.test(MOBI_URL) ? 1 : 50)) throw new Error(`nur ${d.anlagen.length} Anlagen gelesen`);   // Schutz gegen halbe Downloads (lokaler Test: 1)
+    dba = d;
+    fs.writeFileSync(DBA_FILE + '.tmp', JSON.stringify(dba));
+    fs.renameSync(DBA_FILE + '.tmp', DBA_FILE);
+    return `${d.anlagen.filter((a) => a[1] === 'aufzug').length} Aufzüge, ${d.anlagen.filter((a) => a[1] === 'rolltreppe').length} Rolltreppen, Stand ${d.stand}`;
+  } finally { fs.rmSync(file, { force: true }); }
+}
+async function refreshDbStatus() {
+  const file = path.join(DATA_DIR, 'openstation-sirifm.xml');
+  try {
+    await mobiFetch(MOBI_ABO.sirifm, file, 120);
+    const xml = fs.readFileSync(file, 'utf8'), s = {};
+    for (const m of xml.matchAll(/<FacilityRef>([^<]+)<\/FacilityRef>[\s\S]*?<Status>([^<]+)<\/Status>/g)) s[m[1].trim()] = m[2].trim();
+    if (!Object.keys(s).length) throw new Error('kein Status gelesen');
+    dbaStatus = { t: Date.now(), s };
+    if (bf) bf.gz = null;
+    return Object.keys(s).length;
+  } finally { fs.rmSync(file, { force: true }); }
+}
+function dbaTick() {
+  if (!MOBI_ON) return;
+  if (!dbaRun && (!dba ? Date.now() - dbaTry > 864e5 : Date.now() - dba.t > 7 * 864e5 && new Date().getHours() >= 2 && new Date().getHours() < 5)) {
+    dbaTry = Date.now();
+    dbaRun = refreshDba().then((m) => { console.log('DB-Aufzüge:', m); setTimeout(dbaTick, 1000); }).catch((e) => console.error('DB-Aufzüge:', e.message)).finally(() => { dbaRun = null; });
+  }
+  if (dba && !dbsRun && Date.now() - dbaStatus.t > 270e3) dbsRun = refreshDbStatus().catch((e) => console.error('DB-Aufzüge Status:', e.message)).finally(() => { dbsRun = null; });
+}
+const DBA_TEXT = { available: 'in Betrieb', notAvailable: 'außer Betrieb', partiallyAvailable: 'eingeschränkt', unknown: 'Status unbekannt' };
+const dbaState = (id) => (Date.now() - dbaStatus.t < 30 * 60e3 ? dbaStatus.s[id] : null) || null;
+// Anlagen an einem Bahnhof nahe einer Stelle (bis max m): Bahnhof, Anzahl, was außer Betrieb ist
+function dbaAt(pos, max) {
+  if (!dba || !pos) return null;
+  const near = dba.anlagen.map((a) => ({ a, d: mAbs(pos, [a[5], a[6]]) })).filter((x) => x.d <= (max || 600));
+  if (!near.length) return null;
+  near.sort((x, y) => x.d - y.d);
+  const st = near[0].a[2], list = near.filter((x) => x.a[2] === st).map((x) => x.a);
+  const aus = list.filter((a) => /^(notAvailable|partiallyAvailable)$/.test(dbaState(a[0]) || ''));
+  return { bahnhof: st, aufzuege: list.filter((a) => a[1] === 'aufzug').length, rolltreppen: list.filter((a) => a[1] === 'rolltreppe').length,
+    ausser_betrieb: aus.map((a) => `${a[1] === 'aufzug' ? 'Aufzug' : 'Rolltreppe'} ${a[4]} (${DBA_TEXT[dbaState(a[0])]})`),
+    status: Date.now() - dbaStatus.t < 30 * 60e3 ? `aktuell, Stand ${uhr(dbaStatus.t)}` : 'kein aktueller Status', quelle: 'DB InfraGO (OpenStation, CC0)' };
+}
+// für die Karte: Aufzüge der DB in den Städten mit Fahrplan, mit Status
+function dbaLifts() {
+  if (!dba) return [];
+  return dba.anlagen.filter((a) => a[1] === 'aufzug' && FP_STAEDTE.some((c) => a[5] >= c.box[0] && a[5] <= c.box[1] && a[6] >= c.box[2] && a[6] <= c.box[3]))
+    .map((a) => [a[5], a[6], a[8] === 0 ? 0 : 1, `${a[2]}: ${a[4] || 'Aufzug'}`, dbaState(a[0]) || '', 'db', a[7] || null]);
+}
 // Ampelanlagen: [Breite, Länge, Nummer, Art, Betreiber, Kennung] – Art kp Kreuzung, fu Fußgängerampel, sw Stadtwerke (Stadtbahn), so Sonstige; Betreiber s Stadt, l Straßen.NRW
 const LSA_FILE = path.join(DATA_DIR, 'ampelanlagen.json');
 let lsa = null, lsaRun = null, lsaTry = 0;
@@ -1970,6 +2084,7 @@ Regeln:
 - „Wann fährt die nächste Bahn oder der nächste Bus?“ ohne Haltestelle: Werkzeug abfahrten_in_der_naehe, nicht nachfragen.
 - Universität, Hauptbahnhof, Rathaus, Jahnplatz, Kunsthalle, Stadttheater und alle Haltestellennamen sind eindeutige Ziele. Frag nur nach, wenn ein Werkzeug „mehrdeutig“ oder „auswahl“ meldet oder kein Ziel genannt ist.
 - Fehlt der Standort (Werkzeug meldet „Kein Standort“), frag nach dem Start: Haltestelle, Straße oder Adresse.
+- Ist am Ziel oder an einem Bahnhof ein Aufzug außer Betrieb (bahnhof_aufzuege, db_aufzuege_ausser_betrieb), sag das bei Rollstuhl, Rollator und Kinderwagen zuerst und nenne den Bahnhof; Angaben laut DB.
 - Ampeln auf einem Weg nur aus weg_check; ampeln_mit_ton ist für Ampeln am Standort oder an einem Ort, nicht für einen Weg.
 - Beschreibe nie einen Weg innerhalb eines Gebäudes oder Geländes; dazu hast du keine Daten.
 - Erfinde keine ruhigen Zeiten, Öffnungszeiten oder Auslastung.
@@ -2315,10 +2430,12 @@ const ZIEL_THEMA = { rollstuhl: ['zugang', 'aufzug', 'wc'], rollator: ['zugang',
 const ausserhalb = (pos) => !!pos && !inBox(pos[0], pos[1], 0.05);
 const AUSSEN_HINWEIS = 'Der Ort liegt außerhalb von Bielefeld. Dazu hat Flowtown keine Angaben zu Barrierefreiheit, Toiletten, Behindertenparkplätzen, Haltestellen, Fahrplan und Ampeln mit Tonsignal. Sag das offen; behaupte nicht, dass es dort nichts gibt.';
 function zielInfo(pos, name, typ) {
-  if (ausserhalb(pos)) return { hinweis: AUSSEN_HINWEIS };
+  const dbAm = dbaAt(pos, 600);
+  if (ausserhalb(pos)) return dbAm ? { hinweis: AUSSEN_HINWEIS + ' Nur die Aufzüge und Rolltreppen am Bahnhof (bahnhof_aufzuege) sind bekannt.', bahnhof_aufzuege: dbAm } : { hinweis: AUSSEN_HINWEIS };
   const near = (list, max) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(pos, x.pos) })).filter((x) => x.entfernung_m <= max).sort((a, b) => a.entfernung_m - b.entfernung_m)[0];
   const strip = (x) => { if (!x) return undefined; const o = Object.assign({}, x); delete o.pos; o.entfernung_m = Math.round(o.entfernung_m / 10) * 10; return o; };
   const out = {};
+  if (dbAm) out.bahnhof_aufzuege = dbAm;
   // Gebäude: nur wenn der Name eindeutig zu einem Ort von „Bielefeld barrierefrei erleben“ passt
   if (name && bf && (bf.orte || []).length) {
     const themen = ZIEL_THEMA[typ] || ['zugang', 'wc'];
@@ -2391,7 +2508,8 @@ async function assistTool(name, a, ctx, act) {
     const alle = (mb.items || []).filter((it) => !it.vorbei);
     const linien = [...new Set(alle.flatMap((it) => (it.linien || []).map(String)))];
     const bahn = alle.some((it) => it.bahn) || linien.some((l) => /^[1-4]$/.test(l));
-    return { anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
+    const dbAus = dba ? dba.anlagen.filter((x) => inBox(x[5], x[6], 0.05) && /^(notAvailable|partiallyAvailable)$/.test(dbaState(x[0]) || '')).map((x) => `${x[2]}: ${x[1] === 'aufzug' ? 'Aufzug' : 'Rolltreppe'} ${x[4]} ${DBA_TEXT[dbaState(x[0])]}`) : null;
+    return { anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
       meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug, quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
@@ -2652,7 +2770,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -2931,6 +3049,7 @@ if (cli === 'faq') {
   setTimeout(bppTick, 40000); setInterval(bppTick, 3600e3);
   setTimeout(lsaTick, 15000); setInterval(lsaTick, 3600e3);
   setTimeout(swcTick, 20000); setInterval(swcTick, 3600e3);
+  setTimeout(dbaTick, 30000); setInterval(dbaTick, 60e3);
   setTimeout(stadt2Tick, 25000); setInterval(stadt2Tick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

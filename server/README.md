@@ -144,6 +144,12 @@ Er liest die Liste beim Start und dann stündlich und nennt im Protokoll jede Ze
 
 **Aufzüge:** Der Fahrplan-Auszug zieht aus DELFI die Wege in Stationen (Aufzüge, Rolltreppen, Treppen), z. B. Hauptbahnhof, Jahnplatz, Nordpark. Die App zeigt dann „✓ Aufzug“. Dafür den Fahrplan einmal neu holen: `sudo rm /var/lib/flowtown/fahrplan.json && sudo systemctl restart flowtown` (dauert einige Minuten).
 
+### Aufzüge an DB-Bahnhöfen (Mobilithek)
+
+Der Server holt über die Mobilithek die Stammdaten aller Aufzüge und Rolltreppen an DB-Bahnhöfen (DB InfraGO „OpenStation NeTEx“, einmal pro Woche, etwa 300 MB, behalten werden nur Aufzüge und Rolltreppen) und alle 5 Minuten ihren Status („OpenStation SIRI FM“). Lizenz CC0. Flowtown nennt dann am Ziel und in der Assistenz, welcher Aufzug außer Betrieb ist, und zeigt die Aufzüge auf der Karte unter „Barrierefrei“ (rot: außer Betrieb).
+
+Einrichtung: Maschinenzertifikat der Mobilithek nach `/etc/flowtown/mobilithek.p12` (`chown root:flowtown`, `chmod 640`), in `/etc/flowtown.env` `MOBILITHEK_CERT=/etc/flowtown/mobilithek.p12` und `MOBILITHEK_CERT_PASS='…'`. Die Abo-IDs sind voreingestellt; andere mit `MOBILITHEK_ABO_NETEX` und `MOBILITHEK_ABO_SIRIFM`. Abgeholt wird mit `curl` (Container-Schnittstelle). `/api/health` zeigt unter `aufzuegeDb` Anzahl, Stand und wie viele gerade außer Betrieb sind.
+
 ### Öffentliche Toiletten der Stadt
 
 Der Server holt einmal am Tag die öffentlichen Toiletten der Stadt Bielefeld aus dem Geodienst der Stadt (Open Data „Öffentliche Toiletten“, www.bielefeld01.de): Name, Adresse, Öffnungszeiten, barrierefrei ja oder nein, Entgelt. Sie gehen vor den Toiletten aus OpenStreetMap; eine OSM-Toilette bis 30 m daneben fällt weg. Sie erscheinen auf der Karte, am Ziel und in der Assistenz. Abschalten wie alle Stadtdaten mit `STADT_DATEN=0`. `/api/health` zeigt unter `toilettenStadt` Anzahl und Stand.

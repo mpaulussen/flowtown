@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.92.2';
+  const VERSION = '0.92.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3549,7 +3549,12 @@
         .bindPopup(`<strong>Behindertenparkplatz</strong>${p[3] ? '<br>' + esc(p[3]) : ''}${p[2] ? `<br>${p[2]} ${p[2] === 1 ? 'Platz' : 'Plätze'}` : ''}<br><span class="muted">Nur mit Parkausweis · ${esc(bppSrc(p))}</span>`).addTo(g);
     }
     for (const a of bfData.lift || []) {
-      L.circleMarker([a[0], a[1]], { radius: 4, color: '#1d5fa6', weight: 2, fillColor: '#ffffff', fillOpacity: 1 }).bindPopup('<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
+      // DB-Aufzüge mit Status (OpenStation): rot außer Betrieb, gelb eingeschränkt
+      const db = a[5] === 'db', st = a[4] || '', bad = st === 'notAvailable', part = st === 'partiallyAvailable';
+      const stTxt = { available: 'in Betrieb', notAvailable: 'außer Betrieb', partiallyAvailable: 'eingeschränkt' }[st] || 'ohne aktuellen Status';
+      L.circleMarker([a[0], a[1]], { radius: db ? 6 : 4, color: bad ? '#d64933' : part ? '#e0a326' : '#1d5fa6', weight: 2, fillColor: bad ? '#d64933' : '#ffffff', fillOpacity: 1 })
+        .bindPopup(db ? `<strong>Aufzug: ${esc(stTxt)}</strong><br>${esc(a[3] || '')}${a[6] ? `<br>Innenbreite ${fmtNum(a[6], 2)} m` : ''}<br><span class="muted">DB InfraGO (OpenStation), Status alle 5 Minuten</span>`
+          : '<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
     }
     await loadFaq();
     if (faq && mapLayers.acc) {
