@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.92.3';
+  const VERSION = '0.92.4';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1603,7 +1603,7 @@
   function sayDepartures(name, kind) {
     const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
     const list = departures(name, now, 90).filter((d) => kind == null || d.kind === kind).slice(0, 5);
-    speak(list.length ? `Nächste Abfahrten ${name}: ` + list.map((d) => { const m = d.t - nowMin; return `${d.kind === 0 ? 'Stadtbahn' : d.kind === 2 ? '' : 'Bus'} ${d.line} nach ${d.head}, ${m <= 0 ? 'jetzt' : `in ${sayMin(m)}`}`; }).join('. ') + '.' : `${name}: in der nächsten Zeit keine Abfahrt.`, { now: true, force: true });
+    speak(list.length ? `Nächste Abfahrten ${name}: ` + list.map((d) => { const m = d.t + (d.dl > 0 ? d.dl : 0) - nowMin; return `${d.kind === 0 ? 'Stadtbahn' : d.kind === 2 ? '' : 'Bus'} ${d.line} nach ${d.head}, ${d.x ? 'fällt aus' : (m <= 0 ? 'jetzt' : `in ${sayMin(m)}`) + (d.dl >= 2 ? `, ${sayMin(d.dl)} später` : '')}`; }).join('. ') + '.' : `${name}: in der nächsten Zeit keine Abfahrt.`, { now: true, force: true });
   }
   // Haltestelle aus dem Gesagten: eigene Haltestellen zuerst, dann alle aus dem Fahrplan
   function matchStop(phrase) {
@@ -1946,6 +1946,7 @@
     const PRE = '^(?:(?:jetzt|bitte|ich will|ich möchte)\\s+)?(?:(?:mit dem|mit der)\\s+\\S+\\s+|zu ?fu(?:ß|ss)\\s+)?';
     if (/^(?:wann f(?:ä|a)hrt (?:die |der |das )?)?nächste[rn]? (?:bahn|stadtbahn|straßenbahn|bus|zug|abfahrt(?:en)?)\b|^abfahrten\b/.test(c) && !/\b(zum|zur|nach)\b/.test(c)) {
       if (!fp || fpWrong()) await loadFahrplan();
+      if (fp && !rtFresh()) await loadEchtzeit().catch(() => false);
       if (!fp) { speak('Der Fahrplan ist gerade nicht geladen.', { now: true, force: true }); return true; }
       const kind = /\bbus\b/.test(c) ? 3 : /\bzug\b/.test(c) ? 2 : /bahn/.test(c) ? 0 : null;
       const at = (c.match(/\b(?:ab|von|an der haltestelle|haltestelle|abfahrten)\s+(.+)$/) || [])[1];
@@ -4460,12 +4461,35 @@
     return fp.svcDay[day];
   }
   // nächste Abfahrten an einer Haltestelle (alle Steige), auch Fahrten nach Mitternacht vom Vortag
+  // Echtzeit (DELFI über den Flowtown-Server): je Fahrt Ausfall, Verspätung je Halt; die App fragt nur nach der Stadt
+  let rtData = null, rtAt = 0, rtLoading = false;
+  async function loadEchtzeit() {
+    if (!fp || rtLoading || !apiBase() || Date.now() - rtAt < 60e3) return false;
+    rtLoading = true; rtAt = Date.now();
+    try {
+      const d = await api('/api/echtzeit' + (fp.stadt && fp.stadt !== 'bielefeld' ? '?stadt=' + fp.stadt : ''), { cache: 'no-cache' });
+      const ok = d && d.t && d.stand === fp.stand;   // nur zum selben Fahrplan
+      rtData = ok ? Object.assign(d, { stadt: fp.stadt }) : null;
+      if (!d.t) rtAt = Date.now() - 45e3;   // wird noch geladen: in 15 s noch einmal
+      return ok;
+    } catch (e) { rtData = null; return false; } finally { rtLoading = false; }
+  }
+  const rtFresh = () => !!(rtData && fp && rtData.stadt === fp.stadt && Date.now() - rtData.t < 5 * 60e3);
+  function rtFor(ti, pat, k) {
+    if (!rtFresh()) return null;
+    const e = rtData.trips[ti];
+    if (!e) return null;
+    if (e[0] || e[3].includes(pat[k])) return { x: true };
+    for (let j = k; j >= 0; j--) { const h = e[2].find((q) => q[0] === pat[j]); if (h) return { dl: Math.round(h[1] / 60) }; }
+    return { dl: e[1] != null ? Math.round(e[1] / 60) : 0 };
+  }
   function departures(name, now, span) {
     const idx = new Set(fp.byName[name] || []), pats = new Set();
     idx.forEach((si) => (fp.patsOf[si] || []).forEach((pi) => pats.add(pi)));
     const nowMin = now.getHours() * 60 + now.getMinutes(), out = [];
     const days = [[servicesOn(ymd(now)), 0], [servicesOn(ymd(new Date(now - 864e5))), 1440]];
-    for (const [r, pi, h, sv, start, deltas, nr] of fp.trips) {
+    for (let ti = 0; ti < fp.trips.length; ti++) {
+      const [r, pi, h, sv, start, deltas, nr] = fp.trips[ti];
       if (!pats.has(pi)) continue;
       for (const [on, shift] of days) {
         if (!on.has(sv)) continue;
@@ -4474,7 +4498,10 @@
         for (let k = 0; k < pat.length - 1; k++) {   // an der Endhaltestelle fährt nichts mehr ab
           if (k) t += deltas[k - 1];
           if (t > nowMin + span) break;
-          if (idx.has(pat[k]) && t >= nowMin) out.push({ t, line: fpLine(r, nr), kind: fp.routes[r][1], head: fp.heads[h].replace(FP_PREFIX, '') });
+          if (idx.has(pat[k]) && t >= nowMin - 10) {
+            const rx = shift === 0 ? rtFor(ti, pat, k) : null;
+            if (t + (rx && rx.dl > 0 ? rx.dl : 0) >= nowMin) out.push(Object.assign({ t, line: fpLine(r, nr), kind: fp.routes[r][1], head: fp.heads[h].replace(FP_PREFIX, '') }, rx || {}));
+          }
         }
       }
     }
@@ -4521,10 +4548,11 @@
       let list = departures(open, now, 60);
       if (list.length < 4) list = departures(open, now, 180);
       const mineL = settings.linien;
-      const rows = list.slice(0, 8).map((d) => { const inMin = d.t - nowMin;
-        return `<li class="dep${mineL.includes(d.line) ? ' mine' : ''}"><b class="dep-t">${hhmm((d.t + 1440) % 1440)}</b><span class="dep-line${d.kind === 0 ? ' tram' : d.kind === 2 ? ' rail' : ''}">${esc(d.line)}</span><span class="dep-head">${esc(d.head)}</span><span class="dep-in">${inMin <= 0 ? 'jetzt' : inMin < 60 ? `in ${inMin} min` : ''}</span></li>`; }).join('');
+      if (!rtFresh()) loadEchtzeit().then((ok) => { if (ok) renderVorfahrt(); });
+      const rows = list.slice(0, 8).map((d) => { const inMin = d.t + (d.dl > 0 ? d.dl : 0) - nowMin;
+        return `<li class="dep${mineL.includes(d.line) ? ' mine' : ''}"><b class="dep-t${d.x ? ' dep-x' : ''}">${hhmm((d.t + 1440) % 1440)}${d.x ? '<span class="dep-rt bad">fällt aus</span>' : d.dl >= 1 ? `<span class="dep-rt late">+${d.dl}</span>` : d.dl != null && !d.x ? '<span class="dep-rt ok" aria-label="pünktlich">✓</span>' : ''}</b><span class="dep-line${d.kind === 0 ? ' tram' : d.kind === 2 ? ' rail' : ''}">${esc(d.line)}</span><span class="dep-head">${esc(d.head)}</span><span class="dep-in">${inMin <= 0 ? 'jetzt' : inMin < 60 ? `in ${inMin} min` : ''}</span></li>`; }).join('');
       body = rows ? `<ul class="dep-list" aria-label="Abfahrten ${esc(open)}">${rows}</ul>` : '<p class="small">In den nächsten drei Stunden fährt hier laut Fahrplan nichts.</p>';
-      body += `<p class="small muted lg-src">Laut Fahrplan, ohne Verspätungen · <button type="button" class="btn-link" data-hs-del="${esc(open)}">${esc(open)} entfernen</button> · Fahrplan: DELFI (CC BY 4.0), Stand ${esc((fp.stand || '').slice(8, 10) + '.' + (fp.stand || '').slice(5, 7) + '.')}</p>`;
+      body += `<p class="small muted lg-src">${rtFresh() ? `Mit Echtzeit, Stand ${clock(rtData.t)} Uhr (DELFI, CC BY-SA 4.0)` : 'Laut Fahrplan, ohne Verspätungen'} · <button type="button" class="btn-link" data-hs-del="${esc(open)}">${esc(open)} entfernen</button> · Fahrplan: DELFI (CC BY 4.0), Stand ${esc((fp.stand || '').slice(8, 10) + '.' + (fp.stand || '').slice(5, 7) + '.')}</p>`;
     }
     return `<section class="vf world-vor" aria-labelledby="hs-h"><h3 class="vf-title vf-title-row" id="hs-h">Nächste Abfahrten${canSpeak && open && fp ? `<button type="button" class="vf-x vf-say" data-say-dep="${esc(open)}" aria-label="Abfahrten vorlesen">${ic('sound')}</button>` : ''}</h3>
       <div class="vf-chips" role="group" aria-label="Deine Haltestellen">${chips}</div>${form}${body}</section>`;

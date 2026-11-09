@@ -193,7 +193,7 @@ def main():
 
     # gleiche Haltefolgen zusammenfassen; je Fahrt nur Abfahrt am ersten Halt und Abstände in Minuten
     patterns, pat_idx, out_trips = [], {}, []
-    for tr in trips.values():
+    for tid, tr in trips.items():
         st = sorted(tr[4])
         if len(st) < 2:
             continue
@@ -202,13 +202,16 @@ def main():
             pat_idx[seq] = len(patterns)
             patterns.append(list(seq))
         times = [m for _, _, m in st]
-        out_trips.append([tr[0], pat_idx[seq], tr[2], tr[1], times[0], [b - a for a, b in zip(times, times[1:])]] + ([tr[3]] if tr[3] else []))
+        out_trips.append(([tr[0], pat_idx[seq], tr[2], tr[1], times[0], [b - a for a, b in zip(times, times[1:])]] + ([tr[3]] if tr[3] else []), tid))
     # nur Linien und Verkehrstage, die übrig bleiben
-    used_routes = sorted({t[0] for t in out_trips})
+    used_routes = sorted({t[0] for t, _ in out_trips})
     remap = {old: new for new, old in enumerate(used_routes)}
-    for t in out_trips:
+    for t, _ in out_trips:
         t[0] = remap[t[0]]
-    out_trips.sort(key=lambda t: (t[0], t[4]))
+    out_trips.sort(key=lambda x: (x[0][0], x[0][4]))
+    # Fahrt-Kennungen (GTFS trip_id) in derselben Reihenfolge, für die Echtzeitdaten; bleibt auf dem Server
+    trip_ids = [tid for _, tid in out_trips]
+    out_trips = [t for t, _ in out_trips]
     used_services = {t[3] for t in out_trips}
     out = {
         'quelle': 'DELFI', 'lizenz': 'CC BY 4.0', 'stand': feed.get('feed_version', ''),
@@ -220,6 +223,10 @@ def main():
     with open(dst + '.tmp', 'w', encoding='utf-8') as f:
         json.dump(out, f, ensure_ascii=False, separators=(',', ':'))
     os.replace(dst + '.tmp', dst)
+    ids = re.sub(r'\.json$', '', dst) + '.ids.json'
+    with open(ids + '.tmp', 'w', encoding='utf-8') as f:
+        json.dump(trip_ids, f, separators=(',', ':'))
+    os.replace(ids + '.tmp', ids)
     rail = sum(1 for t in out_trips if out['routes'][t[0]][1] == 2)
     print(f'{len(out_trips)} Fahrten, davon {rail} Züge, {len(used_routes)} Linien, {len(stops)} Haltestellen, {len(patterns)} Haltefolgen in {time.time() - t0:.0f} s')
 

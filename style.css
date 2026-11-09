@@ -1313,3 +1313,11 @@ html,body{touch-action:manipulation}
 /* Ausweichroute in der Planung */
 .vf-alt{display:flex;flex-direction:column;gap:8px}
 .vf-alt .btn{align-self:flex-start}
+
+/* Abfahrten mit Echtzeit */
+.dep-rt{display:inline-block;margin-left:6px;font-size:13px;font-weight:700;padding:1px 6px;border-radius:999px;vertical-align:1px}
+.dep-rt.late{background:#fdecc8;color:#7a4b00}
+.dep-rt.bad{background:#fbe1dc;color:#9b2c17}
+.dep-rt.ok{background:#dff3e8;color:#17663f}
+.dep-t.dep-x{text-decoration:line-through;text-decoration-thickness:1px}
+.dep-t.dep-x .dep-rt{text-decoration:none}
