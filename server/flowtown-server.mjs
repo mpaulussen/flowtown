@@ -1955,6 +1955,7 @@ Regeln:
 - Notfall, Unfall, Gefahr: sofort auf den Notruf 112 verweisen. Keine medizinische oder rechtliche Beratung.
 - Fragen ohne Bezug zu Wegen, Verkehr und Barrierefreiheit beantwortest du nicht; sag kurz, wobei du helfen kannst.
 - Ziele in anderen Städten (etwa „Mönchengladbach Hauptbahnhof“) sind erlaubt: Gib den Ort mit Stadtnamen an das Werkzeug weiter und ersetze ihn nie durch einen Ort in Bielefeld.
+- Ist die Person in einer anderen Stadt (Kontext standort), meinen „Hauptbahnhof“, „Rathaus“, „Innenstadt“ und Haltestellennamen den Ort in dieser Stadt. Häng nie „Bielefeld“ an und nenne keine Bielefelder Linien.
 - Ist die Person oder das Ziel außerhalb von Bielefeld, hilfst du trotzdem: Wege, Verkehrsmittel-Vergleich mit CO₂, Staus und Sperrungen auf der Strecke gibt es überall. Barrierefreiheit von Gebäuden, Toiletten, Behindertenparkplätze, Fahrplan, Störungen von moBiel und Tonsignale an Ampeln gibt es nur für Bielefeld; sag das offen.
 - Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
 - Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
@@ -2043,9 +2044,11 @@ async function assistOrt(name, ctx) {
   if (!n || /^(hier|standort|mein standort|in der nähe)$/i.test(n)) return ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
   // unterwegs in einer anderen Stadt: dort suchen, nicht in Bielefeld (außer Bielefeld wird genannt)
   if (ctx.aussen && !/bielefeld/i.test(n)) {
-    const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === hstNorm(n));
-    if (z && isFinite(z.lat)) return { name: z.name, pos: [z.lat, z.lon] };
-    const r = HERE_KEY ? (await findOrt(n, ctx.pos).catch(() => []))[0] : null;
+    // gespeicherte Ziele nur, wenn sie in der Nähe liegen: „Hauptbahnhof“ ist in Mönchengladbach nicht der in Bielefeld
+    const z = (ctx.ziele || []).find((x) => hstNorm(x.name) === hstNorm(n) && isFinite(x.lat) && mAbs(ctx.pos, [x.lat, x.lon]) < 30000);
+    if (z) return { name: z.name, pos: [z.lat, z.lon] };
+    const nq = n.replace(/^\s*(die|der|das|zur|zum|zu)\s+/i, '').replace(/^\s*(bahnhof|hbf)\s*$/i, 'Hauptbahnhof');
+    const r = HERE_KEY ? (await findOrt(nq + (ctx.stadt && !new RegExp(ctx.stadt, 'i').test(nq) ? ', ' + ctx.stadt : ''), ctx.pos).catch(() => []))[0] : null;
     return r ? { name: r.name, pos: [r.lat, r.lon], adresse: r.sub, gefunden_ueber: 'Ortssuche (HERE)' } : null;
   }
   // „Universität Bielefeld“, „die Uni“: Zusatz Bielefeld und Artikel weglassen, damit Haltestelle und Gebäude gefunden werden
@@ -2588,7 +2591,8 @@ async function assist(body) {
   const auswertung = assistStatsClean(k.auswertung);
   const ctx = { pos, auswertung, typ: profilTyp(k), vorrang: k.vorrang === 'schnell' || /schnellsten|am schnellsten|eilig/i.test(frage) ? 'schnell' : '', ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
   ctx.aussen = ausserhalb(pos);
-  const kontext = { standort: pos ? (ctx.aussen ? 'bekannt, außerhalb von Bielefeld (auf 100 m gerundet)' : 'bekannt (auf 100 m gerundet)') : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
+  ctx.stadt = ctx.aussen ? (fpStadtAt(pos) || {}).name || (await placeNear(pos).catch(() => '')) || '' : 'Bielefeld';
+  const kontext = { standort: pos ? (ctx.aussen ? `bekannt, außerhalb von Bielefeld${ctx.stadt ? ', in ' + ctx.stadt : ''} (auf 100 m gerundet)` : 'bekannt (auf 100 m gerundet)') : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
   const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
