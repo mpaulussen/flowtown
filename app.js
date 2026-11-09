@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.92.4';
+  const VERSION = '0.93.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1062,6 +1062,7 @@
   });
 
   function startTrip() {
+    audioUnlock();
     if ((!fp || fpWrong()) && lageOn()) loadFahrplan().catch(() => {});
     const mode = selectedMode();
     settings.mode = mode; store.set('settings', settings);
@@ -1159,7 +1160,7 @@
         if (t - B.wrongSince > 6000 && t - B.wrongAt > 30000) {
           B.wrongAt = t;
           vib([80, 60, 80, 60, 80]);
-          speak(`Du gehst in die falsche Richtung. Dreh dich um, die Strecke führt Richtung ${DIRS[Math.round(rb / 45) % 8]}.`, { now: true });
+          navSay(`Du gehst in die falsche Richtung. Dreh dich um, die Strecke führt Richtung ${DIRS[Math.round(rb / 45) % 8]}.`);
         }
       } else B.wrongSince = null;
     } else if (h != null) {
@@ -1174,12 +1175,12 @@
     const id = ahead.c.id;
     if (ahead.d > 12 && ahead.d <= 40 && !B.said[id + 'v'] && !ahead.onTurn) {
       B.said[id + 'v'] = true;
-      speak(`In etwa ${roundM(ahead.d)} Metern kommt eine Ampel, ${sigFeat(ahead.c)}.`);
+      navSay(`In etwa ${roundM(ahead.d)} Metern kommt eine Ampel, ${sigFeat(ahead.c)}.`);
     }
     if (ahead.d <= 12 && !B.said[id + 'e']) {
       B.said[id + 'e'] = B.said[id + 'v'] = true;
       vib([200, 100, 200]);
-      speak(`Ampel erreicht, ${sigFeat(ahead.c)}. Wann du gehst, entscheidest du am Signal.`, { now: true });
+      navSay(`Ampel erreicht, ${sigFeat(ahead.c)}. Wann du gehst, entscheidest du am Signal.`);
     }
   }
   function navBuild(nav, dauer) {
@@ -1238,6 +1239,26 @@
     $('#nav-box').hidden = true; $('#btn-nav-re').hidden = true;
     driveMapSetup();
   }
+  // am Ziel: Eingang laut „Bielefeld barrierefrei erleben“, defekter Aufzug der DB in der Nähe
+  function arrivalInfo() {
+    const z = rec && rec.target;
+    if (!z || !bfData) return '';
+    const plan = rec.trip.plan || {}, zz = settings.ziele.find((x) => x.id === plan.ziel) || { lat: z.lat, lon: z.lon };
+    const out = [], o = bfNear(zz);
+    if (o) {
+      const ein = o.hinweis && o.hinweis.eingang;
+      if (ein) out.push(`Zum Eingang: ${ein.replace(/\s+/g, ' ').slice(0, 160)}`);
+      else if (o.f && o.f.stufenlos === 1) out.push('Der Eingang ist stufenlos');
+      else if (o.f && o.f.stufenlos === 0) out.push('Der Eingang hat Stufen');
+    }
+    for (const a of bfData.lift || []) {
+      if (a[5] !== 'db' || a[4] !== 'notAvailable' || dist({ lat: a[0], lon: a[1] }, z) > 400) continue;
+      const [bhf, wo] = String(a[3] || '').split(': ');
+      out.push(`Achtung: Am ${bhf} ist der Aufzug ${wo || ''} außer Betrieb`.replace(/\s+/g, ' ').trim());
+      if (out.length >= 3) break;
+    }
+    return out.length ? ' ' + out.map((x) => x.replace(/[.\s]+$/, '') + '.').join(' ') : '';
+  }
   function navUpdate(p, t, acc, heading) {
     driveMapMove(p, heading);
     const N = rec && rec.nav, g = navGroup();
@@ -1258,8 +1279,15 @@
       N.arrived = true;
       if (g === 'fuss' && begleitOn()) vib([300, 100, 300, 100, 600]);
       navShow(navArrow({ art: 'arrive' }), 'Ziel erreicht', rec.trip.plan ? rec.trip.plan.name : '', '', false);
-      speak(`Du hast dein Ziel erreicht${rec.trip.plan ? ': ' + rec.trip.plan.name : ''}.`, { now: true });
+      navSay(`Du hast dein Ziel erreicht${rec.trip.plan ? ': ' + rec.trip.plan.name : ''}.${arrivalInfo()}`, null, 'ziel');
       return;
+    }
+    if (!N.said.start && N.checked && (N.startOk || !N.reAt || Date.now() - N.reAt > 8000)) {
+      N.said.start = true; N.holdUntil = t + 6000;
+      const name = rec.trip.plan ? rec.trip.plan.name : 'deinem Ziel', b = bearing(p, r.q);
+      const h = heading != null ? heading : compass && Date.now() - compass.t < 3000 ? compass.h : null;
+      const wo = h != null ? `auf ${Math.round(((b - h + 360) % 360) / 30) || 12} Uhr` : `Richtung ${DIRS[Math.round(b / 45) % 8]}`;
+      navSay(!N.joined && r.d > 15 ? `Navigation zu ${name}. Die Strecke beginnt in etwa ${navSayM(r.d)}, ${wo}.` : `Navigation zu ${name}. Es geht hier los${N.steps[0] && N.steps[0].art !== 'arrive' ? `, als Erstes in ${navSayM(Math.max(10, N.steps[0].at))} ${navText(N.steps[0]).charAt(0).toLowerCase() + navText(N.steps[0]).slice(1)}` : ''}.`);
     }
     if (!N.joined) {
       const dir = DIRS[Math.round(bearing(p, r.q) / 45) % 8];
@@ -1268,7 +1296,7 @@
     }
     if (N.offSince != null && t - N.offSince > 8000) {
       navShow(navArrow({ art: 'uTurn' }), 'Abseits der Strecke', 'Ich berechne sie neu, oder tippe unten.', rest, true);
-      if (!N.said.off) { N.said.off = true; speak('Du bist von der Strecke abgekommen. Ich berechne sie neu.', { now: true }); }
+      if (!N.said.off) { N.said.off = true; navSay('Du bist von der Strecke abgekommen. Ich berechne sie neu.'); }
       if (t - N.offSince > 12000) navReroute(false);
       return;
     }
@@ -1283,15 +1311,16 @@
     }
     const steps = (m) => { const r = m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50; return bg && m < 150 ? `, etwa ${Math.max(5, Math.round(r / 0.7 / 5) * 5)} Schritten,` : ''; };
     navShow(navArrow(next), d <= NAV_NOW[g] ? 'Jetzt' : `In ${navM(d)}`, txt, rest, false);
-    // Ansagen: zweimal vorher, dann „Jetzt“
+    // Ansagen: zweimal vorher, dann „Jetzt“ (nicht in die Startansage hinein)
+    if (N.holdUntil && t < N.holdUntil) return;
     const key = next.i;
     if (d <= NAV_NOW[g] + 5) {
-      if (!N.said[key + 'n']) { N.said[key + 'n'] = true; if (next.art !== 'arrive') { speak(`Jetzt ${low}.`, { now: true }); if (bg) vib(next.dir === 'left' ? [500] : next.dir === 'right' ? [120, 80, 120] : [600]); } }
+      if (!N.said[key + 'n']) { N.said[key + 'n'] = true; if (next.art !== 'arrive') { navSay(`Jetzt ${low}.`); if (bg) vib(next.dir === 'left' ? [500] : next.dir === 'right' ? [120, 80, 120] : [600]); } }
     } else {
       const th = NAV_SAY[g].find((x, i) => d <= x && (i === NAV_SAY[g].length - 1 || d > NAV_SAY[g][i + 1]));
       if (th && !N.said[key + '_' + th] && d > NAV_NOW[g] + 15) {
         NAV_SAY[g].forEach((x) => { if (x >= th) N.said[key + '_' + x] = true; });
-        speak(`In ${navSayM(d)}${steps(d)} ${low}.`, { now: true });
+        navSay(`In ${navSayM(d)}${steps(d)} ${low}.`);
         if (bg && th === NAV_SAY[g][NAV_SAY[g].length - 1]) vib([80]);
       }
     }
@@ -1313,10 +1342,12 @@
       if (via) rec.nav.via = via;
       rec.nav.checked = true; rec.nav.reAt = Date.now();
       driveMapRoute();
-      if (!quiet && old && old.joined) speak('Neue Strecke berechnet.', { now: true });
+      if (old && old.said && old.said.start) rec.nav.said.start = true; else rec.nav.startOk = true;   // Startansage nur einmal, auf der neuen Strecke gleich
+      if (!quiet && old && old.joined) navSay('Neue Strecke berechnet.');
     } catch (e) { /* ohne Netz: alte Strecke bleibt */ }
   }
   $('#btn-nav-re').addEventListener('click', () => { if (rec && rec.nav) { rec.nav.reAt = 0; navReroute(false); } });
+  $('#btn-nav-rep').addEventListener('click', () => { unlockSpeech(); audioUnlock(); navRepeat(); });
   // mitlaufende Karte: Ausschnitt um den Standort, Strecke darauf; nicht verschiebbar, damit der Blick kurz bleibt
   let driveMap = null, driveLayer = null, driveMe = null;
   function driveMapSetup() {
@@ -1450,9 +1481,43 @@
     if (!canSpeak || speechUnlocked) return;
     try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; u.lang = 'de-DE'; speechSynthesis.speak(u); speechUnlocked = true; } catch (e) { /* ohne */ }
   }
+  // Töne für die Navigation (ITU-T F.921): zwei kurze Töne vor einer Ansage, drei aufsteigende am Ziel
+  let audioCtx = null;
+  function audioUnlock() {
+    try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) { audioCtx = null; }
+  }
+  function chime(kind) {
+    if (!audioCtx || settings.navTone === false) return 0;
+    const notes = kind === 'ziel' ? [659, 880, 1047] : [880, 659], t0 = audioCtx.currentTime + 0.03;
+    try {
+      notes.forEach((f, i) => {
+        const o = audioCtx.createOscillator(), g = audioCtx.createGain(), st = t0 + i * 0.2;
+        o.type = 'sine'; o.frequency.value = f;
+        g.gain.setValueAtTime(0.0001, st); g.gain.exponentialRampToValueAtTime(0.3, st + 0.02); g.gain.exponentialRampToValueAtTime(0.0001, st + 0.16);
+        o.connect(g); g.connect(audioCtx.destination); o.start(st); o.stop(st + 0.18);
+      });
+    } catch (e) { return 0; }
+    return notes.length * 200 + 80;
+  }
+  // Navigationsansage: erst der Hinweiston, dann sprechen; die letzte Ansage bleibt zum Wiederholen
+  let lastNavSay = '', lastSpoken = '';
+  function navSay(text, opts, kind) {
+    if (!text) return;
+    lastNavSay = text;
+    if (!voiceOn() && !(opts && opts.force)) return;
+    if (canSpeak) speechSynthesis.cancel();
+    const ms = chime(kind || 'hinweis');
+    if (ms) setTimeout(() => speak(text, Object.assign({}, opts, { now: true })), ms); else speak(text, Object.assign({}, opts, { now: true }));
+  }
+  function navRepeat() {
+    const t = lastNavSay || ($('#nav-box').hidden ? lastSpoken : `${$('#nav-dist').textContent}: ${$('#nav-text').textContent}.`);
+    if (!t) { speak('Es gibt noch nichts zu wiederholen.', { now: true, force: true }); return; }
+    navSay(t, { force: true });
+  }
   function speak(text, opts) {
     opts = opts || {};
     if (!canSpeak || !text || (!opts.force && !voiceOn())) return;
+    lastSpoken = text;
     const t = sayText(text), now = Date.now();
     if (!opts.force && sayLast[t] && now - sayLast[t] < 20000) return;   // nichts doppelt hintereinander
     sayLast[t] = now;
@@ -1537,7 +1602,7 @@
   // (Apple oder Google); deshalb einmal Einwilligung. Flowtown selbst speichert und sendet nichts davon.
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let recog = null, sayAfterZiel = null, micT = null;
-  const MIC_HELP = 'Du kannst zum Beispiel sagen: Losfahren. Mit dem Rad los. Zur Uni. Nächste Bahn ab Jahnplatz. '
+  const MIC_HELP = 'Du kannst zum Beispiel sagen: Losfahren. Mit dem Rad los. Zur Uni. Nächste Bahn ab Jahnplatz. Wiederholen. '
     + 'Unterwegs: Wie lange noch? Nächster Halt? Jetzt zu Fuß. Ja oder Nein auf eine Rückfrage. Fahrt beenden. Außerdem: Vorlesen, Ansagen aus, Hilfe. Wo bin ich? beschreibt deine Umgebung. Und du kannst frei fragen, zum Beispiel: Wo ist die nächste rollstuhlgerechte Toilette? Nach meiner Antwort höre ich weiter zu, Danke beendet das Gespräch.';
   function micStatus(text, keep) {
     const el = $('#mic-status');
@@ -1910,6 +1975,7 @@
     }
     if (/notfall|notruf|krise|krisendienst|rettungsdienst|^hilfe hilfe/.test(c)) { openSos(); speak('Im Notfall wähle 112. Ich habe die Notrufnummern geöffnet.', { now: true, force: true }); return true; }
     if (TIPS_RE.test(c)) { renderTips(); readTips(); return true; }
+    if (/^(wiederhol|nochmal|noch mal|noch einmal|wie bitte|was hast du gesagt)/.test(c)) { navRepeat(); return true; }
     if (/\bhilfe\b|was kann ich sagen|welche befehle/.test(c)) { speak(MIC_HELP, { now: true, force: true }); return true; }
     if (/ansagen (aus|stopp|stop)|sei (still|leise)|ruhe bitte/.test(c)) { setVoice(false); if (canSpeak) speechSynthesis.cancel(); micStatus('Ansagen aus'); return true; }
     if (/ansagen (an|ein)/.test(c)) { setVoice(true); speak('Ansagen an.', { now: true }); return true; }
@@ -6341,6 +6407,8 @@
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
   $('#set-compass').checked = compassWanted();
   $('#set-begleit').checked = begleitOn();
+  $('#set-navtone').checked = settings.navTone !== false;
+  $('#set-navtone').addEventListener('change', (ev) => { settings.navTone = ev.target.checked; store.set('settings', settings); if (ev.target.checked) { audioUnlock(); chime('hinweis'); } });
   $('#set-begleit').addEventListener('change', (ev) => { settings.begleit = ev.target.checked; store.set('settings', settings); if (ev.target.checked && !compassOn) compassStart(true); });
   $('#set-compass').addEventListener('change', (ev) => { settings.compass = ev.target.checked; store.set('settings', settings); if (ev.target.checked) compassStart(true).then((ok) => { if (!ok) { $('#set-compass').checked = false; micStatus('Der Kompass ist auf diesem Gerät nicht verfügbar oder nicht freigegeben.'); } }); });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });

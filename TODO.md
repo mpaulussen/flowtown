@@ -10,10 +10,10 @@ Stand: 6. November 2026. Quellen: Studien (CHI '26, IJHCI 2026, Verde u. a. 2026
 
 ## B. Navigation nach ITU-T F.921
 Schnell machbar:
-- [ ] B1 Hinweiston (zwei Töne) vor jeder Navigationsansage, drei aufsteigende Töne am Ziel
-- [ ] B2 Taste „Wiederholen“ im Navigationsfeld und Sprachbefehl „Wiederholen“
-- [ ] B3 Startansage sprechen („Die Strecke beginnt 30 Meter vor dir, auf 2 Uhr.“)
-- [ ] B4 Zielansage mit Zugang aus „Bielefeld barrierefrei erleben“ („Der stufenlose Eingang ist der Seiteneingang.“)
+- [x] B1 (0.93.0) Hinweiston (zwei Töne) vor jeder Navigationsansage, drei aufsteigende Töne am Ziel
+- [x] B2 (0.93.0) Taste „Wiederholen“ im Navigationsfeld und Sprachbefehl „Wiederholen“
+- [x] B3 (0.93.0) Startansage sprechen („Die Strecke beginnt 30 Meter vor dir, auf 2 Uhr.“)
+- [x] B4 (0.93.0) Zielansage mit Zugang aus „Bielefeld barrierefrei erleben“ („Der stufenlose Eingang ist der Seiteneingang.“)
 
 Mittlerer Aufwand:
 - [ ] B5 Treppe 6 m vorher ansagen: hoch oder runter, Stufenzahl unter 12, Handlauf (OSM `incline`, `step_count`, `handrail` im Fußnetz mitliefern)

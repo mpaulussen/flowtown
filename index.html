@@ -221,6 +221,7 @@
     <div class="nav-box" id="nav-box" hidden>
       <div class="nav-next" role="status" aria-live="polite"><span class="nav-arrow" id="nav-arrow" aria-hidden="true"></span><span class="nav-what"><b id="nav-dist"></b><span id="nav-text"></span></span></div>
       <p class="nav-rest" id="nav-rest"></p>
+      <button type="button" class="btn nav-rep" id="btn-nav-rep" aria-label="Letzte Ansage wiederholen"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg>Wiederholen</button>
       <button type="button" class="btn nav-re" id="btn-nav-re" hidden><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Strecke neu berechnen</button>
     </div>
     <div class="drive-map" id="drive-map" aria-hidden="true" inert hidden></div>
@@ -382,6 +383,7 @@
         <label class="check"><input type="checkbox" id="set-compass"><span>Kompass für „Wo bin ich?“: Angaben wie rechts, links und auf 3 Uhr</span></label>
         <div class="voice-set" id="box-voice">
           <label class="check"><input type="checkbox" id="set-voice"><span>Ansagen vorlesen: Wechsel, Baustellen und Hindernisse voraus, Bilanz am Ende</span></label>
+          <label class="check"><input type="checkbox" id="set-navtone"><span>Hinweiston vor Navigationsansagen (zwei Töne, am Ziel drei aufsteigende)</span></label>
           <label class="field" for="set-voice-rate">Sprechtempo
             <select id="set-voice-rate"><option value="0.85">langsam</option><option value="1">normal</option><option value="1.2">schnell</option></select>
           </label>

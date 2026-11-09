@@ -1321,3 +1321,6 @@ html,body{touch-action:manipulation}
 .dep-rt.ok{background:#dff3e8;color:#17663f}
 .dep-t.dep-x{text-decoration:line-through;text-decoration-thickness:1px}
 .dep-t.dep-x .dep-rt{text-decoration:none}
+
+/* Navigation: Ansage wiederholen, eine große Taste */
+.nav-rep{width:100%;min-height:52px;font-size:18px;margin-top:8px}
