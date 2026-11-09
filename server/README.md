@@ -160,6 +160,10 @@ Drei Abos der Mobilithek (Landesbetrieb Straßenbau NRW, Datenlizenz Deutschland
 
 Alle Mobilithek-Abos auf einmal prüfen: `sudo bash -c 'set -a; . /etc/flowtown.env; node /opt/flowtown/server/flowtown-server.mjs mobilithek'`
 
+### Treppen im Fußwegnetz
+
+Die Kacheln des Fußwegnetzes (`/api/fussnetz`) tragen bei Treppen jetzt Stufenzahl (`step_count`), Richtung (`incline` up/down) und Handlauf (`handrail`, `handrail:left/right/center`) aus OpenStreetMap. Die App sagt damit unterwegs Treppen an (etwa 25 m und 6 m vorher). Ältere Kacheln erneuert der Server einmal im Hintergrund, wenn sie abgerufen werden.
+
 ### Öffentliche Toiletten der Stadt
 
 Der Server holt einmal am Tag die öffentlichen Toiletten der Stadt Bielefeld aus dem Geodienst der Stadt (Open Data „Öffentliche Toiletten“, www.bielefeld01.de): Name, Adresse, Öffnungszeiten, barrierefrei ja oder nein, Entgelt. Sie gehen vor den Toiletten aus OpenStreetMap; eine OSM-Toilette bis 30 m daneben fällt weg. Sie erscheinen auf der Karte, am Ziel und in der Assistenz. Abschalten wie alle Stadtdaten mit `STADT_DATEN=0`. `/api/health` zeigt unter `toilettenStadt` Anzahl und Stand.

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.93.0';
+  const VERSION = '0.94.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1074,8 +1074,10 @@
     rec = newRecording(mode);
     if (pendingPlan) {   // Fahrt mit Ziel: Name und geplante Zeit bleiben an der Fahrt, die Koordinaten nur bis zum Ende der Aufzeichnung
       rec.target = { lat: pendingPlan.lat, lon: pendingPlan.lon };
-      rec.trip.plan = Object.assign({}, pendingPlan); delete rec.trip.plan.lat; delete rec.trip.plan.lon; delete rec.trip.plan.nav; delete rec.trip.plan.via;
+      rec.trip.plan = Object.assign({}, pendingPlan); delete rec.trip.plan.lat; delete rec.trip.plan.lon; delete rec.trip.plan.nav; delete rec.trip.plan.via; delete rec.trip.plan.lokal;
       rec.nav = navBuild(pendingPlan.nav, pendingPlan.dauer);
+      if (rec.nav && pendingPlan.lokal) rec.nav.lokal = pendingPlan.lokal;   // stufenloser Weg aus der eigenen Wegsuche
+      if (rec.nav && MODE_GROUP[mode] === 'fuss') navStairs(rec.nav).catch(() => {});
       if (rec.nav && pendingPlan.via) rec.nav.via = pendingPlan.via;   // Ausweichroute: beim Neuberechnen über diesen Punkt   // Strecke und Abbiegehinweise: nur bis zum Ende der Aufzeichnung im Speicher
       pendingPlan = null;
     }
@@ -1212,7 +1214,7 @@
     const on = x.str ? ` auf ${x.str}` : x.nr ? ` auf ${x.nr}` : '';
     const side = x.dir === 'left' ? 'links' : x.dir === 'right' ? 'rechts' : '';
     if (x.art === 'arrive') return 'Ziel erreicht';
-    if (x.art === 'turn') return side ? `${x.sev === 'light' ? 'Leicht ' + side : cap(side)} abbiegen${on}` : `Abbiegen${on}`;
+    if (x.art === 'turn') return side ? `${x.sev === 'light' ? 'Leicht ' + side : x.sev === 'sharp' ? 'Scharf ' + side : cap(side)} abbiegen${on}` : `Abbiegen${on}`;
     if (x.art === 'keep') return side ? `${cap(side)} halten${on}` : `Weiter${on}`;
     if (/^roundabout(Enter|Pass)$/.test(x.art)) return `In den Kreisverkehr${on}`;
     if (x.art === 'roundaboutExit') return x.exit ? `Im Kreisverkehr die ${x.exit}. Ausfahrt nehmen${on}` : `Kreisverkehr verlassen${on}`;
@@ -1239,6 +1241,38 @@
     $('#nav-box').hidden = true; $('#btn-nav-re').hidden = true;
     driveMapSetup();
   }
+  // Treppen an der Strecke aus dem Fußwegnetz: wo (Meter ab Start), hinauf oder hinunter, Stufen, Handlauf (in Gehrichtung)
+  async function navStairs(N) {
+    if (!N || !apiBase()) return;
+    const keys = [...new Set(N.pts.filter((q, k) => k % 3 === 0).map((q) => radKey(q.lat, q.lon)))].slice(0, 8), tiles = [];
+    for (const k of keys) { const t = await fussTile(k).catch(() => null); if (t) tiles.push(t); }
+    const out = [], seen = new Set();
+    for (let k = 0; k < N.pts.length - 1; k++) {
+      const a = N.pts[k], b = N.pts[k + 1], h = bearing(a, b), segM = N.cum[k + 1] - N.cum[k];
+      for (let m = 0; m <= segM; m += 2) {
+        const P = { lat: a.lat + (b.lat - a.lat) * (segM ? m / segM : 0), lon: a.lon + (b.lon - a.lon) * (segM ? m / segM : 0) };
+        for (const t of tiles) for (const w of t.ways) {
+          if (w.c !== 'stufen' || seen.has(w) || Math.abs(w.g[0][0] - P.lat) > 0.002) continue;
+          for (let i = 0; i < w.g.length - 1; i++) {
+            const wa = { lat: w.g[i][0], lon: w.g[i][1] }, wb = { lat: w.g[i + 1][0], lon: w.g[i + 1][1] };
+            if (distToWay(P, [wa, wb]) > 3.5) continue;   // eng: eine Rampe direkt neben der Treppe ist keine Treppe
+            // nur auf der Treppe selbst, nicht an ihrem Anfang oder Ende (dort biegt man oft nur ab)
+            const e0 = { lat: w.g[0][0], lon: w.g[0][1] }, e1 = { lat: w.g[w.g.length - 1][0], lon: w.g[w.g.length - 1][1] }, tol = Math.min(5, dist(e0, e1) / 3);
+            if (dist(P, e0) < tol || dist(P, e1) < tol) continue;
+            let ad = Math.abs(bearing(wa, wb) - h) % 360; ad = Math.min(ad, 360 - ad);
+            if (ad > 35 && ad < 145) continue;   // querende Treppe zählt nicht
+            seen.add(w);
+            const same = ad <= 35, info = w.s || [null, 0, null], inc = info[1] * (same ? 1 : -1);
+            const hand = { b: 'Handlauf auf beiden Seiten', m: 'Handlauf in der Mitte', y: 'mit Handlauf', n: 'ohne Handlauf', l: same ? 'Handlauf links' : 'Handlauf rechts', r: same ? 'Handlauf rechts' : 'Handlauf links' }[info[2]] || '';
+            out.push({ at: N.cum[k] + m, n: info[0], dir: inc > 0 ? 'hinauf' : inc < 0 ? 'hinunter' : '', hand, name: w.n || '' });
+            break;
+          }
+        }
+      }
+    }
+    N.stairs = out.sort((x, y) => x.at - y.at);
+  }
+  const stairText = (st) => ['Treppe' + (st.dir ? ' ' + st.dir : ''), st.n && st.n < 12 ? `${st.n} Stufen` : '', st.hand].filter(Boolean).join(', ');
   // am Ziel: Eingang laut „Bielefeld barrierefrei erleben“, defekter Aufzug der DB in der Nähe
   function arrivalInfo() {
     const z = rec && rec.target;
@@ -1300,6 +1334,23 @@
       if (t - N.offSince > 12000) navReroute(false);
       return;
     }
+    if (g === 'fuss' && N.stairs) {
+      const st = N.stairs.find((x) => x.at > N.along - 2 && x.at - N.along < 30 && !x.said6);
+      if (st) {
+        const d = st.at - N.along;
+        if (d <= 7) { st.said6 = st.said25 = true; navSay(`Achtung, ${stairText(st)}.`); vib([300, 100, 300]); return; }
+        if (d > 12 && !st.said25) { st.said25 = true; navSay(`In etwa ${roundM(d)} Metern kommt eine ${stairText(st)}.`); return; }
+      }
+    }
+    // B7: „Weiter geradeaus“ zur Bestätigung auf langen geraden Stücken (Abstand einstellbar, ITU-T F.921: 10 m)
+    const every = geradeausM();
+    if (g === 'fuss' && every && N.joined) {
+      const nx = N.steps.find((x) => x.at > N.along + 3), dn = nx ? nx.at - N.along : Infinity;
+      if (N.lastSayAlong == null) N.lastSayAlong = N.along;
+      if (dn > 25 && N.along - N.lastSayAlong >= every && !(N.holdUntil && t < N.holdUntil)) {
+        navSay(nx && nx.art !== 'arrive' ? `Weiter geradeaus, noch ${navSayM(dn).replace(/Metern$/, 'Meter').replace(/Kilometern$/, 'Kilometer')} bis zum Abbiegen.` : `Weiter geradeaus.`);
+      }
+    }
     const next = N.steps.find((x) => x.at > N.along + 3);
     if (!next) { navShow(navArrow(null), navM(left), 'Der Strecke folgen', rest, false); return; }
     const d = next.at - N.along, txt = next.art === 'arrive' ? `Ziel: ${rec.trip.plan ? rec.trip.plan.name : 'erreicht'}` : navText(next);
@@ -1331,6 +1382,20 @@
     if (!N || !g || !rec.target || !rec.last || Date.now() - N.reAt < 60000 || !apiBase()) return;
     N.reAt = Date.now();
     const from = [rec.last.lat, rec.last.lon].map((x) => x.toFixed(4));
+    if (N.lokal) {   // stufenloser Weg: wieder mit der eigenen Wegsuche, nicht mit HERE (das kennt keine Treppen)
+      try {
+        const r = await fussRoute([rec.last.lat, rec.last.lon], [rec.target.lat, rec.target.lon], N.lokal);
+        if (!rec || !r) return;
+        const old = rec.nav;
+        rec.nav = navBuild({ pts: r.pts, schritte: stepsFromPath(r.pts, r.names) }, r.m / 1.1);
+        Object.assign(rec.nav, { lokal: old.lokal, checked: true, reAt: Date.now() });
+        if (old.said && old.said.start) rec.nav.said.start = true; else rec.nav.startOk = true;
+        navStairs(rec.nav).catch(() => {});
+        driveMapRoute();
+        if (!quiet && old.joined) navSay('Neue Strecke berechnet, ohne Stufen.');
+      } catch (e) { /* alte Strecke bleibt */ }
+      return;
+    }
     // Ausweichroute: über den Zwischenpunkt, solange er noch vor einem liegt
     let via = N.via || null;
     if (via) { const vp = navProject(N, { lat: via[0], lon: via[1] }, 0, N.pts.length - 1); if (vp.d < 300 && N.joined && N.along > vp.along - 300) via = null; }
@@ -1340,6 +1405,7 @@
       const old = rec.nav;
       rec.nav = navBuild(d.nav, d.dauer);
       if (via) rec.nav.via = via;
+      if (g === 'fuss') navStairs(rec.nav).catch(() => {});
       rec.nav.checked = true; rec.nav.reAt = Date.now();
       driveMapRoute();
       if (old && old.said && old.said.start) rec.nav.said.start = true; else rec.nav.startOk = true;   // Startansage nur einmal, auf der neuen Strecke gleich
@@ -1486,6 +1552,8 @@
   function audioUnlock() {
     try { audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)(); if (audioCtx.state === 'suspended') audioCtx.resume(); } catch (e) { audioCtx = null; }
   }
+  // „Weiter geradeaus“: aus, alle 10, 25 oder 50 m; ohne Einstellung im Begleitmodus alle 25 m, sonst aus
+  const geradeausM = () => (settings.geradeaus != null ? Number(settings.geradeaus) || 0 : begleitOn() ? 25 : 0);
   function chime(kind) {
     if (!audioCtx || settings.navTone === false) return 0;
     const notes = kind === 'ziel' ? [659, 880, 1047] : [880, 659], t0 = audioCtx.currentTime + 0.03;
@@ -1504,6 +1572,7 @@
   function navSay(text, opts, kind) {
     if (!text) return;
     lastNavSay = text;
+    if (typeof rec !== 'undefined' && rec && rec.nav) rec.nav.lastSayAlong = rec.nav.along;
     if (!voiceOn() && !(opts && opts.force)) return;
     if (canSpeak) speechSynthesis.cancel();
     const ms = chime(kind || 'hinweis');
@@ -3279,6 +3348,8 @@
     return { m, total, pts, punkte, stellen: Object.values(by).sort((a, b) => FUSS_BAD.indexOf(a.c) - FUSS_BAD.indexOf(b.c) || b.m - a.m), bord: nodeHits.b.length, gleis: nodeHits.g, ampeln: nodeHits.a, places };
   }
   const FUSS_WEIGHT = { rollstuhl: ['stufen', 'kopfstein', 'steil', 'unbefestigt', 'holprig'], rollator: ['stufen', 'kopfstein', 'unbefestigt', 'steil', 'holprig'], sehen: ['stufen'], hoeren: [], lernen: ['stufen'], ruhe: ['stufen', 'steil'] };
+  // mit Rollstuhl oder Rollator nimmt die Navigation den Weg ohne Stufen von selbst, wenn es ihn gibt
+  const altAuto = (r) => !!(r && r.alt && settings.access.on && ['rollstuhl', 'rollator'].includes(settings.access.type) && r.stellen.some((x) => x.c === 'stufen') && !r.alt.r.stellen.some((x) => x.c === 'stufen'));
   function fussBlock(r, route) {
     if (!r) return '';
     if (r.loading) return '<p class="small muted" role="status">Der Weg wird geprüft …</p>';
@@ -3313,8 +3384,10 @@
       if (r.bord > r.alt.r.bord) fewer.push('weniger hohe Bordsteine');
       if (r.gleis.length > r.alt.r.gleis.length) fewer.push('weniger Gleise');
       const plus = Math.max(0, Math.round(r.alt.plus / 10) * 10);
-      altHtml = `<div class="alt-weg"><p><b>${ic('route')} Besserer Weg für dich</b><br>${esc(fewer.join(', ') || 'mit weniger Hindernissen')}, ${plus ? `etwa ${plus} m länger (+${Math.max(1, Math.round(plus / 60))} min)` : 'kaum länger'}.</p>`
-        + `<button type="button" class="btn quiet" data-peek="l" data-name="Besserer Weg" data-art="alt" data-lines="${r.alt.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${route}">${ic('map')}Weg auf der Karte</button></div>`;
+      const auto = altAuto(r);
+      altHtml = `<div class="alt-weg"><p><b>${ic('route')} Besserer Weg für dich</b><br>${esc(fewer.join(', ') || 'mit weniger Hindernissen')}, ${plus ? `etwa ${plus} m länger (+${Math.max(1, Math.round(plus / 60))} min)` : 'kaum länger'}.${auto ? ' Die Navigation nimmt diesen Weg.' : ''}</p>`
+        + `<button type="button" class="btn quiet" data-peek="l" data-name="Besserer Weg" data-art="alt" data-lines="${r.alt.pts.map((q) => q.map((v) => v.toFixed(5)).join(',')).join(';')}" data-pts="${route}">${ic('map')}Weg auf der Karte</button>`
+        + (auto ? '' : `<button type="button" class="btn quiet" data-vf="go-fussalt">${ic('play')}Diesen Weg gehen</button>`) + '</div>';
     } else if (FUSS_PEN[type] && lines.length && !r.altDone) altHtml = '<p class="small muted" role="status">Flowtown sucht einen Weg mit weniger Hindernissen …</p>';
     else if (FUSS_PEN[type] && lines.length && r.altDone) altHtml = '<p class="small muted">Einen besseren Weg ohne große Umwege gibt es laut den Kartendaten nicht.</p>';
     return `<div class="rad-rate${type ? ' acc-block' : ''}"><h4 class="vf-h4">${title}${type ? ' · ' + esc(ACCESS_LABEL[type]) : ''}</h4>${bar}${lines.length ? `<ul class="rad-ohne bf-list">${lines.join('')}</ul>` : ''}${altHtml}`
@@ -3338,6 +3411,21 @@
     for (const [c, m] of Object.entries(r.m)) if (c !== 'offen' && c !== 'gut') x += m * (Math.min(pen[c], 20) - 1);
     return x + r.stellen.filter((s) => s.c === 'stufen').length * (pen.stufen === Infinity ? 1000 : pen.stufen * 20) + r.bord * pen.b + r.gleis.length * pen.g;
   }
+  function stepsFromPath(pts, names) {
+    const cum = [0];
+    for (let k = 1; k < pts.length; k++) cum.push(cum[k - 1] + dist({ lat: pts[k - 1][0], lon: pts[k - 1][1] }, { lat: pts[k][0], lon: pts[k][1] }));
+    // Richtung über etwa 10 m davor und danach, damit kleine Zacken nicht als Abbiegen zählen
+    const dirAt = (k, back) => { let j = k; while (back ? j > 0 && cum[k] - cum[j] < 10 : j < pts.length - 1 && cum[j] - cum[k] < 10) j += back ? -1 : 1; return back ? radBearing(pts[j], pts[k]) : radBearing(pts[k], pts[j]); };
+    const out = [];
+    for (let k = 1; k < pts.length - 1; k++) {
+      let dd = ((dirAt(k, false) - dirAt(k, true) + 540) % 360) - 180;
+      if (Math.abs(dd) < 40) continue;
+      if (out.length && cum[k] - cum[out[out.length - 1].i] < 15) continue;
+      out.push({ i: k, art: 'turn', dir: dd > 0 ? 'right' : 'left', sev: Math.abs(dd) < 60 ? 'light' : Math.abs(dd) > 120 ? 'sharp' : '', str: names && names[k + 1] && names[k + 1] !== names[k] ? names[k + 1] : '' });
+    }
+    out.push({ i: pts.length - 1, art: 'arrive' });
+    return out;
+  }
   async function fussRoute(from, to, type) {
     const pen = FUSS_PEN[type];
     if (!pen) return null;
@@ -3351,14 +3439,15 @@
     const id = new Map(), lat = [], lon = [], adj = [];
     const node = (p) => { const k = p[0] + ',' + p[1]; let i = id.get(k); if (i == null) { i = lat.length; id.set(k, i); lat.push(p[0]); lon.push(p[1]); adj.push([]); } return i; };
     const inBox = (p) => p[0] >= la0 && p[0] <= la1 && p[1] >= lo0 && p[1] <= lo1;
+    const wnames = [''], wname = (n) => { let i = wnames.indexOf(n || ''); if (i < 0) { i = wnames.length; wnames.push(n); } return i; };
     for (const t of tiles) for (const w of t.ways) {
-      const f = pen[w.c] == null ? 1.1 : pen[w.c];
+      const f = pen[w.c] == null ? 1.1 : pen[w.c], ni = wname(w.n);
       if (f === Infinity) continue;
       for (let i = 0; i < w.g.length - 1; i++) {
         if (!inBox(w.g[i]) && !inBox(w.g[i + 1])) continue;
         const a = node(w.g[i]), b = node(w.g[i + 1]);
         const d = dist({ lat: lat[a], lon: lon[a] }, { lat: lat[b], lon: lon[b] });
-        adj[a].push(b, d, d * f); adj[b].push(a, d, d * f);
+        adj[a].push(b, d, d * f, ni); adj[b].push(a, d, d * f, ni);
       }
     }
     const extra = new Float64Array(lat.length);
@@ -3367,7 +3456,7 @@
     const s = snap(from), e = snap(to);
     if (s < 0 || e < 0) return null;
     // A*: Kosten = Länge mal Aufschlag, Schätzung = Luftlinie (nie zu hoch, weil Aufschläge mindestens 1 sind)
-    const g = new Float64Array(lat.length).fill(Infinity), prev = new Int32Array(lat.length).fill(-1), len = new Float64Array(lat.length);
+    const g = new Float64Array(lat.length).fill(Infinity), prev = new Int32Array(lat.length).fill(-1), len = new Float64Array(lat.length), via = new Int32Array(lat.length);
     const h = (i) => dist({ lat: lat[i], lon: lon[i] }, { lat: lat[e], lon: lon[e] });
     const heap = [[h(s), s]];
     const push = (x) => { heap.push(x); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
@@ -3378,16 +3467,17 @@
       const [, u] = pop();
       if (u === e) break;
       const a = adj[u];
-      for (let k = 0; k < a.length; k += 3) {
+      for (let k = 0; k < a.length; k += 4) {
         const v = a[k], c = g[u] + a[k + 2] + extra[v];
-        if (c < g[v]) { g[v] = c; prev[v] = u; len[v] = len[u] + a[k + 1]; push([c + h(v), v]); }
+        if (c < g[v]) { g[v] = c; prev[v] = u; via[v] = a[k + 3]; len[v] = len[u] + a[k + 1]; push([c + h(v), v]); }
       }
     }
     if (g[e] === Infinity) return null;
     const path = [];
-    for (let i = e; i >= 0; i = prev[i]) path.push([lat[i], lon[i]]);
-    path.reverse();
-    return { pts: path, m: len[e] };
+    const names = [];
+    for (let i = e; i >= 0; i = prev[i]) { path.push([lat[i], lon[i]]); names.push(wnames[via[i]] || ''); }
+    path.reverse(); names.reverse();   // names[k]: Straße, auf der man zu Punkt k kommt
+    return { pts: path, m: len[e], names };
   }
   // ---------- Hinweise von Nutzer*innen: Hindernisse melden, bestätigen, als erledigt markieren ----------
   const HINW = { stufe: 'Stufe oder Treppe', bordstein: 'Hoher Bordstein', pflaster: 'Schlechter Belag', aufzug: 'Aufzug defekt', blockiert: 'Gehweg blockiert', toilette: 'Toilette nicht nutzbar', ampel: 'Ampel zu kurz grün oder ohne Ton', gut: 'Gut zugänglich' };
@@ -4831,6 +4921,38 @@
     return `<div class="vf-alt"><p class="tip">${ic('route')}<span><b>Ausweichroute${a.strassen && a.strassen.length ? ' über ' + esc(a.strassen.join(', ')) : ''}</b>: ${esc(bits.join(' · '))}</span></p>`
       + (a.nav ? `<button type="button" class="btn quiet" data-vf="go-alt">${ic('route')}Ausweichroute fahren</button>` : '') + '</div>';
   }
+  // B6: Vorschau der Strecke zum Vorlesen: Länge, Dauer, alle Abbiegungen, Ampeln mit Ton und Treppen (zu Fuß), Meldungen (Auto, Rad)
+  function previewText(z, group, r) {
+    const d = r.data, alt = group === 'fuss' && r.fuss && altAuto(r.fuss) ? r.fuss.alt : null;
+    const raw = alt ? alt.pts : d.nav ? d.nav.pts : null;
+    if (!raw) return '';
+    const steps = (alt ? stepsFromPath(alt.pts, alt.names) : d.nav.schritte).filter((x) => x.art !== 'arrive' && x.i > 0 && x.i < raw.length);
+    const cum = [0];
+    for (let k = 1; k < raw.length; k++) cum.push(cum[k - 1] + dist({ lat: raw[k - 1][0], lon: raw[k - 1][1] }, { lat: raw[k][0], lon: raw[k][1] }));
+    const total = cum[cum.length - 1], dauer = alt ? alt.m / 1.1 : d.dauer;
+    const out = [`Vorschau zu ${z.name}: ${total >= 1000 ? fmtNum(total / 1000, 1) + ' Kilometer' : Math.round(total / 10) * 10 + ' Meter'}, etwa ${hmSay(dauer)}${alt ? ', ohne Stufen' : ''}.`];
+    if (steps.length) {
+      out.push(steps.length === 1 ? 'Eine Abbiegung.' : `${steps.length} Abbiegungen.`);
+      let last = 0;
+      steps.slice(0, 8).forEach((st, k) => { const t = navText(st); out.push(`${k ? 'Nach weiteren' : 'Nach'} ${navSayM(Math.max(10, cum[st.i] - last))} ${t.charAt(0).toLowerCase() + t.slice(1)}.`); last = cum[st.i]; });
+      if (steps.length > 8) out.push(`Und ${steps.length - 8} weitere.`);
+    } else out.push('Ohne Abbiegen.');
+    const f = group === 'fuss' && r.fuss && !r.fuss.loading && !r.fuss.error ? (alt ? alt.r : r.fuss) : null;
+    if (f) {
+      const amp = f.ampeln || [], ton = amp.filter((n) => n[3] === 1).length;
+      if (amp.length) out.push(`${amp.length === 1 ? 'Eine Ampel' : amp.length + ' Ampeln'}${ton ? `, davon ${ton} mit Tonsignal` : ', ohne bekanntes Tonsignal'}.`);
+      const tr = (f.stellen || []).filter((x) => x.c === 'stufen');
+      out.push(tr.length ? `${tr.length === 1 ? 'Eine Treppe' : tr.length + ' Treppen'}${tr[0].name ? ', etwa ' + tr[0].name : ''}.` : 'Keine Treppe bekannt.');
+    }
+    if (group !== 'fuss' && d.items && d.items.length) out.push(`${d.items.length === 1 ? 'Eine Meldung' : d.items.length + ' Meldungen'} auf der Strecke, zum Beispiel ${d.items[0].titel}.`);
+    return out.join(' ');
+  }
+  // Plan für den besseren Fußweg (eigene Wegsuche): Strecke mit selbst erzeugten Abbiegehinweisen
+  function fussAltPlan(z, r) {
+    const a = r.fuss.alt, type = settings.access.on ? settings.access.type : 'rollator';
+    return { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: Date.now(), dauer: Math.round(a.m / 1.1), basis: Math.round(a.m / 1.1), km: Math.round(a.m / 100) / 10,
+      nav: { pts: a.pts, schritte: stepsFromPath(a.pts, a.names) }, lokal: FUSS_PEN[type] ? type : 'rollator', meldungen: [], ohneStufen: true };
+  }
   function zielPanel(z, group) {
     if (!z) return '';
     const head = `<div class="vf-phead"><b>${esc(z.name)}</b>${canSpeak ? `<button type="button" class="vf-x vf-say" data-vf="say" aria-label="Vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="btn-link" data-vf="edit">Bearbeiten</button><button type="button" class="vf-x" data-vf="close" aria-label="Schließen">${ic('x')}</button></div>`;
@@ -4860,7 +4982,8 @@
         + (best.t && gain >= 300 ? `<p class="tip">${ic('clock')}<span>Um ${clock(best.t)} bist du etwa ${Math.round(gain / 60)} min kürzer unterwegs als jetzt.</span></p>` : '');
     }
     const all = `<button type="button" class="btn quiet" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|')}" data-arts="${items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|')}" data-pts="${route}">${ic('map')}Strecke auf der Karte</button>`;
-    const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}${group === 'fuss' ? 'Losgehen mit Ziel' : 'Fahrt starten mit Ziel'}</button>`;
+    const go = `<button type="button" class="btn primary" data-vf="go">${ic('play')}${group === 'fuss' ? 'Losgehen mit Ziel' : 'Fahrt starten mit Ziel'}</button>`
+      + (canSpeak && (d.nav || (r.fuss && r.fuss.alt)) ? `<button type="button" class="btn quiet" data-vf="preview">${ic('sound')}Vorschau vorlesen</button>` : '');
     const foot = `<p class="small muted lg-src">Stand ${clock(d.t)} Uhr · ${esc(lageSrc(['HERE'].concat(d.items.some((it) => it.quelle === 'Autobahn GmbH') ? ['Autobahn GmbH'] : [])))} · <button type="button" class="btn-link" data-vf="again">neu prüfen</button></p>`;
     const lines = items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|');
     const larts = items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|');
@@ -5168,7 +5291,7 @@
             const mainM = data.km * 1000;
             if (alt && alt.m <= mainM * 1.8 + 300) {
               const ra = await fussRate(alt.pts).catch(() => null);
-              if (ra && fussBad(ra, type) < fussBad(r, type) * 0.6) r.alt = { pts: alt.pts, m: alt.m, plus: alt.m - mainM, r: ra };
+              if (ra && fussBad(ra, type) < fussBad(r, type) * 0.6) r.alt = { pts: alt.pts, names: alt.names, m: alt.m, plus: alt.m - mainM, r: ra };
             }
             r.altDone = true;
           }
@@ -5284,6 +5407,7 @@
     const z = settings.ziele.find((x) => x.id === zielOpen);
     const act = b.dataset.vf;
     if (act === 'say') { sayPanel(b.closest('.vf-panel')); return; }
+    if (act === 'preview' && z) { const r = zielRes[zKey(z, MODE_GROUP[selectedMode()])]; if (r && r.data) { unlockSpeech(); speak(previewText(z, MODE_GROUP[selectedMode()], r), { now: true, force: true }); } return; }
     if (act === 'close') { zielOpen = null; zielEdit = false; }
     else if (act === 'edit') zielEdit = !zielEdit;
     else if (act === 'again' && z) { checkZiel(z, true); return; }
@@ -5298,8 +5422,17 @@
         pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: Date.now(), dauer, basis: dauer, km: null, meldungen: [],
           verbindung: c.teile.filter((x) => x.art !== 'fuss').map((x) => `${x.linie} ${clock(x.ab)}`).join(', ') };
         if (first) setModeUI(first.art);
-      } else pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km, nav: d.nav || null,
+      } else if (d.mode === 'fuss' && r.fuss && altAuto(r.fuss)) pendingPlan = fussAltPlan(z, r);
+      else pendingPlan = { ziel: z.id, name: z.name, lat: z.lat, lon: z.lon, t: d.t, dauer: d.abfahrt ? d.abfahrt[0].dauer : d.dauer, basis: d.basis, km: d.km, nav: d.nav || null,
         meldungen: d.items.slice(0, 3).map((it) => ({ titel: it.titel, art: it.art, km: it.km })) };
+      zielOpen = null;
+      startTrip();
+      return;
+    }
+    else if (act === 'go-fussalt' && z) {
+      const r = zielRes[zKey(z, MODE_GROUP[selectedMode()])];
+      if (!r || !r.fuss || !r.fuss.alt) return;
+      pendingPlan = fussAltPlan(z, r);
       zielOpen = null;
       startTrip();
       return;
@@ -6408,6 +6541,8 @@
   $('#set-compass').checked = compassWanted();
   $('#set-begleit').checked = begleitOn();
   $('#set-navtone').checked = settings.navTone !== false;
+  $('#set-geradeaus').value = settings.geradeaus == null ? '' : String(settings.geradeaus);
+  $('#set-geradeaus').addEventListener('change', (ev) => { settings.geradeaus = ev.target.value === '' ? null : Number(ev.target.value); store.set('settings', settings); });
   $('#set-navtone').addEventListener('change', (ev) => { settings.navTone = ev.target.checked; store.set('settings', settings); if (ev.target.checked) { audioUnlock(); chime('hinweis'); } });
   $('#set-begleit').addEventListener('change', (ev) => { settings.begleit = ev.target.checked; store.set('settings', settings); if (ev.target.checked && !compassOn) compassStart(true); });
   $('#set-compass').addEventListener('change', (ev) => { settings.compass = ev.target.checked; store.set('settings', settings); if (ev.target.checked) compassStart(true).then((ok) => { if (!ok) { $('#set-compass').checked = false; micStatus('Der Kompass ist auf diesem Gerät nicht verfügbar oder nicht freigegeben.'); } }); });

@@ -1103,6 +1103,15 @@ async function radTick() {
 // gleiche Kacheln wie bei den Radwegen; vorab nur die Innenstadt, der Rest bei Bedarf
 const FUSS_DIR = path.join(DATA_DIR, 'fussnetz');
 const fussMem = new Map(), fussPending = new Map();
+// Treppe: [Stufen oder null, 1 aufwärts / -1 abwärts in Richtung des Wegs / 0, Handlauf b beide, l links, r rechts, m Mitte, y ja, n nein, null]
+function stairInfo(t) {
+  const n = parseInt(t.step_count, 10), yes = (v) => /^(yes|true)$/i.test(v || '');
+  const L = yes(t['handrail:left']), R = yes(t['handrail:right']), M = yes(t['handrail:center']);
+  const hl = L && R ? 'b' : L ? 'l' : R ? 'r' : M ? 'm' : yes(t.handrail) ? 'y' : /^no$/i.test(t.handrail || '') ? 'n' : null;
+  return [n > 0 && n < 500 ? n : null, /^up$/i.test(t.incline || '') ? 1 : /^down$/i.test(t.incline || '') ? -1 : 0, hl];
+}
+// Kacheln von vor den Treppen-Angaben (Stufen, Richtung, Handlauf) einmal im Hintergrund erneuern
+const FUSS_V2 = Date.parse('2026-11-09T12:00:00Z');
 function fussClass(t) {
   if (t.highway === 'steps') return 'stufen';
   const inc = /^-?\d+(\.\d+)?\s*%$/.test(t.incline || '') ? Math.abs(parseFloat(t.incline)) : null;
@@ -1143,7 +1152,8 @@ function fussFetch(k) {
           const t = e.tags || {};
           if (e.type === 'way' && e.geometry && e.geometry.length > 1) {
             if (t.access === 'private' || t.foot === 'no') continue;
-            ways.push({ c: fussClass(t), n: (t.name || '').slice(0, 60), g: e.geometry.map((p) => [r5(p.lat), r5(p.lon)]) });
+            const c = fussClass(t);
+            ways.push(Object.assign({ c, n: (t.name || '').slice(0, 60), g: e.geometry.map((p) => [r5(p.lat), r5(p.lon)]) }, c === 'stufen' ? { s: stairInfo(t) } : {}));
           } else if (e.type === 'node') {
             if (t.barrier === 'kerb') { if (/^(raised|regular|yes)$/.test(t.kerb || '')) nodes.push([r5(e.lat), r5(e.lon), 'b']); }
             else if (t.railway) nodes.push([r5(e.lat), r5(e.lon), 'g']);
@@ -1169,8 +1179,8 @@ function fussFetch(k) {
 async function sendFuss(req, res, origin, k) {
   let c = fussCached(k);
   if (!c) c = await fussFetch(k);
-  else if (Date.now() - c.t > RAD_AGE) fussFetch(k).catch(() => {});
-  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'public, max-age=86400', ETag: c.etag, Vary: 'Origin, Accept-Encoding' };
+  else if (Date.now() - c.t > RAD_AGE || c.t < FUSS_V2) fussFetch(k).catch(() => {});
+  const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': c.t < FUSS_V2 ? 'no-cache' : 'public, max-age=86400', ETag: c.etag, Vary: 'Origin, Accept-Encoding' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Expose-Headers': 'ETag' });
   if (req.headers['if-none-match'] === c.etag) { res.writeHead(304, h); return res.end(); }
   if (/\bgzip\b/.test(req.headers['accept-encoding'] || '')) { h['Content-Encoding'] = 'gzip'; res.writeHead(200, h); return res.end(c.gz); }

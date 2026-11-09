@@ -16,10 +16,10 @@ Schnell machbar:
 - [x] B4 (0.93.0) Zielansage mit Zugang aus „Bielefeld barrierefrei erleben“ („Der stufenlose Eingang ist der Seiteneingang.“)
 
 Mittlerer Aufwand:
-- [ ] B5 Treppe 6 m vorher ansagen: hoch oder runter, Stufenzahl unter 12, Handlauf (OSM `incline`, `step_count`, `handrail` im Fußnetz mitliefern)
-- [ ] B6 Vorschau: Strecke vor dem Start vorlesen (Abbiegungen, Ampeln mit Ton, Treppen)
-- [ ] B7 „Weiter geradeaus“ als Bestätigung, einstellbar (10 m, 25 m, 50 m, aus)
-- [ ] B8 Barrierefreiester Weg: Route meidet Stufen bei Profil Rollstuhl oder Rollator, statt nur zu warnen
+- [x] B5 (0.94.0) Treppe 6 m vorher ansagen: hoch oder runter, Stufenzahl unter 12, Handlauf (OSM `incline`, `step_count`, `handrail` im Fußnetz mitliefern)
+- [x] B6 (0.94.0) Vorschau: Strecke vor dem Start vorlesen (Abbiegungen, Ampeln mit Ton, Treppen)
+- [x] B7 (0.94.0) „Weiter geradeaus“ als Bestätigung, einstellbar (10 m, 25 m, 50 m, aus)
+- [x] B8 (0.94.0) Barrierefreiester Weg: Route meidet Stufen bei Profil Rollstuhl oder Rollator, statt nur zu warnen
 
 ## C. KI-Assistenz und Daten
 - [ ] C1 Plan B: bei Störung, defektem Aufzug oder Stufen immer eine Alternative nennen
@@ -58,6 +58,6 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [ ] F7 Später, je Stadt auf Open.NRW: Behindertenparkplätze (Köln, Düsseldorf, Gelsenkirchen, Neuss, Bochum, Moers), barrierefreie Toiletten (Dortmund, Duisburg, Köln, Münster, Neuss), Ampeln mit Tonsignal (Köln), Aufzüge KVB (Köln), Baustellen (Köln, Dortmund, Duisburg, Münster, Aachen), Parkhaus-Belegung (Köln, Münster, Bonn), Bänke (Bochum, Soest, Neuss); landesweit Soll-Fahrplan NRW (GTFS, CC BY 4.0, Beta) und Leihroller und Leihräder (Dott, VOI, Bolt, Lime, nextbike)
 
 ## G. Entscheidungen
-- [ ] G1 Vorgabe für „Weiter geradeaus“: 10 m wie in der Norm oder 25 m?
+- [x] G1 (vorläufig: ohne Einstellung im Begleitmodus alle 25 m, sonst aus; wählbar aus, 10, 25, 50 m) Vorgabe für „Weiter geradeaus“: 10 m wie in der Norm oder 25 m?
 - [ ] G2 Zeitformat „1 min 26 s“: ja oder nein?
 - [ ] G3 Google-Sheets-Connector freischalten, damit die Tabelle direkt bearbeitet werden kann?
