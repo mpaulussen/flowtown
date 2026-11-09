@@ -22,15 +22,15 @@ Mittlerer Aufwand:
 - [x] B8 (0.94.0) Barrierefreiester Weg: Route meidet Stufen bei Profil Rollstuhl oder Rollator, statt nur zu warnen
 
 ## C. KI-Assistenz und Daten
-- [ ] C1 Plan B: bei Störung, defektem Aufzug oder Stufen immer eine Alternative nennen
-- [ ] C2 Rückweg mitdenken („Wann muss ich zurück, damit es noch stufenlos geht?“)
-- [ ] C3 Hilfe durch Menschen: Servicekontakte und Videohilfe (etwa Be My Eyes) in unübersichtlichen Lagen
-- [ ] C4 Eingang statt Gebäudemitte für Ziele (OSM-Eingänge, Bethel)
-- [ ] C5 Lücken offen sagen („Zur Türbreite habe ich keine Angabe.“)
-- [ ] C6 Prüfen: Ampel-Angaben nur als Information, nie als Sicherheitszusage
+- [x] C1 (0.95.0: plan_b in den Werkzeugergebnissen) Plan B: bei Störung, defektem Aufzug oder Stufen immer eine Alternative nennen
+- [x] C2 (0.95.0: Werkzeug rueckweg mit letzten Abfahrten heute) Rückweg mitdenken („Wann muss ich zurück, damit es noch stufenlos geht?“)
+- [x] C3 (0.95.0: Werkzeug hilfe_menschen und Sprachbefehl) Hilfe durch Menschen: Servicekontakte und Videohilfe (etwa Be My Eyes) in unübersichtlichen Lagen
+- [x] C4 (0.95.0: Weg zu Fuß endet am Eingang, stufenlos bei Rollstuhl und Rollator) Eingang statt Gebäudemitte für Ziele (OSM-Eingänge, Bethel)
+- [x] C5 (0.95.0: angaben_fehlen je Profil) Lücken offen sagen („Zur Türbreite habe ich keine Angabe.“)
+- [x] C6 (0.95.0: Regel „laut Karte, nie eine Zusage“; „Sicher ans Ziel“ heißt jetzt „Weg prüfen lassen“) Prüfen: Ampel-Angaben nur als Information, nie als Sicherheitszusage
 - [x] C7 (0.92.3: Aufzüge und Rolltreppen an DB-Bahnhöfen mit Status über die Mobilithek, DB InfraGO OpenStation) Aufzugsstatus der DB für den Hauptbahnhof prüfen (offene Schnittstelle FaSta)
-- [ ] C8 moBiel-Meldungen prüfen: Ist „39 Buslinien“ zu hoch gezählt?
-- [ ] C9 Zeitformat „1 min 26 s“ (Entscheidung offen)
+- [x] C8 (geprüft 9.11.: 19 Meldungen auf mobiel.de, alle Linien richtig gelesen; 32 Linien einschließlich Nachtlinien und Umland sind korrekt gezählt, kein Fehler) moBiel-Meldungen prüfen: Ist „39 Buslinien“ zu hoch gezählt?
+- [x] C9 (0.95.0 für die Sprachausgabe: „1:26 min“ wird „1 Minute 26 Sekunden“; die Anzeige bleibt „1:26“, G2 offen) Zeitformat „1 min 26 s“ (Entscheidung offen)
 
 ## D. Texte in App, Flyer und Datenschutz
 - [ ] D1 „Flowtown ergänzt Langstock und Blindenhund“ in Einstieg, Datenschutzseite und Flyer

@@ -164,6 +164,15 @@ Alle Mobilithek-Abos auf einmal prüfen: `sudo bash -c 'set -a; . /etc/flowtown.
 
 Die Kacheln des Fußwegnetzes (`/api/fussnetz`) tragen bei Treppen jetzt Stufenzahl (`step_count`), Richtung (`incline` up/down) und Handlauf (`handrail`, `handrail:left/right/center`) aus OpenStreetMap. Die App sagt damit unterwegs Treppen an (etwa 25 m und 6 m vorher). Ältere Kacheln erneuert der Server einmal im Hintergrund, wenn sie abgerufen werden.
 
+### Assistenz: Plan B, Rückweg, Hilfe, Eingang, Lücken
+
+- **Plan B (`plan_b`)** steht in den Ergebnissen von `weg_check`, `vergleich`, `ort_info`, `oepnv_stoerungen` und `rueckweg`, wenn es ein Hindernis gibt (Stufen, Sperrung, Störung, Aufzug außer Betrieb). Die Alternativen stammen aus den Daten (Stadtbahn mit Hochbahnsteig, andere Aufzüge am Bahnhof, neu berechnen), nie aus dem Modell.
+- **`rueckweg`**: letzte Abfahrten heute an Haltestellen bis 500 m um das Ziel (Bielefeld, Mönchengladbach), Aufzüge am Bahnhof, Verbindungen jetzt zurück.
+- **`hilfe_menschen`**: Möglichkeiten, wenn die Person nicht weiterweiß (Passanten, Be My Eyes, Servicepersonal am Bahnhof, Mobilitätsservice der Bahn, moBiel-Kundenservice). Ohne Telefonnummern, mit Verweis auf bahn.de und mobiel.de.
+- **Eingang (`eingang`)**: Zu Fuß endet die Strecke am Eingang des Ziels (OpenStreetMap `entrance`, bis 70 m, bei Rollstuhl und Rollator zuerst ein stufenloser, sonst Haupteingang). Overpass bekommt nur feste Rechtecke von etwa 670 × 410 m, nie das genaue Ziel.
+- **Lücken (`angaben_fehlen`)**: je Profil, was zum Gebäude fehlt (Türbreite, Aufzuggröße, Leitsystem, Induktionsschleife …). Die KI sagt das offen.
+- Ergebnisse von Werkzeugen werden bei 4000 Zeichen gekürzt: Wichtiges (`plan_b`, `eingang`, `angaben_fehlen`) steht deshalb am Anfang.
+
 ### Öffentliche Toiletten der Stadt
 
 Der Server holt einmal am Tag die öffentlichen Toiletten der Stadt Bielefeld aus dem Geodienst der Stadt (Open Data „Öffentliche Toiletten“, www.bielefeld01.de): Name, Adresse, Öffnungszeiten, barrierefrei ja oder nein, Entgelt. Sie gehen vor den Toiletten aus OpenStreetMap; eine OSM-Toilette bis 30 m daneben fällt weg. Sie erscheinen auf der Karte, am Ziel und in der Assistenz. Abschalten wie alle Stadtdaten mit `STADT_DATEN=0`. `/api/health` zeigt unter `toilettenStadt` Anzahl und Stand.

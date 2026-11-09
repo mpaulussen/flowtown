@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.94.0';
+  const VERSION = '0.95.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1400,7 +1400,7 @@
     let via = N.via || null;
     if (via) { const vp = navProject(N, { lat: via[0], lon: via[1] }, 0, N.pts.length - 1); if (vp.d < 300 && N.joined && N.along > vp.along - 300) via = null; }
     try {
-      const d = await api(`/api/ziel?from=${from.join(',')}&to=${rec.target.lat},${rec.target.lon}&mode=${g}&nav=1${via ? '&via=' + via.join(',') : ''}`);
+      const d = await api(`/api/ziel?from=${from.join(',')}&to=${rec.target.lat},${rec.target.lon}&mode=${g}&nav=1${via ? '&via=' + via.join(',') : ''}${g === 'fuss' && settings.access.on ? '&profil=' + settings.access.type : ''}`);
       if (!rec || !d.nav) return;
       const old = rec.nav;
       rec.nav = navBuild(d.nav, d.dauer);
@@ -1536,6 +1536,8 @@
   }
   // Text zum Sprechen: Abkürzungen ausschreiben, Zeichen weglassen
   const sayText = (x) => String(x || '').replace(/\s+/g, ' ')
+    .replace(/(\d+):(\d{2})\s?h\b/g, (m, h, mi) => `${h} Stunde${h === '1' ? '' : 'n'} ${+mi} Minute${+mi === 1 ? '' : 'n'}`)
+    .replace(/(\d+):(\d{2})\s?min\b/g, (m, mi, sec) => (+mi ? `${+mi} Minute${+mi === 1 ? '' : 'n'}${+sec ? ` ${+sec} Sekunde${+sec === 1 ? '' : 'n'}` : ''}` : `${+sec} Sekunde${+sec === 1 ? '' : 'n'}`))
     .replace(/(\d)\s?min\b/g, '$1 Minuten').replace(/(\d)\s?km\/h/g, '$1 Kilometer pro Stunde').replace(/(\d),(\d)\s?km\b/g, '$1 Komma $2 Kilometer').replace(/(\d)\s?km\b/g, '$1 Kilometer')
     .replace(/(\d)\s?m\b/g, '$1 Meter').replace(/\bggü\.?\s?/g, 'gegenüber ').replace(/\bz\.\s?B\.\s?/g, 'zum Beispiel ').replace(/\bu\.\s?a\.\s?/g, 'unter anderem ').replace(/\bbzw\.\s?/g, 'beziehungsweise ').replace(/\bHbf\b/g, 'Hauptbahnhof').replace(/\bvsl\.\s?/g, 'voraussichtlich ').replace(/\bca\.\s?/g, 'etwa ').replace(/\bNr\.\s?/g, 'Nummer ').replace(/\bStr\.\s*$/, 'Straße.').replace(/\bStr\.(\s+)(?=[A-ZÄÖÜ])/g, 'Straße.$1').replace(/\bStr\./g, 'Straße').replace(/\bStr\b/g, 'Straße').replace(/-v-/g, ' von ').replace(/\bØ\s?/g, 'im Schnitt ')
     .replace(/\s?[·|]\s?/g, ', ').replace(/→/g, ' bis ').replace(/[✓✗]/g, '').replace(/\+(\d)/g, 'plus $1').replace(/−(\d)/g, 'minus $1').replace(/\s+([.,])/g, '$1').replace(/([.,]){2,}/g, '$1').trim();
@@ -2041,6 +2043,10 @@
     if (merkVoice(c)) return true;
     if (!$('#assist').hidden && /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b/.test(c)) {
       $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
+    }
+    if (/verlaufen|nicht (mehr )?weiter|brauche (jemanden|hilfe von|videohilfe)|be my eyes|ich weiß nicht (mehr )?wo/.test(c) && !/notfall|unfall|gestürzt/.test(c)) {
+      speak('Sprich Passanten an, sie helfen meist gern. Oder nutze die kostenlose App Be My Eyes: Dort hilft dir ein Mensch per Videoanruf. Bei Gefahr wähle 112. Frag mich gern nach Hilfe am Bahnhof.', { now: true, force: true });
+      return true;
     }
     if (/notfall|notruf|krise|krisendienst|rettungsdienst|^hilfe hilfe/.test(c)) { openSos(); speak('Im Notfall wähle 112. Ich habe die Notrufnummern geöffnet.', { now: true, force: true }); return true; }
     if (TIPS_RE.test(c)) { renderTips(); readTips(); return true; }
@@ -4012,7 +4018,7 @@
       stats: [Q_LAST, { l: 'Wo war es zu kurz grün?', q: 'An welchen Ampeln war die Grünphase für mich zu kurz?', n: 'mine' }, Q_MINE, { l: 'Ebener Weg ans Ziel', i: 'stufenlos', n: 'weg_check' }]
     },
     sehen: {
-      start: [{ l: 'Wo bin ich?', q: 'Wo bin ich?' }, { l: 'Sicher ans Ziel', i: 'sicher', n: 'weg_check' }, Q_ORT, { l: 'Ampeln mit Ton hier?', q: 'Welche Ampeln in meiner Nähe haben ein Tonsignal?', n: 'ampeln_mit_ton' }, { l: 'Finde meinen besten Weg', i: 'weg' }],
+      start: [{ l: 'Wo bin ich?', q: 'Wo bin ich?' }, { l: 'Weg prüfen lassen', i: 'sicher', n: 'weg_check' }, Q_ORT, { l: 'Ampeln mit Ton hier?', q: 'Welche Ampeln in meiner Nähe haben ein Tonsignal?', n: 'ampeln_mit_ton' }, { l: 'Finde meinen besten Weg', i: 'weg' }],
       tips: [{ l: 'Tipps vorlesen', q: 'Lies mir die Tipps vor' }, { l: 'Was lohnt sich für mich?', i: 'vergleich', n: 'vergleich' }, Q_ORT],
       stats: [Q_LAST, { l: 'Wo fehlte ein Tonsignal?', q: 'An welchen Ampeln fehlte mir ein Tonsignal?', n: 'mine' }, Q_MINE]
     },
@@ -4988,7 +4994,8 @@
     const lines = items.map((it) => (it.segs || [it.pts]).map((l) => l.map((q) => q.join(',')).join(';')).join('|')).join('|');
     const larts = items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|');
     const mini = `<div class="vf-map" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${lines}" data-arts="${larts}" data-pts="${route}" role="img" aria-label="Karte der Strecke nach ${esc(z.name)}${items.length ? ', Meldungen farbig' : ''}. Tippen öffnet die große Karte."></div>`;
-    return `<div class="vf-panel">${head}${sum}${mini}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+    const eing = group === 'fuss' && d.eingang ? `<p class="small">${ic('pin')} Der Weg führt zum ${esc(d.eingang.art)}${d.eingang.stufenlos === 'ja' ? ', stufenlos' : d.eingang.stufenlos === 'nein' ? ', mit Stufen' : d.eingang.stufenlos === 'eingeschränkt' ? ', nur eingeschränkt stufenlos' : ''}${d.eingang.automatiktuer === 'ja' ? ', Automatiktür' : ''}. <span class="muted">OpenStreetMap</span></p>` : '';
+    return `<div class="vf-panel">${head}${sum}${eing}${mini}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
   }
   // ---------- Park + Ride und Radverkehrsnetz der Stadt Bielefeld (Open Data) ----------
   let stadt2 = store.get('stadt2', null), stadt2Loading = null, netzGrid = null;
@@ -5277,7 +5284,7 @@
     const pos = halt ? [halt[2], halt[3]] : await myStart();
     const from = halt ? pos : (pos || [52.02, 8.53]).map((x) => (group === 'fuss' ? Math.round(x * 1000) / 1000 : Math.round(x * 100) / 100));   // sonst auf etwa 1 km gerundet (zu Fuß auf etwa 100 m), ohne Standort: Bielefeld
     try {
-      const data = await api(`/api/ziel?from=${from.join(',')}&to=${z.lat},${z.lon}&mode=${group}${halt ? '&ab=halt' : ''}`);
+      const data = await api(`/api/ziel?from=${from.join(',')}&to=${z.lat},${z.lon}&mode=${group}${halt ? '&ab=halt' : ''}${group === 'fuss' && settings.access.on ? '&profil=' + settings.access.type : ''}`);
       zielRes[key] = { t: Date.now(), data, fallback: !pos };
       if (group === 'fuss' && data.pts && data.pts.length > 1) {
         const res = zielRes[key];
@@ -6207,7 +6214,7 @@
     schnell: { label: 'Schneller ankommen', fd: ['clock', 'Beste Abfahrt zu deinem Ziel', 'Stau, Baustellen und die beste Zeit'] },
     stufenlos: { label: 'Ohne Stufen', cls: 'acc', fd: ['access', 'Stufenlose Haltestellen und Orte', 'Hochbahnsteige, Aufzüge, Toiletten auf der Karte'] },
     blick: { label: 'Ohne Blick aufs Display', cls: 'blue', fd: ['mic', 'Wo bin ich?', 'Adresse, Ampel und Haltestelle, vorgelesen'] },
-    rad: { label: 'Sicher mit dem Rad', fd: ['bike', 'Radwege auf der Karte', 'Gute Wege, holprige Stellen, Baustellen'] },
+    rad: { label: 'Mit dem Rad', fd: ['bike', 'Radwege auf der Karte', 'Gute Wege, holprige Stellen, Baustellen'] },
     stadt: { label: 'Die Stadt verbessern', fd: ['chart', 'Deine Wirkung für Bielefeld', 'Fahrten anonym beitragen, Ampeln bewerten'] }
   };
   const goals = () => (Array.isArray(settings.goals) ? settings.goals : []).filter((g) => GOALS[g]);

@@ -2282,6 +2282,12 @@ Regeln:
 - Fehlt der Standort (Werkzeug meldet „Kein Standort“), frag nach dem Start: Haltestelle, Straße oder Adresse.
 - Ist am Ziel oder an einem Bahnhof ein Aufzug außer Betrieb (bahnhof_aufzuege, db_aufzuege_ausser_betrieb), sag das bei Rollstuhl, Rollator und Kinderwagen zuerst und nenne den Bahnhof; Angaben laut DB.
 - Abfahrten mit verspaetung_min oder faellt_aus kommen aus der Echtzeit: Verspätungen ab 2 Minuten und Ausfälle immer nennen; ohne diese Felder gilt der Fahrplan, dann „laut Fahrplan“ sagen.
+- Plan B: Gibt ein Werkzeug plan_b zurück oder meldet es ein Hindernis (Stufen, Sperrung, Störung, Aufzug außer Betrieb), nenne neben dem Problem immer eine Alternative daraus. Fehlt plan_b, sag offen, dass du keine kennst, und verweise auf Menschen vor Ort (Werkzeug hilfe_menschen).
+- Rückweg („Wann muss ich zurück?“, „Wie komme ich wieder heim?“, „Fährt abends noch eine Bahn?“): Werkzeug rueckweg mit dem Ort, von dem es zurückgeht. Nenne die letzte Abfahrt heute (bei Profil mit Hochbahnsteig), sag, dass der Fahrplan keine späteren Verspätungen kennt, und rate zu etwa 15 Minuten Reserve.
+- Weiß die Person nicht weiter, hat sich verlaufen, ist ein Ort unübersichtlich oder braucht sie beim Ein- und Aussteigen Hilfe: Werkzeug hilfe_menschen. Nenne zwei Möglichkeiten, erfinde keine Telefonnummern, verweise auf bahn.de oder mobiel.de. Bei Gefahr zuerst Notruf 112.
+- Fehlen Angaben (angaben_fehlen, keine Angabe, unbekannt), sag das offen in einem Satz, zum Beispiel „Zur Türbreite habe ich keine Angabe.“ Nenne nur Fehlendes, das zum Profil passt.
+- Ampel-Angaben (Tonsignal, Taster, Leitstreifen) sind Angaben aus Karten, nie eine Zusage, dass das Queren sicher ist. Sag „laut Karte“ und dass die Person am Signal selbst entscheidet.
+- Endet der Weg an einem eingang (Feld eingang), nenne den Eingang und ob er stufenlos ist; der Weg führt dorthin, nicht in die Gebäudemitte.
 - Ampeln auf einem Weg nur aus weg_check; ampeln_mit_ton ist für Ampeln am Standort oder an einem Ort, nicht für einen Weg.
 - Beschreibe nie einen Weg innerhalb eines Gebäudes oder Geländes; dazu hast du keine Daten.
 - Erfinde keine ruhigen Zeiten, Öffnungszeiten oder Auslastung.
@@ -2294,6 +2300,10 @@ Regeln:
 - „Infos zu einem Ort“, „Was erwartet mich dort?“: Werkzeug ort_info. Sag zuerst, für welchen Ort die Angaben gelten (ort, adresse). Gibt es „auswahl“ oder „gebaeude_auswahl“, nenne zwei, drei davon und frag, welcher gemeint ist; erfinde keine Angaben.
 - Entfernungen gelten immer vom gefundenen Ort aus (Luftlinie); nenne sie nur, wenn der Ort eindeutig ist. Liegt die Stadtbahn bei 0 bis 100 m, sag „direkt dort“. Große Gelände wie die Universität: sag, dass es um das Gelände geht.`;
 const ASSIST_TOOLS = [
+  { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
+    art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
+  { type: 'function', function: { name: 'rueckweg', description: 'Rückweg: von einem Ziel zurück zum Standort oder zu einem anderen Ort. Liefert die letzten Abfahrten heute mit Bus und Bahn nahe dem Ziel (Fahrplan, ohne Verspätung), mit Profil auch Hochbahnsteig, die Aufzüge am Bahnhof und die Verbindungen jetzt.', parameters: { type: 'object', properties: {
+    ziel: { type: 'string', description: 'Der Ort, von dem es zurückgeht (etwa das Ziel der Hinfahrt)' }, zurueck_nach: { type: 'string', description: 'leer = Standort' } }, required: ['ziel'] } } },
   { type: 'function', function: { name: 'orte_in_der_naehe', description: 'Findet Orte in der Nähe des Standorts oder eines genannten Orts in Bielefeld.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['rollstuhl_toilette', 'toilette', 'behindertenparkplatz', 'aufzug', 'park_and_ride', 'barrierefreier_ort'] },
     ort: { type: 'string', description: 'Ortsname, Platz oder Adresse; leer = Standort der Person' } }, required: ['art'] } } },
@@ -2350,6 +2360,35 @@ function bfOrtDetails(name, thema) {
     quelle: 'Bielefeld barrierefrei erleben (v. Bodelschwinghsche Stiftungen Bethel)', link: o.u || BF_URL
   };
 }
+// Eingang nahe einem Ziel (OpenStreetMap, bis 70 m): mit Rollstuhl oder Rollator zuerst ein stufenloser, sonst Haupteingang, sonst der nächste.
+// Nur zu Fuß: Die Strecke endet am Eingang statt in der Gebäudemitte. Nicht gefunden oder zu langsam: null, dann gilt das Ziel wie gegeben.
+const eingCells = new Map();   // feste Rechtecke von 0,006° (etwa 670 × 410 m): so erfährt Overpass nie das genaue Ziel
+const EING_CELL = 0.006;
+async function eingCell(a, b) {
+  const k = a + '_' + b, c = eingCells.get(k);
+  if (c && Date.now() - c.t < 7 * 864e5) return c.list;
+  const bb = `${(a * EING_CELL - 0.0012).toFixed(5)},${(b * EING_CELL - 0.0016).toFixed(5)},${((a + 1) * EING_CELL + 0.0012).toFixed(5)},${((b + 1) * EING_CELL + 0.0016).toFixed(5)}`;
+  const j = await Promise.race([overpass(`[out:json][timeout:20];node[entrance](${bb});out tags;`, 15000), new Promise((_, rej) => setTimeout(() => rej(new Error('zu langsam')), 16000))]);
+  const list = (j.elements || []).filter((e) => e.type === 'node' && e.tags && e.tags.entrance && !/^(emergency|exit)$/.test(e.tags.entrance) && isFinite(e.lat)).map((e) => ({ t: e.tags, pos: [r5(e.lat), r5(e.lon)] }));
+  eingCells.set(k, { t: Date.now(), list });
+  if (eingCells.size > 300) eingCells.delete(eingCells.keys().next().value);
+  return list;
+}
+async function eingangNahe(pos, typ) {
+  if (!pos || !isFinite(pos[0])) return null;
+  const mob = ['rollstuhl', 'rollator'].includes(typ);
+  let all;
+  try { all = await eingCell(Math.floor(pos[0] / EING_CELL), Math.floor(pos[1] / EING_CELL)); } catch (e) { return null; }
+  const list = all.map((x) => Object.assign({ d: mAbs(pos, x.pos) }, x)).filter((x) => x.d <= 70);
+  const rank = (x) => (mob ? (x.t.wheelchair === 'yes' ? 0 : x.t.wheelchair === 'limited' ? 1 : x.t.wheelchair === 'no' ? 9 : 4) : 0) + (x.t.entrance === 'main' ? 0 : x.t.entrance === 'service' || x.t.entrance === 'staircase' ? 5 : 2);
+  list.sort((a, b) => rank(a) - rank(b) || a.d - b.d);
+  const best = list[0];
+  if (!best) return null;
+  const t = best.t;
+  return { pos: best.pos, art: t.entrance === 'main' ? 'Haupteingang' : t.entrance === 'service' ? 'Nebeneingang für Personal oder Lieferung' : 'Eingang', abstand_m: Math.round(best.d / 5) * 5,
+    stufenlos: t.wheelchair === 'yes' ? 'ja' : t.wheelchair === 'limited' ? 'eingeschränkt' : t.wheelchair === 'no' ? 'nein' : 'keine Angabe',
+    automatiktuer: /^(yes|button)$/.test(t.automatic_door || '') ? 'ja' : undefined, stufen: parseInt(t.step_count, 10) > 0 ? parseInt(t.step_count, 10) : undefined, quelle: 'OpenStreetMap' };
+}
 // Ort aus Text: Standort, ein gespeichertes Ziel aus dem Kontext, ein Ort von Bethel, sonst HERE
 async function assistOrt(name, ctx) {
   const n = String(name || '').trim();
@@ -2396,7 +2435,7 @@ function berlinNow() {
   const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date()).map((x) => [x.type, x.value]));
   return { ymd: f.year + f.month + f.day, min: Number(f.hour) * 60 + Number(f.minute) };
 }
-function serverDepartures(name, kind, d) {
+function serverDepartures(name, kind, d, span, lim) {
   d = d || fpData();
   rtWanted = Date.now(); rtTick();
   const city = (Object.values(fahrplaene).find((f) => fpParsedBy[f.id] === d) || {}).id || 'bielefeld';
@@ -2415,13 +2454,13 @@ function serverDepartures(name, kind, d) {
       if (idx.has(pat[j])) {
         for (const [day, off] of [[ymd, 0], [prev, 1440]]) {
           const at = tm - off;
-          if (at >= min && at <= min + 60 && days.includes(day)) out.push(Object.assign({ in_min: at - min, linie: d.routes[t[0]][0], richtung: fpName(d.heads[t[2]], d), art: ['Stadtbahn', '', 'Zug', 'Bus'][d.routes[t[0]][1]] || 'Bus' }, off === 0 ? rtAt(city, ti, pat, j) || {} : {}));
+          if (at >= min && at <= min + (span || 60) && days.includes(day)) out.push(Object.assign({ in_min: at - min, uhr: `${String(Math.floor((at % 1440) / 60)).padStart(2, '0')}:${String(at % 60).padStart(2, '0')}`, linie: d.routes[t[0]][0], richtung: fpName(d.heads[t[2]], d), art: ['Stadtbahn', '', 'Zug', 'Bus'][d.routes[t[0]][1]] || 'Bus' }, off === 0 ? rtAt(city, ti, pat, j) || {} : {}));
         }
       }
       tm += t[5][j] || 0;
     }
   }
-  return out.sort((a, b) => a.in_min - b.in_min).slice(0, 6);
+  return out.sort((a, b) => a.in_min - b.in_min).slice(0, lim || 6);
 }
 // ---------- Weg-Check auf dem Server, wie in der App: Stufen, Belag, Steigung, Bordsteine, Gleise, Ampeln mit Tonsignal ----------
 // Grundlage sind dieselben Kacheln aus OpenStreetMap wie für die App (fussnetz). Fehlt eine Kachel, wird sie geholt; dauert das
@@ -2629,6 +2668,42 @@ async function ampelnNahe(pos) {
 const ZIEL_THEMA = { rollstuhl: ['zugang', 'aufzug', 'wc'], rollator: ['zugang', 'aufzug', 'wc'], sehen: ['sehen', 'zugang'], hoeren: ['hoeren'], lernen: ['einfach'], ruhe: ['service', 'wc'] };
 const ausserhalb = (pos) => !!pos && !inBox(pos[0], pos[1], 0.05);
 const AUSSEN_HINWEIS = 'Der Ort liegt außerhalb von Bielefeld. Dazu hat Flowtown keine Angaben zu Barrierefreiheit, Toiletten, Behindertenparkplätzen, Haltestellen, Fahrplan und Ampeln mit Tonsignal. Sag das offen; behaupte nicht, dass es dort nichts gibt.';
+// Welche Angaben zum Gebäude für ein Profil fehlen? Die KI nennt sie offen („Dazu habe ich keine Angabe.“).
+const LUECKEN = {
+  rollstuhl: [['Türbreite', (t) => /breit/i.test(t) && /\d/.test(t)], ['Größe des Aufzugs', (t) => /aufzug|lift/i.test(t) && /\d/.test(t)], ['stufenloser Eingang', (t) => /stufenlos|rampe|eingang/i.test(t)], ['rollstuhlgerechtes WC', (t) => /wc|toilett/i.test(t)]],
+  rollator: [['Türbreite', (t) => /breit/i.test(t) && /\d/.test(t)], ['stufenloser Eingang', (t) => /stufenlos|rampe|eingang/i.test(t)], ['Sitzgelegenheiten', (t) => /sitz|bank|stuhl/i.test(t)], ['WC', (t) => /wc|toilett/i.test(t)]],
+  sehen: [['Leitsystem für blinde Menschen', (t) => /leit|taktil|boden/i.test(t)], ['Hilfen für sehbehinderte Menschen', (t) => /sehbehind|blind|kontrast|braille/i.test(t)]],
+  hoeren: [['Induktionsschleife', (t) => /induktion|hörschleife|schleife/i.test(t)], ['Gebärdensprache', (t) => /gebärde|dolmetsch/i.test(t)]],
+  lernen: [['Angebote in einfacher Sprache', (t) => /einfach|leicht/i.test(t)]],
+  ruhe: [['ruhige Bereiche', (t) => /ruhe|rückzug|pause/i.test(t)], ['Sitzgelegenheiten', (t) => /sitz|bank|stuhl/i.test(t)]]
+};
+function lueckenFuer(typ, angaben) {
+  const themen = LUECKEN[typ];
+  if (!themen) return [];
+  const txt = (angaben || []).map((x) => [x.frage, x.antwort, x.hinweis, x.merkmal].filter(Boolean).join(' ')).join(' | ');
+  return themen.filter(([, ok]) => !ok(txt)).map(([n]) => n);
+}
+// ---------- C1: Plan B: eine Alternative aus den Daten, nie erfunden ----------
+function planB(art, d) {
+  const out = [], typ = d.typ || '', mob = ['rollstuhl', 'rollator'].includes(typ), am = d.am || {};
+  const stadtbahn = am.stadtbahn && typeof am.stadtbahn === 'object' ? am.stadtbahn : null;
+  const stufen = d.ck && (d.ck.stellen || []).some((x) => x.c === 'stufen');
+  if (art === 'weg' && (stufen || (d.ck && d.ck.hohe_bordsteine && mob))) {
+    if (mob && stadtbahn && stadtbahn.hochbahnsteig === 'ja') out.push(`Mit der Stadtbahn bis ${stadtbahn.name}, die Haltestelle hat einen Hochbahnsteig und liegt etwa ${stadtbahn.entfernung_m} m vom Ziel.`);
+    else if (mob) out.push('Mit Bus oder Bahn bis zur Haltestelle am Ziel; ob sie stufenlos ist, sagt das Werkzeug haltestelle.');
+    out.push('In der App unter „Wohin?“ beim Ziel zeigt Flowtown einen Weg mit weniger Stufen, wenn es ihn gibt.');
+  }
+  if (art === 'weg' && d.r && (d.r.items || []).some((it) => it.art === 'sperrung')) out.push('Auf der Strecke liegt eine Sperrung: In der Navigation die Strecke neu berechnen lassen.');
+  const au = am.bahnhof_aufzuege && am.bahnhof_aufzuege.ausser_betrieb;
+  if (au && au.length) {
+    const b = am.bahnhof_aufzuege;
+    out.push(`Am Bahnhof ${b.bahnhof} ${b.aufzuege > au.length ? 'gibt es weitere Aufzüge in Betrieb (nach Beschilderung suchen)' : 'sind die Aufzüge außer Betrieb'}; Servicepersonal der Bahn am Bahnhof ansprechen oder vorab den Mobilitätsservice der Bahn bitten (Werkzeug hilfe_menschen).`);
+    if (mob) out.push('Alternativ an einer Haltestelle mit Hochbahnsteig oder an einem anderen Bahnhof aussteigen.');
+  }
+  if (art === 'vergleich' && d.v && (d.v.optionen || []).some((o) => o.verkehrsmittel === 'fuss' && o.geeignet === false) && mob && stadtbahn && stadtbahn.hochbahnsteig === 'ja') out.push(`Zu Fuß geht es nicht stufenlos; die Stadtbahn bis ${stadtbahn.name} (Hochbahnsteig) ist die Alternative.`);
+  if (art === 'stoerung' && d.items && d.items.length) out.push('Bei Umleitungen: Ersatzverkehr oder eine Nachbarhaltestelle nutzen, die Abfahrten dort zeigt das Werkzeug abfahrten_in_der_naehe.');
+  return out.length ? out : undefined;
+}
 function zielInfo(pos, name, typ) {
   const dbAm = dbaAt(pos, 600);
   if (ausserhalb(pos)) return dbAm ? { hinweis: AUSSEN_HINWEIS + ' Nur die Aufzüge und Rolltreppen am Bahnhof (bahnhof_aufzuege) sind bekannt.', bahnhof_aufzuege: dbAm } : { hinweis: AUSSEN_HINWEIS };
@@ -2642,7 +2717,8 @@ function zielInfo(pos, name, typ) {
     const first = bfOrtDetails(name, themen[0]);
     if (first && first.name && !first.mehrdeutig) {
       const ang = [].concat(...themen.map((t, i) => ((i ? bfOrtDetails(name, t) : first).angaben || []))).slice(0, 14);
-      out.gebaeude = { name: first.name, adresse: first.adresse, angaben: ang, hinweise: first.hinweise, stand: first.stand_der_erhebung, quelle: 'Bielefeld barrierefrei erleben' };
+      const lu = lueckenFuer(typ, ang);
+      out.gebaeude = { name: first.name, adresse: first.adresse, angaben_fehlen: lu.length ? lu : undefined, angaben: ang, hinweise: first.hinweise, stand: first.stand_der_erhebung, quelle: 'Bielefeld barrierefrei erleben' };
     } else if (first && first.mehrdeutig) out.gebaeude_auswahl = first.kandidaten;
   }
   if (!out.gebaeude && bf && (bf.orte || []).length) {
@@ -2651,6 +2727,7 @@ function zielInfo(pos, name, typ) {
       .filter((x) => x.entfernung_m <= 600).sort((a, b) => a.entfernung_m - b.entfernung_m).slice(0, 4).map((x) => Object.assign(x, { entfernung_m: Math.round(x.entfernung_m / 10) * 10 }));
     if (nah.length) out.barrierefreie_orte_nah = nah;
   }
+  if (!out.gebaeude && typ) out.angaben_fehlen = lueckenFuer(typ, []);
   if (!bf || !(bf.orte || []).length) out.hinweis_daten = 'Die Daten von Bielefeld barrierefrei erleben sind auf dem Server gerade nicht geladen.';
   const wc = wcAll().map(wcInfo)
     .concat((bf && bf.orte || []).filter((x) => x.f && x.f.wc === 1).map((x) => ({ name: 'WC im Gebäude ' + x.n, rollstuhlgerecht: 'ja', quelle: 'Bielefeld barrierefrei erleben', pos: [x.lat, x.lon] })));
@@ -2667,14 +2744,57 @@ function zielInfo(pos, name, typ) {
   if (g.length) out.gemeldet = g;
   return out;
 }
+const HILFE = {
+  orientierung: { moeglichkeiten: ['Passanten ansprechen: Menschen helfen meist gern, Straße oder Eingang nennen zu lassen.', 'Videohilfe: Die kostenlose App Be My Eyes verbindet mit Freiwilligen, die per Kamera helfen (auch auf Deutsch).', 'Wenn Sprechen nicht geht: die Notruf-App nora.'], hinweis: 'Be My Eyes ist ein eigenes Angebot, Flowtown ist damit nicht verbunden.' },
+  bahnhof: { moeglichkeiten: ['Servicepersonal am Bahnhof ansprechen (Informationsstand oder DB-Personal am Gleis).', 'Hilfe beim Ein-, Um- und Aussteigen (Rampe, Hublift): der Mobilitätsservice der Bahn; vorab anmelden, die Kontaktdaten stehen auf bahn.de unter „Mobilitätsservice“.', 'Bei defektem Aufzug nach einem anderen Aufzug oder einer Begleitung fragen.'], hinweis: 'Keine Telefonnummer nennen; auf bahn.de verweisen.' },
+  nahverkehr: { moeglichkeiten: ['Fahrerin oder Fahrer ansprechen: Sie helfen bei der Rampe und warten kurz.', 'Kundenservice von moBiel: Kontakt auf mobiel.de.', 'Bei Störungen: Ersatzverkehr und Aushänge an der Haltestelle.'], hinweis: 'Keine Telefonnummer nennen; auf mobiel.de verweisen.' },
+  gefahr: { moeglichkeiten: ['Sofort den Notruf 112 wählen; das rote Plus oben in Flowtown öffnet die Notrufnummern.', 'Wenn Sprechen nicht geht: die Notruf-App nora.'], hinweis: 'Keine medizinischen Ratschläge.' }
+};
+// letzte Abfahrten heute an Haltestellen bis max m, mit Uhrzeit
+function letzteAbfahrten(pos, max) {
+  const fs0 = fpStadtAt(pos), d = fs0 ? fpData(fs0.id) : null;
+  if (!d) return null;
+  const by = new Map();
+  for (const st of d.stops) { const nm = fpName(st[1], d), dd = mAbs(pos, [st[2], st[3]]); if (dd <= max && (!by.has(nm) || dd < by.get(nm))) by.set(nm, dd); }
+  const near = [...by.entries()].sort((x, y) => x[1] - y[1]).slice(0, 3);
+  const out = [];
+  for (const [nm, dd] of near) {
+    const ab = serverDepartures(nm, null, d, 1440, 5000).filter((x) => !x.faellt_aus);
+    if (!ab.length) continue;
+    const byLine = new Map();
+    for (const x of ab) byLine.set(`${x.art} ${x.linie} ${x.richtung}`, x);   // je Linie und Richtung die letzte
+    const last = [...byLine.values()].sort((a, b) => b.in_min - a.in_min).slice(0, 4);
+    out.push({ haltestelle: nm, entfernung_m: Math.round(dd / 10) * 10, hochbahnsteig: fs0.id === 'bielefeld' ? hbsOf(nm) : undefined, letzte_abfahrten: last.map((x) => ({ uhr: x.uhr, linie: x.linie, richtung: x.richtung, art: x.art })) });
+  }
+  return out.length ? out : null;
+}
 async function assistTool(name, a, ctx, act) {
   a = a || {};
+  if (name === 'hilfe_menschen') return HILFE[a.art] || HILFE.orientierung;
+  if (name === 'rueckweg') {
+    const von = await assistOrt(a.ziel, ctx);
+    if (!von) return { fehler: 'Der Ort, von dem es zurückgeht, ist unbekannt' };
+    const nach = a.zurueck_nach ? await assistOrt(a.zurueck_nach, ctx) : (ctx.pos ? { name: 'Standort', pos: ctx.pos } : null);
+    const out = { von: von.name, nach: nach ? nach.name : 'unbekannt', hinweis: 'Fahrplan, ohne Verspätungen und Ausfälle von später; 15 Minuten Reserve einplanen und vor Ort prüfen.' };
+    out.letzte_abfahrten_heute = letzteAbfahrten(von.pos, 500) || 'keine Haltestelle mit Fahrplan bis 500 m bekannt';
+    const am = zielInfo(von.pos, von.name, ctx.typ);
+    if (am.bahnhof_aufzuege) out.bahnhof_aufzuege = am.bahnhof_aufzuege;
+    out.plan_b = planB('ort', { typ: ctx.typ, am });
+    if (nach && HERE_KEY) {
+      try { const v = await vergleichZiel(von.pos.map((x) => Math.round(x * 1000) / 1000), nach.pos.map((x) => Math.round(x * 10000) / 10000), ctx.typ, ctx.vorrang); out.jetzt_zurueck = { empfehlung: v.empfehlung, optionen: v.optionen.map((o) => ({ verkehrsmittel: o.verkehrsmittel, dauer_min: o.dauer_min, ankunft: o.ankunft, geeignet: o.geeignet, hindernisse: o.hindernisse })) }; } catch (e) { out.jetzt_zurueck = 'gerade nicht berechenbar'; }
+    }
+    return out;
+  }
   // Daten, die es nur für Bielefeld gibt
   if (['abfahrten_in_der_naehe', 'ampeln_mit_ton', 'verkehrslage', 'hinweise', 'orte_in_der_naehe'].includes(name)) {
     const o = a.ort ? await assistOrt(a.ort, ctx) : ctx.pos ? { name: 'Standort', pos: ctx.pos } : null;
     if (o && ausserhalb(o.pos) && !(name === 'abfahrten_in_der_naehe' && fpStadtAt(o.pos))) return { bei: o.name, hinweis: AUSSEN_HINWEIS + (name === 'verkehrslage' ? ' Staus und Sperrungen auf einer Strecke prüft das Werkzeug weg.' : '') };
   }
-  if (name === 'ort_barrierefreiheit') return bfOrtDetails(a.name, a.thema);
+  if (name === 'ort_barrierefreiheit') {
+    const r = bfOrtDetails(a.name, a.thema);
+    if (r && r.angaben && ctx.typ) return Object.assign({ name: r.name, angaben_fehlen: lueckenFuer(ctx.typ, r.angaben) }, r);
+    return r;
+  }
   if (name === 'vergleich' || name === 'weg_check') {
     if (!HERE_KEY) return { fehler: 'Dafür braucht der Server den HERE-Schlüssel' };
     const to = await assistOrt(a.ziel, ctx), from = a.start ? await assistOrt(a.start, ctx) : (ctx.pos ? { name: 'Standort', pos: ctx.pos } : null);
@@ -2684,15 +2804,19 @@ async function assistTool(name, a, ctx, act) {
     if (name === 'vergleich') {
       const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang);
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
-      return Object.assign({ ziel: to.name }, v, { am_ziel: zielInfo(to.pos, to.name, ctx.typ) });
+      const am = zielInfo(to.pos, to.name, ctx.typ), eg = ausserhalb(to.pos) ? null : await eingangNahe(to.pos, ctx.typ).catch(() => null);
+      return Object.assign({ ziel: to.name, plan_b: planB('vergleich', { v, typ: ctx.typ, am }), eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer } : undefined }, v, { am_ziel: am });
     }
-    const r = await checkZiel(f, t, 'fuss', true);
+    const eg = ausserhalb(to.pos) ? null : await eingangNahe(to.pos, ctx.typ).catch(() => null);
+    const r = await checkZiel(f, eg ? eg.pos.map((x) => Math.round(x * 1e4) / 1e4) : t, 'fuss', true);
     const ck = await wegCheck(r.pts, 6000);
     act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: 'fuss' };
-    return { ziel: to.name, dauer_min: Math.round(r.dauer / 60), km: r.km, profil: ctx.typ || 'kein Profil', wichtig_fuer_profil: wichtigFuer(ctx.typ, ck) || undefined, check: ck,
-      baustellen: (r.items || []).slice(0, 3).map((it) => ({ titel: it.titel, hinweis: it.text || '' })), gemeldet: hinweiseAm(r.pts, 25),
-      am_ziel: zielInfo(to.pos, to.name, ctx.typ),
-      hinweis: 'Einen Weg mit weniger Hindernissen zeigt die App unter Wohin? beim Ziel (zu Fuß, mit Profil).' };
+    const amZ = zielInfo(to.pos, to.name, ctx.typ);
+    return { ziel: to.name, dauer_min: Math.round(r.dauer / 60), km: r.km, profil: ctx.typ || 'kein Profil', wichtig_fuer_profil: wichtigFuer(ctx.typ, ck) || undefined,
+      plan_b: planB('weg', { ck, r, typ: ctx.typ, am: amZ }),
+      eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer, stufen: eg.stufen, hinweis: 'Der Weg endet an diesem Eingang, nicht in der Gebäudemitte.' } : undefined,
+      check: ck, baustellen: (r.items || []).slice(0, 3).map((it) => ({ titel: it.titel, hinweis: it.text || '' })), gemeldet: hinweiseAm(r.pts, 25),
+      am_ziel: amZ, hinweis: 'Einen Weg mit weniger Hindernissen zeigt die App unter Wohin? beim Ziel (zu Fuß, mit Profil).' };
   }
   if (name === 'oepnv_stoerungen') {
     const mb = await readMobiel().catch(() => ({ items: [] }));
@@ -2709,7 +2833,8 @@ async function assistTool(name, a, ctx, act) {
     const linien = [...new Set(alle.flatMap((it) => (it.linien || []).map(String)))];
     const bahn = alle.some((it) => it.bahn) || linien.some((l) => /^[1-4]$/.test(l));
     const dbAus = dba ? dba.anlagen.filter((x) => inBox(x[5], x[6], 0.05) && /^(notAvailable|partiallyAvailable)$/.test(dbaState(x[0]) || '')).map((x) => `${x[2]}: ${x[1] === 'aufzug' ? 'Aufzug' : 'Rolltreppe'} ${x[4]} ${DBA_TEXT[dbaState(x[0])]}`) : null;
-    return { anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
+    const planb = planB('stoerung', { items: lin ? items : [], typ: ctx.typ });
+    return { plan_b: planb, anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
       meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug, quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
@@ -2735,7 +2860,10 @@ async function assistTool(name, a, ctx, act) {
     if (!o) return { fehler: 'Diesen Ort habe ich nicht gefunden. Bitte genauer nennen, zum Beispiel mit Straße.' };
     // mehrdeutig: keine Entfernungen von einem geratenen Punkt, sondern nachfragen
     if (o.auswahl) return { gesucht: a.ort, mehrdeutig: true, auswahl: o.auswahl, hinweis: 'Mehrere Orte passen. Frag, welcher gemeint ist, und nenne zwei oder drei davon.' };
-    return Object.assign({ ort: o.name, adresse: o.adresse, gefunden_ueber: o.gefunden_ueber, profil: ctx.typ || 'kein Profil' }, zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ));
+    const am = zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ), eg = ausserhalb(o.pos) ? null : await eingangNahe(o.pos, ctx.typ).catch(() => null);
+    return Object.assign({ ort: o.name, adresse: o.adresse, gefunden_ueber: o.gefunden_ueber, profil: ctx.typ || 'kein Profil', plan_b: planB('ort', { typ: ctx.typ, am }),
+      eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer, stufen: eg.stufen, quelle: 'OpenStreetMap' } : undefined,
+      angaben_fehlen: (am.gebaeude && am.gebaeude.angaben_fehlen) || am.angaben_fehlen }, am);
   }
   if (name === 'ampeln_mit_ton' && (ctx.used || []).includes('weg_check')) return { hinweis: 'Für die Ampeln auf dem Weg gelten nur die Angaben aus weg_check (check.ampeln). Nenne keine anderen Ampeln.' };
   if (name === 'ampeln_mit_ton') {
@@ -2970,7 +3098,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -3067,9 +3195,13 @@ const server = http.createServer(async (req, res) => {
       // Navigation (nav=1): Start auf etwa 10 m, damit die Strecke genau am Standort beginnt (Einwilligung mit „Fahrt starten mit Ziel“)
       const nav = url.searchParams.get('nav') === '1' && mode !== 'oepnv';
       const from = coord(url.searchParams.get('from'), nav || (mode === 'oepnv' && url.searchParams.get('ab') === 'halt') ? 4 : mode === 'fuss' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
+      // zu Fuß: Strecke bis zum Eingang statt bis zur Gebäudemitte
+      const eing = mode === 'fuss' && HERE_KEY ? await eingangNahe(to, profilTyp({ profil_typ: url.searchParams.get('profil') })).catch(() => null) : null;
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       const via = mode === 'auto' && url.searchParams.get('via') ? coord(url.searchParams.get('via'), 4) : null;   // Ausweichroute in der Navigation halten
-      return send(res, 200, mode === 'oepnv' ? await checkZielOepnv(from, to) : await checkZiel(from, to, mode, nav, via), origin);
+      if (mode === 'oepnv') return send(res, 200, await checkZielOepnv(from, to), origin);
+      const erg = await checkZiel(from, eing ? eing.pos.map((x) => Math.round(x * 1e4) / 1e4) : to, mode, nav, via);
+      return send(res, 200, eing ? Object.assign({}, erg, { eingang: { art: eing.art, stufenlos: eing.stufenlos, abstand_m: eing.abstand_m, automatiktuer: eing.automatiktuer } }) : erg, origin);
     }
     if (req.method === 'POST' && p.startsWith('/api/pilot/')) {
       if (!pilotAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Übertragungen möglich.' }, origin);
