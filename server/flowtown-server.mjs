@@ -280,11 +280,13 @@ async function autobahn() {
   return [].concat(...done.filter((r) => r.status === 'fulfilled').map((r) => r.value)).filter((it) => it.pts.some((q) => inBox(q[0], q[1], 0.05)));
 }
 
-const lage = { here: { items: [], t: 0 }, autobahn: { items: [], t: 0 }, stadt: { items: [], t: 0 } };
+const lage = { here: { items: [], t: 0 }, autobahn: { items: [], t: 0 }, stadt: { items: [], t: 0 }, nrw: { items: [], t: 0 } };
 let stadtBauAt = 0;
 let lageAt = 0, lageRun = null;
 async function refreshLage() {
+  nrwWanted = Date.now(); nrwTick();
   const jobs = { autobahn: autobahn() };
+  if (nrwItems().length || Object.values(nrw).some((q) => q.t)) jobs.nrw = Promise.resolve(nrwItems().filter((it) => it.pts.some((q) => inBox(q[0], q[1], 0.05))));
   if (HERE_KEY) jobs.here = Promise.all([hereFlow(), hereIncidents()]).then(([a, b]) => a.concat(b));
   // Baustellen der Stadt ändern sich selten: höchstens alle 30 Minuten
   if (STADT_ON && Date.now() - stadtBauAt > 30 * 60000) { stadtBauAt = Date.now(); jobs.stadt = stadtBaustellen(); }
@@ -304,7 +306,7 @@ async function readLage() {
   const fresh = Object.entries(lage).filter(([k, v]) => v.t && Date.now() - v.t < (k === 'stadt' ? 6 * 3600e3 : 30 * 60000));
   return {
     t: Math.min(...fresh.filter(([k]) => k !== 'stadt').map(([, v]) => v.t).concat(lageAt || Date.now())),
-    quellen: fresh.map(([k, v]) => ({ name: k === 'here' ? 'HERE' : k === 'stadt' ? 'Stadt Bielefeld' : 'Autobahn GmbH', t: v.t })),
+    quellen: fresh.map(([k, v]) => ({ name: k === 'here' ? 'HERE' : k === 'stadt' ? 'Stadt Bielefeld' : k === 'nrw' ? 'Straßen.NRW' : 'Autobahn GmbH', t: v.t })),
     items: [].concat(...fresh.map(([, v]) => v.items))
   };
 }
@@ -724,6 +726,19 @@ async function checkZiel(from, to, mode, nav, via) {
       items.push(Object.assign({}, it, { at, titel: fromAb ? abTitle(it.titel) : null }));
     }
   });
+  // 2a. Straßen.NRW: Meldungen, Baustellen und Umleitungen auch abseits der Autobahnen; nicht doppelt zu schon gefundenen
+  nrwWanted = Date.now(); nrwTick();
+  for (const it of nrwItems()) {
+    if (seen.has(it.id) || !keep(it.art)) continue;
+    if (it.art === 'sperrung' && RAMPE.test((it.titel || '') + ' ' + (it.text || '')) && !/vollsperrung/i.test(it.text || '')) {
+      const a0 = onRoute(it, P, 60);
+      if (a0 == null || (cum[a0] > 3000 && cum[cum.length - 1] - cum[a0] > 3000)) continue;
+    }
+    const at = onRoute(it, P, it.pts.length === 1 ? 60 : 30);
+    if (at == null || items.some((x) => x.at != null && x.art === it.art && Math.abs(cum[x.at] - cum[at]) < 1500)) continue;
+    seen.add(it.id);
+    items.push(Object.assign({}, it, { at }));
+  }
   // 2b. Stau und zäher Verkehr aus der aktuellen Geschwindigkeit je Abschnitt (wie die roten Abschnitte in Karten-Apps), auch ohne Meldung
   if (mode === 'auto') for (const st of flowStretches(main.spans, cum)) {
     const km0 = cum[st.i0], km1 = cum[st.i1];
@@ -1846,10 +1861,11 @@ const MOBI_CERT = process.env.MOBILITHEK_CERT || '', MOBI_PASS = process.env.MOB
 const MOBI_ON = !!MOBI_CERT || /^http:\/\/127\./.test(MOBI_URL);
 const MOBI_ABO = { netex: process.env.MOBILITHEK_ABO_NETEX || '1056540005609947136', sirifm: process.env.MOBILITHEK_ABO_SIRIFM || '1056533070466469888' };
 // Abo abholen (Container-Schnittstelle) in eine Datei; das Passwort geht über stdin an curl, nicht in die Prozessliste
-function mobiFetch(abo, file, maxSec) {
+function mobiFetch(abo, file, maxSec, kind) {
   return new Promise((resolve, reject) => {
     const q = (v) => '"' + String(v).replace(/\\/g, '\\\\').replace(/"/g, '\\"') + '"';
-    const cfg = [`url = ${q(`${MOBI_URL}/container/subscription?subscriptionID=${abo}`)}`, `output = ${q(file)}`, 'compressed', 'silent', 'show-error', `max-time = ${maxSec || 300}`, 'write-out = "%{http_code}"']
+    const u = kind === 'datex2' ? `${MOBI_URL}/subscription/${abo}/clientPullService?subscriptionID=${abo}` : `${MOBI_URL}/container/subscription?subscriptionID=${abo}`;
+    const cfg = [`url = ${q(u)}`, `output = ${q(file)}`, 'compressed', 'silent', 'show-error', `max-time = ${maxSec || 300}`, 'write-out = "%{http_code}"']
       .concat(MOBI_CERT && /^https:/.test(MOBI_URL) ? [`cert-type = "P12"`, `cert = ${q(MOBI_CERT + ':' + MOBI_PASS)}`] : []);
     const p = spawn('curl', ['-K', '-']);
     let out = '', err = '';
@@ -1858,7 +1874,7 @@ function mobiFetch(abo, file, maxSec) {
     p.on('close', (code) => {
       const st = Number(out.trim().slice(-3));
       if (code !== 0) return reject(new Error('curl ' + code + ': ' + err.trim().slice(0, 200)));
-      if (st !== 200) return reject(new Error('Mobilithek HTTP ' + st));
+      if (st !== 200) return reject(Object.assign(new Error('Mobilithek HTTP ' + st), { status: st }));
       resolve(st);
     });
     p.stdin.end(cfg.join('\n') + '\n');
@@ -2055,6 +2071,69 @@ function rtAt(city, ti, pat, k) {
   for (let j = k; j >= 0; j--) { const x = e[2].find((p) => p[0] === pat[j]); if (x) return { verspaetung_min: Math.round(x[1] / 60) }; }
   return e[1] != null ? { verspaetung_min: Math.round(e[1] / 60) } : { verspaetung_min: 0 };
 }
+// ---------- Straßen.NRW über die Mobilithek: Verkehrsmeldungen (VIZ.NRW), Baustellen und Umleitungen außerhalb der Autobahnen (DATEX II v2, Datenlizenz Deutschland – Zero) ----------
+// Nur bei Bedarf (Lage oder Strecke angefragt): Meldungen alle 3, Baustellen und Umleitungen alle 30 Minuten. Solange ein Abo
+// noch nicht freigegeben ist (HTTP 404), nur einmal pro Stunde fragen.
+const NRW_ABO = { viz: process.env.MOBILITHEK_ABO_VIZ || '1056533255515164672', bau: process.env.MOBILITHEK_ABO_ARBEITSSTELLEN || '1056533308808019968', uml: process.env.MOBILITHEK_ABO_UMLEITUNGEN || '1056533361559556096' };
+const NRW_MIN = { viz: 3, bau: 30, uml: 30 };
+const nrw = { viz: { t: 0, items: [], try: 0, err: '' }, bau: { t: 0, items: [], try: 0, err: '' }, uml: { t: 0, items: [], try: 0, err: '' } };
+let nrwWanted = 0;
+const NRW_RANK = { sperrung: 0, unfall: 1, stau: 2, zaeh: 3, baustelle: 4, warnung: 5 };
+// DATEX II v2: je Situation die schwerste Meldung, alle Koordinaten (Anzeige-Punkt, Punkt, Linie), Kommentare, Straße, Zeitraum
+function datexItems(xml, quelle, pre) {
+  const out = [], now = Date.now();
+  const val = (re, t) => { const m = re.exec(t); return m ? m[1] : ''; };
+  for (const sm of xml.matchAll(/<(?:\w+:)?situation\b[^>]*\bid="([^"]+)"[^>]*>([\s\S]*?)<\/(?:\w+:)?situation>/g)) {
+    let best = null;
+    for (const rm of sm[2].matchAll(/<(?:\w+:)?situationRecord\b([^>]*)>([\s\S]*?)<\/(?:\w+:)?situationRecord>/g)) {
+      const at = rm[1], rb = rm[2];
+      const type = val(/type="(?:\w+:)?(\w+)"/, at);
+      if (/suspended/.test(val(/<(?:\w+:)?validityStatus>(\w+)/, rb))) continue;
+      const start = val(/<(?:\w+:)?overallStartTime>([^<]+)/, rb), end = val(/<(?:\w+:)?overallEndTime>([^<]+)/, rb);
+      if (start && Date.parse(start) > now + 3600e3) continue;   // erst später: nicht als aktuell zeigen
+      if (end && Date.parse(end) < now) continue;
+      const pts = [...rb.matchAll(/<(?:\w+:)?latitude>(-?[\d.]+)<\/(?:\w+:)?latitude>\s*<(?:\w+:)?longitude>(-?[\d.]+)</g)].map((m) => [r5(Number(m[1])), r5(Number(m[2]))]).filter((q) => q[0] > 47 && q[0] < 56 && q[1] > 5 && q[1] < 16);
+      if (!pts.length) continue;
+      const kom = [...rb.matchAll(/<(?:\w+:)?(?:generalPublicComment|nonGeneralPublicComment)>[\s\S]*?<(?:\w+:)?value[^>]*>([^<]+)</g)].map((m) => deText(m[1]));
+      const txtAll = kom.join(' ');
+      let art = 'warnung';
+      if (/AbnormalTraffic/.test(type)) art = /slow|heavy/i.test(val(/<(?:\w+:)?abnormalTrafficType>(\w+)/, rb)) ? 'zaeh' : 'stau';
+      else if (/Accident/.test(type)) art = 'unfall';
+      else if (/RoadOrCarriagewayOrLaneManagement/.test(type)) art = /roadClosed|carriagewayClosures/i.test(val(/<(?:\w+:)?roadOrCarriagewayOrLaneManagementType>(\w+)/, rb)) ? 'sperrung' : 'warnung';
+      else if (/ConstructionWorks|MaintenanceWorks|Roadworks/i.test(type)) art = /vollsperrung|voll gesperrt|gesperrt/i.test(txtAll) ? 'sperrung' : 'baustelle';
+      const rec = { art, pts, kom, road: val(/<(?:\w+:)?roadNumber>([^<]+)/, rb), name: val(/<(?:\w+:)?roadName>[\s\S]*?<(?:\w+:)?value[^>]*>([^<]+)</, rb), end, umleitung: /Rerouting/i.test(type) };
+      if (!best || NRW_RANK[art] < NRW_RANK[best.art]) best = Object.assign(rec, { pts: best ? best.pts.concat(pts) : pts, kom: best ? best.kom.concat(kom) : kom });
+      else { best.pts = best.pts.concat(pts); best.kom = best.kom.concat(kom); }
+    }
+    if (!best) continue;
+    const text = clip([...new Set(best.kom)].join(' '), 220);
+    out.push({ id: pre + sm[1].slice(-24), quelle, art: best.art, titel: clip([best.road, deText(best.name)].filter(Boolean).join(' ') || (best.umleitung ? 'Umleitung' : ''), 60) || null,
+      text: best.umleitung && !/umleit/i.test(text) ? clip('Umleitung: ' + text, 220) : text, bis: best.end || null, pts: thin(best.pts) });
+  }
+  return out;
+}
+async function nrwRefresh(k) {
+  const file = path.join(DATA_DIR, `nrw-${k}.xml`), q = nrw[k];
+  q.try = Date.now();
+  try {
+    try { await mobiFetch(NRW_ABO[k], file, 120, 'datex2'); }
+    catch (e) { if (e.status === 422 || e.status === 403) await mobiFetch(NRW_ABO[k], file, 120); else throw e; }
+    const xml = fs.readFileSync(file, 'utf8');
+    if (!/situation|d2LogicalModel|payloadPublication/i.test(xml.slice(0, 5000))) throw new Error('keine DATEX-II-Daten: ' + xml.slice(0, 80));
+    q.items = datexItems(xml, 'Straßen.NRW', k);
+    q.t = Date.now(); q.err = ''; q.bytes = xml.length;
+  } catch (e) { q.err = e.status === 404 ? 'wartet auf Freigabe (HTTP 404)' : e.message; if (e.status !== 404) console.error('Straßen.NRW', k + ':', e.message); }
+  finally { fs.rmSync(file, { force: true }); }
+}
+let nrwRun = null;
+function nrwTick() {
+  if (!MOBI_ON || nrwRun || Date.now() - nrwWanted > 15 * 60e3) return;
+  const due = Object.keys(nrw).filter((k) => Date.now() - nrw[k].try > (/Freigabe/.test(nrw[k].err) ? 3600e3 : NRW_MIN[k] * 60e3));
+  if (!due.length) return;
+  nrwRun = (async () => { for (const k of due) await nrwRefresh(k); })().finally(() => { nrwRun = null; });
+}
+// aktuelle Meldungen aller drei Quellen (bis eine Stunde alt)
+const nrwItems = () => [].concat(...Object.values(nrw).filter((q) => q.t && Date.now() - q.t < 3600e3).map((q) => q.items));
 // Ampelanlagen: [Breite, Länge, Nummer, Art, Betreiber, Kennung] – Art kp Kreuzung, fu Fußgängerampel, sw Stadtwerke (Stadtbahn), so Sonstige; Betreiber s Stadt, l Straßen.NRW
 const LSA_FILE = path.join(DATA_DIR, 'ampelanlagen.json');
 let lsa = null, lsaRun = null, lsaTry = 0;
@@ -2881,7 +2960,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -3092,6 +3171,21 @@ if (cli === 'faq') {
     console.log('Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
     process.exit(0);
   }).catch((e) => { console.error(e.message); process.exit(1); });
+} else if (cli === 'mobilithek') {
+  // alle Abos der Mobilithek einmal abholen und zeigen, was ankommt (zum Prüfen nach einer Freigabe)
+  (async () => {
+    if (!MOBI_ON) { console.error('MOBILITHEK_CERT fehlt in /etc/flowtown.env'); process.exit(1); }
+    loadFahrplan();
+    for (const k of Object.keys(nrw)) {
+      await nrwRefresh(k);
+      const q = nrw[k];
+      console.log(`Straßen.NRW ${k} (Abo ${NRW_ABO[k]}):`, q.err || `${q.items.length} Meldungen, ${Math.round((q.bytes || 0) / 1024)} KB`);
+      for (const it of q.items.slice(0, 3)) console.log('   ', it.art, '|', it.titel || '–', '|', (it.text || '').slice(0, 90), '|', it.pts[0].join(','));
+    }
+    try { const n = await refreshDbStatus(); console.log('DB-Aufzüge Status:', n, 'Anlagen'); } catch (e) { console.log('DB-Aufzüge Status:', e.message); }
+    try { const n = await refreshRt(); console.log('Echtzeit DELFI:', n, 'Fahrten erkannt,', Math.round(rt.bytes / 1e5) / 10, 'MB'); } catch (e) { console.log('Echtzeit DELFI:', e.message); }
+    process.exit(0);
+  })();
 } else if (cli === 'stadtdaten') {
   // Ampelanlagen und Baustellen der Stadt holen und zeigen
   (async () => {
@@ -3155,7 +3249,7 @@ if (cli === 'faq') {
 } else if (cli === 'fahrplan') {
   refreshFahrplan().then((m) => { console.log(m); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli) {
-  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, testlauf [datei], beispiele, fahrplan, barrierefrei, haltestellen, parkplaetze, stadtdaten, frage, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
+  console.error('Unbekannt: ' + cli + '. Möglich: neue-codes <Anzahl>, export, testlauf [datei], beispiele, fahrplan, mobilithek, barrierefrei, haltestellen, parkplaetze, stadtdaten, frage, faq-orte, faq-ort, faq, hinweise, hinweis'); process.exit(1);
 } else {
   loadFahrplan();
   setTimeout(fahrplanTick, 5000); setInterval(fahrplanTick, 3600e3);
@@ -3169,6 +3263,7 @@ if (cli === 'faq') {
   setTimeout(swcTick, 20000); setInterval(swcTick, 3600e3);
   setTimeout(dbaTick, 30000); setInterval(dbaTick, 60e3);
   setInterval(rtTick, 15e3);
+  setInterval(nrwTick, 20e3);
   setTimeout(stadt2Tick, 25000); setInterval(stadt2Tick, 3600e3);
   server.listen(PORT, HOST, () => console.log(`Flowtown-Server auf ${HOST}:${PORT}, KI ${MISTRAL_KEY ? 'an (' + MISTRAL_MODEL + ')' : 'aus'}, Verkehrslage: Autobahn ${LAGE_ROADS.join('/')}${HERE_KEY ? ' + HERE' : ''}, Fahrplan: ${fahrplan ? fahrplan.stand : DELFI_URL ? 'wird geladen' : 'aus'}`));
 }

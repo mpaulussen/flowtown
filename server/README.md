@@ -154,6 +154,12 @@ Einrichtung: Maschinenzertifikat der Mobilithek nach `/etc/flowtown/mobilithek.p
 
 Verspätungen und Ausfälle kommen aus dem deutschlandweiten Datenstrom von DELFI (GTFS-RT Trip Updates, CC BY-SA 4.0) über die Mobilithek, mit demselben Maschinenzertifikat wie die DB-Aufzüge. Der Server holt ihn nur, wenn in den letzten 15 Minuten jemand Abfahrten angesehen oder die Assistenz gefragt hat, dann höchstens alle 90 Sekunden, und behält nur die Fahrten aus den Fahrplan-Auszügen (Bielefeld, Mönchengladbach). Dafür schreibt der Auszug die Fahrt-Kennungen in `fahrplan.ids.json` (bleibt auf dem Server); fehlen sie nach dem Update, holt der Server den Fahrplan einmal gleich neu. Die App fragt `/api/echtzeit?stadt=…` (nur die Stadt) und rechnet die Verspätungen selbst ein. Abo-ID ändern mit `MOBILITHEK_ABO_GTFSRT`. `/api/health` zeigt unter `echtzeit` Stand, Zahl der Fahrten und Größe des Datenstroms.
 
+### Straßen.NRW: Verkehrsmeldungen, Baustellen, Umleitungen (Mobilithek, DATEX II)
+
+Drei Abos der Mobilithek (Landesbetrieb Straßenbau NRW, Datenlizenz Deutschland – Zero), sobald Straßen.NRW sie freigibt: Verkehrsmeldungen der VIZ.NRW (Staus, Unfälle, Sperrungen, Glätte), Arbeitsstellen und Umleitungen außerhalb der Autobahnen. Der Server holt sie nur bei Bedarf (Lage oder Strecke angefragt): Meldungen alle 3, Baustellen und Umleitungen alle 30 Minuten; solange ein Abo noch nicht freigegeben ist (HTTP 404), einmal pro Stunde. Sie kommen auf die geprüfte Strecke (nicht doppelt zu Meldungen der Autobahn GmbH oder HERE) und in die Lage für Bielefeld. Abo-IDs ändern mit `MOBILITHEK_ABO_VIZ`, `MOBILITHEK_ABO_ARBEITSSTELLEN`, `MOBILITHEK_ABO_UMLEITUNGEN`. `/api/health` zeigt unter `strassenNrw` je Abo Anzahl und Stand oder „wartet auf Freigabe“.
+
+Alle Mobilithek-Abos auf einmal prüfen: `sudo bash -c 'set -a; . /etc/flowtown.env; node /opt/flowtown/server/flowtown-server.mjs mobilithek'`
+
 ### Öffentliche Toiletten der Stadt
 
 Der Server holt einmal am Tag die öffentlichen Toiletten der Stadt Bielefeld aus dem Geodienst der Stadt (Open Data „Öffentliche Toiletten“, www.bielefeld01.de): Name, Adresse, Öffnungszeiten, barrierefrei ja oder nein, Entgelt. Sie gehen vor den Toiletten aus OpenStreetMap; eine OSM-Toilette bis 30 m daneben fällt weg. Sie erscheinen auf der Karte, am Ziel und in der Assistenz. Abschalten wie alle Stadtdaten mit `STADT_DATEN=0`. `/api/health` zeigt unter `toilettenStadt` Anzahl und Stand.
