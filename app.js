@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.96.0';
+  const VERSION = '0.96.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6489,7 +6489,8 @@
     $('#set-voice').checked = voiceOn();
     $('#set-voice-rate').value = String((settings.voice && settings.voice.rate) || 1);
     $('#box-voice').hidden = !canSpeak;
-    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '') + (voiceOn() ? ' · Ansagen' : '');
+    $('#access-sub').textContent = (a.on ? ACCESS_LABEL[a.type] : 'Kein Profil') + (settings.big ? ' · große Schrift' : '');
+    $('#ansagen-sub').textContent = (voiceOn() ? 'Ansagen an' : 'Ansagen aus') + (settings.begleit ? ' · Begleitmodus' : '');
     document.documentElement.classList.toggle('gross', !!settings.big);
   }
   $('#set-access').addEventListener('change', (ev) => {
@@ -6585,7 +6586,7 @@
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
   $('#set-voice-rate').addEventListener('change', (ev) => { settings.voice = Object.assign({ on: voiceOn() }, settings.voice || {}, { rate: Number(ev.target.value) || 1 }); store.set('settings', settings); speak('So schnell spreche ich jetzt.', { now: true, force: true }); });
   // beim Öffnen der Einstellung und vor dem Aufklappen der Liste frisch nachsehen
-  $('#box-access').addEventListener('toggle', () => { if ($('#box-access').open && canSpeak) pickVoice(); });
+  $('#box-ansagen').addEventListener('toggle', () => { if ($('#box-ansagen').open && canSpeak) pickVoice(); });
   ['focus', 'pointerdown'].forEach((t) => $('#set-voice-name').addEventListener(t, () => { if (canSpeak && speechSynthesis.getVoices().filter((v) => /^de/i.test(v.lang)).length !== voicesDe.length) pickVoice(); }));
   $('#set-voice-name').addEventListener('change', (ev) => {
     settings.voice = Object.assign({ on: voiceOn(), rate: 1 }, settings.voice || {}, { name: ev.target.value || null });

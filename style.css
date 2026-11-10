@@ -1052,7 +1052,7 @@ body[data-view="plan"] .ask-bar{--ask:#1f5c99}
 .w-access .acc-q,.w-access h3{color:var(--acc-ink)}
 .w-access .acc-chip:not([aria-pressed="true"]){background:#fff;border-color:var(--acc-line)}
 .tipcard[data-world="acc"]{--tb:var(--acc-bg);--ti:var(--acc)}
-.tipcard[data-world="acc"]:has(.tip-row[aria-expanded="true"]),#box-access[open]{border-color:var(--acc)}
+.tipcard[data-world="acc"]:has(.tip-row[aria-expanded="true"]),#box-access[open],#box-ansagen[open]{border-color:var(--acc)}
 .tip-acc{background:var(--acc-bg);border-radius:24px;padding:14px;display:flex;flex-direction:column;gap:10px;margin-top:6px}
 .tip-acc .eyebrow{color:var(--acc-ink);margin-top:2px}
 .tip-acc .tipcard{border-color:transparent;--tb:var(--acc-bg);--ti:var(--acc)}

@@ -328,7 +328,114 @@
     <header class="page-head"><h2 id="h-more" class="display">Einstellungen</h2>
     <p class="page-sub">Alles bleibt auf diesem Handy, bis du es teilst. Tippe auf einen Bereich zum Ändern.</p></header>
     <p id="more-msg" class="msg" role="status" aria-live="polite"></p>
-    <section class="tip-list" aria-labelledby="h-more-mit"><h3 class="eyebrow" id="h-more-mit">Mitmachen</h3>
+    <section class="tip-list" aria-labelledby="h-more-dich"><h3 class="eyebrow" id="h-more-dich">Für dich</h3>
+    <details class="tipcard setbox" id="box-access" data-world="acc">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg></span><span class="tip-main"><b>Profil</b><span id="access-sub">Kein Profil</span></span></summary>
+      <div class="tip-detail">
+        <label class="field" for="set-access">Ich bin unterwegs mit …
+          <select id="set-access">
+            <option value="aus">kein Profil</option>
+            <option value="rollstuhl">Rollstuhl</option>
+            <option value="rollator">Rollator oder Gehhilfe</option>
+            <option value="sehen">Ich sehe schlecht oder nichts</option>
+            <option value="hoeren">Ich höre schlecht oder nichts</option>
+            <option value="lernen">Einfache Sprache</option>
+            <option value="ruhe">Ruhe und Pausen</option>
+            <option value="andere">Andere Einschränkung</option>
+          </select>
+        </label>
+        <p class="small muted">Ruhe und Pausen passt zum Beispiel bei chronischer Krankheit, Autismus oder Angst. Rollator oder Gehhilfe auch, wenn du langsamer zu Fuß bist.</p>
+        <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
+        <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-ansagen" data-world="acc">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg></span><span class="tip-main"><b>Ansagen und Sprache</b><span id="ansagen-sub">Ansagen aus</span></span></summary>
+      <div class="tip-detail">
+        <label class="check"><input type="checkbox" id="set-begleit"><span>Begleitmodus zu Fuß: Ampeln an der Strecke mit Ausstattung, Richtungen als Uhrzeit, Schritte, Warnung bei falscher Richtung</span></label>
+        <label class="check"><input type="checkbox" id="set-compass"><span>Kompass für „Wo bin ich?“: Angaben wie rechts, links und auf 3 Uhr</span></label>
+        <div class="voice-set" id="box-voice">
+          <label class="check"><input type="checkbox" id="set-voice"><span>Ansagen vorlesen: Wechsel, Baustellen und Hindernisse voraus, Bilanz am Ende</span></label>
+          <label class="check"><input type="checkbox" id="set-navtone"><span>Hinweiston vor Navigationsansagen (zwei Töne, am Ziel drei aufsteigende)</span></label>
+          <label class="field" for="set-geradeaus">„Weiter geradeaus“ zu Fuß
+            <select id="set-geradeaus"><option value="">automatisch: im Begleitmodus alle 25 m</option><option value="0">aus</option><option value="10">alle 10 m (wie in der Norm ITU-T F.921)</option><option value="25">alle 25 m</option><option value="50">alle 50 m</option></select>
+          </label>
+          <label class="field" for="set-voice-rate">Sprechtempo
+            <select id="set-voice-rate"><option value="0.85">langsam</option><option value="1">normal</option><option value="1.2">schnell</option></select>
+          </label>
+          <label class="field" for="set-voice-name"><span id="set-voice-label">Stimme</span>
+            <select id="set-voice-name"><option value="">Automatisch: die beste Stimme</option></select>
+          </label>
+          <button id="btn-voice-test" class="btn quiet" type="button"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg>Probe hören</button>
+          <div class="voice-hint" id="voice-hint" hidden></div>
+          <p class="small muted">Die Ansagen kommen aus der Sprachausgabe deines Handys. Flowtown schickt dafür nichts an seinen Server. Mit VoiceOver oder TalkBack kannst du sie auch ausgeschaltet lassen.</p>
+        </div>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-goals">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span><span class="tip-main"><b>Was dir wichtig ist</b><span id="goals-sub">Noch nichts gewählt</span></span></summary>
+      <div class="tip-detail">
+        <p class="small muted" id="set-goal-h">Flowtown zeigt dir das auf „Heute“ zuerst. Mehrere möglich.</p>
+        <div class="goal-chips" id="set-goals" role="group" aria-labelledby="set-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-price">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-euro"/></svg></span><span class="tip-main"><b>Preise</b><span id="price-sub">Für die Kostenschätzung</span></span></summary>
+      <div class="tip-detail">
+        <label class="row" for="inp-fuel">Sprit, Euro je Liter
+          <input id="inp-fuel" class="price" type="text" inputmode="decimal" autocomplete="off">
+        </label>
+        <label class="row" for="inp-power">Strom, Euro je kWh
+          <input id="inp-power" class="price" type="text" inputmode="decimal" autocomplete="off">
+        </label>
+      </div>
+    </details>
+    </section>
+    <section class="tip-list" aria-labelledby="h-more-daten"><h3 class="eyebrow" id="h-more-daten">Daten und Datenschutz</h3>
+    <details class="tipcard setbox" id="box-cut">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><span class="tip-main"><b>Datenschutz</b><span id="cut-sub">Start und Ziel</span></span></summary>
+      <div class="tip-detail">
+        <label class="row" for="inp-cut">Ereignisse in der Nähe von Start und Ziel verwerfen
+          <select id="inp-cut">
+            <option value="0">aus</option>
+            <option value="200">200 m</option>
+            <option value="400">400 m</option>
+          </select>
+        </label>
+        <p class="small"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung lesen</a></p>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-signals">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg></span><span class="tip-main"><b>Ampeldaten</b><span id="signals-sub">Noch keine Ampeln geladen</span></span></summary>
+      <div class="tip-detail">
+        <p class="small" id="signals-info">–</p>
+        <button id="btn-reload-signals" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg>Ampeln in der Umgebung neu laden</button>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-data">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg></span><span class="tip-main"><b>Sichern und übertragen</b><span id="data-sub">Exportieren und importieren</span></span></summary>
+      <div class="tip-detail">
+        <p class="small muted">Alles bleibt auf diesem Gerät, bis du es exportierst.</p>
+        <div class="btn-col">
+          <button id="btn-export" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Daten exportieren (JSON)</button>
+          <button id="btn-export-csv" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Halte exportieren (CSV)</button>
+          <label class="btn file-btn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Daten importieren<input id="inp-import" type="file" accept="application/json,.json"></label>
+        </div>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-wipe">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span><span class="tip-main"><b>Alles löschen</b><span>Alle Fahrten von diesem Handy entfernen</span></span></summary>
+      <div class="tip-detail">
+        <button id="btn-wipe" class="btn danger" type="button"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Alle Fahrten löschen</button>
+        <div id="wipe-confirm" class="btn-col" hidden>
+          <p class="small">Wirklich alle Fahrten löschen? Das lässt sich nicht rückgängig machen.</p>
+          <button id="btn-wipe-yes" class="btn danger" type="button">Ja, alles löschen</button>
+          <button id="btn-wipe-no" class="btn" type="button">Abbrechen</button>
+        </div>
+      </div>
+    </details>
+    </section>
+    <section class="tip-list" aria-labelledby="h-more-mit"><h3 class="eyebrow" id="h-more-mit">Mitmachen und Testen</h3>
     <details class="tipcard setbox" id="box-pilot">
       <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-flask"/></svg></span><span class="tip-main"><b>Pilot</b><span id="pilot-sub">Mit Code dabei sein</span></span></summary>
       <div class="tip-detail" id="pilot-card"></div>
@@ -354,114 +461,12 @@
           </ul></details>
       </div>
     </details>
-    </section>
-    <section class="tip-list" aria-labelledby="h-more-fahrt"><h3 class="eyebrow" id="h-more-fahrt">Für deine Fahrten</h3>
-    <details class="tipcard setbox" id="box-goals">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span><span class="tip-main"><b>Was dir wichtig ist</b><span id="goals-sub">Noch nichts gewählt</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted" id="set-goal-h">Flowtown zeigt dir das auf „Heute“ zuerst. Mehrere möglich.</p>
-        <div class="goal-chips" id="set-goals" role="group" aria-labelledby="set-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-access" data-world="acc">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg></span><span class="tip-main"><b>Barrierefrei unterwegs</b><span id="access-sub">Kein Profil</span></span></summary>
-      <div class="tip-detail">
-        <label class="field" for="set-access">Ich bin unterwegs mit …
-          <select id="set-access">
-            <option value="aus">kein Profil</option>
-            <option value="rollstuhl">Rollstuhl</option>
-            <option value="rollator">Rollator oder Gehhilfe</option>
-            <option value="sehen">Ich sehe schlecht oder nichts</option>
-            <option value="hoeren">Ich höre schlecht oder nichts</option>
-            <option value="lernen">Einfache Sprache</option>
-            <option value="ruhe">Ruhe und Pausen</option>
-            <option value="andere">Andere Einschränkung</option>
-          </select>
-        </label>
-        <p class="small muted">Ruhe und Pausen passt zum Beispiel bei chronischer Krankheit, Autismus oder Angst. Rollator oder Gehhilfe auch, wenn du langsamer zu Fuß bist.</p>
-        <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
-        <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
-        <label class="check"><input type="checkbox" id="set-begleit"><span>Begleitmodus zu Fuß: Ampeln an der Strecke mit Ausstattung, Richtungen als Uhrzeit, Schritte, Warnung bei falscher Richtung</span></label>
-        <label class="check"><input type="checkbox" id="set-compass"><span>Kompass für „Wo bin ich?“: Angaben wie rechts, links und auf 3 Uhr</span></label>
-        <div class="voice-set" id="box-voice">
-          <label class="check"><input type="checkbox" id="set-voice"><span>Ansagen vorlesen: Wechsel, Baustellen und Hindernisse voraus, Bilanz am Ende</span></label>
-          <label class="check"><input type="checkbox" id="set-navtone"><span>Hinweiston vor Navigationsansagen (zwei Töne, am Ziel drei aufsteigende)</span></label>
-          <label class="field" for="set-geradeaus">„Weiter geradeaus“ zu Fuß
-            <select id="set-geradeaus"><option value="">automatisch: im Begleitmodus alle 25 m</option><option value="0">aus</option><option value="10">alle 10 m (wie in der Norm ITU-T F.921)</option><option value="25">alle 25 m</option><option value="50">alle 50 m</option></select>
-          </label>
-          <label class="field" for="set-voice-rate">Sprechtempo
-            <select id="set-voice-rate"><option value="0.85">langsam</option><option value="1">normal</option><option value="1.2">schnell</option></select>
-          </label>
-          <label class="field" for="set-voice-name"><span id="set-voice-label">Stimme</span>
-            <select id="set-voice-name"><option value="">Automatisch: die beste Stimme</option></select>
-          </label>
-          <button id="btn-voice-test" class="btn quiet" type="button"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg>Probe hören</button>
-          <div class="voice-hint" id="voice-hint" hidden></div>
-          <p class="small muted">Die Ansagen kommen aus der Sprachausgabe deines Handys. Flowtown schickt dafür nichts an seinen Server. Mit VoiceOver oder TalkBack kannst du sie auch ausgeschaltet lassen.</p>
-        </div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-price">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-euro"/></svg></span><span class="tip-main"><b>Preise</b><span id="price-sub">Für die Kostenschätzung</span></span></summary>
-      <div class="tip-detail">
-        <label class="row" for="inp-fuel">Sprit, Euro je Liter
-          <input id="inp-fuel" class="price" type="text" inputmode="decimal" autocomplete="off">
-        </label>
-        <label class="row" for="inp-power">Strom, Euro je kWh
-          <input id="inp-power" class="price" type="text" inputmode="decimal" autocomplete="off">
-        </label>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-cut">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><span class="tip-main"><b>Datenschutz</b><span id="cut-sub">Start und Ziel</span></span></summary>
-      <div class="tip-detail">
-        <label class="row" for="inp-cut">Ereignisse in der Nähe von Start und Ziel verwerfen
-          <select id="inp-cut">
-            <option value="0">aus</option>
-            <option value="200">200 m</option>
-            <option value="400">400 m</option>
-          </select>
-        </label>
-        <p class="small"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung lesen</a></p>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-signals">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg></span><span class="tip-main"><b>Ampeldaten</b><span id="signals-sub">Noch keine Ampeln geladen</span></span></summary>
-      <div class="tip-detail">
-        <p class="small" id="signals-info">–</p>
-        <button id="btn-reload-signals" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg>Ampeln in der Umgebung neu laden</button>
-      </div>
-    </details>
-    </section>
-    <section class="tip-list" aria-labelledby="h-more-daten"><h3 class="eyebrow" id="h-more-daten">Deine Daten</h3>
-    <details class="tipcard setbox" id="box-data">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg></span><span class="tip-main"><b>Sichern und übertragen</b><span id="data-sub">Exportieren und importieren</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted">Alles bleibt auf diesem Gerät, bis du es exportierst.</p>
-        <div class="btn-col">
-          <button id="btn-export" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Daten exportieren (JSON)</button>
-          <button id="btn-export-csv" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Halte exportieren (CSV)</button>
-          <label class="btn file-btn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Daten importieren<input id="inp-import" type="file" accept="application/json,.json"></label>
-        </div>
-      </div>
-    </details>
     <details class="tipcard setbox" id="box-demo">
       <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></span><span class="tip-main"><b>Testen ohne Fahrt</b><span>Eine Testfahrt abspielen</span></span></summary>
       <div class="tip-detail">
         <div class="btn-col">
           <button id="btn-demo" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Testfahrt simulieren</button>
           <button id="btn-demo-clear" class="btn" type="button">Demo-Daten löschen</button>
-        </div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-wipe">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span><span class="tip-main"><b>Alles löschen</b><span>Alle Fahrten von diesem Handy entfernen</span></span></summary>
-      <div class="tip-detail">
-        <button id="btn-wipe" class="btn danger" type="button"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Alle Fahrten löschen</button>
-        <div id="wipe-confirm" class="btn-col" hidden>
-          <p class="small">Wirklich alle Fahrten löschen? Das lässt sich nicht rückgängig machen.</p>
-          <button id="btn-wipe-yes" class="btn danger" type="button">Ja, alles löschen</button>
-          <button id="btn-wipe-no" class="btn" type="button">Abbrechen</button>
         </div>
       </div>
     </details>

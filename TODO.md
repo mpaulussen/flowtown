@@ -66,5 +66,5 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [x] H1 (0.96.0) Heute beginnt mit „Wohin?“: Suchfeld mit Mikrofon, gespeicherte Ziele als Chips, darunter Verkehrsmittel und Profil; „Ohne Ziel aufzeichnen“ bleibt als zweite Möglichkeit
 - [x] H2 (0.96.0) Fester Mikrofonknopf auf allen Seiten öffnet Frag Flowtown mit Beispielfragen; die KI-Karte auf Heute entfällt
 - [x] H3 (0.96.0) Abfahrten mit Echtzeit stehen auf Heute statt unter „Wohin?“
-- [ ] H4 Profil und Ansagen unter „Mehr“ an einem Ort bündeln
+- [x] H4 (0.96.1) „Mehr“ in vier Bereiche geordnet (Für dich, Daten und Datenschutz, Mitmachen und Testen, Hilfe); Profil und „Ansagen und Sprache“ getrennt
 - [ ] H5 Englisches Konzept auf den Stand 0.96 bringen
