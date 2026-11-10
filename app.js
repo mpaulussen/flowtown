@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.97.4';
+  const VERSION = '0.98.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2034,13 +2034,17 @@
       tipps: computeTips().slice(0, 5).map((t) => `${plain(t.head || t.title)}: ${plain(t.short)}`.replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen').slice(0, 200))
     };
   }
+  let assistBig = false;
+  const sprechIcon = () => (settings.sprechIcon === 'phone' ? 'handset' : 'mic');
   function showAssist(frage, antwort) {
     const el = $('#assist');
+    el.classList.toggle('big', assistBig);
+    el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
-    el.innerHTML = `<div class="assist-head"><b>${ic('mic')}Frag Flowtown</b>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
+    el.innerHTML = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
       ${frage ? `<p class="assist-q">${esc(frage)}</p>` : ''}
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
-      <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic('mic')}</button>` : ''}</form>
+      <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>
       <p class="small muted">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>`;
     el.hidden = false;
     micStatus('');
@@ -4083,12 +4087,13 @@
     if (voiceOn()) speak(d.open, { now: true, force: true, onend: () => { if (!$('#assist').hidden && pendingIntent) listenAfter('Ich höre zu …'); } });
   }
   // Fester Mikrofonknopf auf allen Seiten: öffnet Frag Flowtown mit Beispielfragen und hört zu, wenn Sprachbefehle erlaubt sind
-  function openAssistEmpty() {
+  function openAssistEmpty(opts) {
     unlockSpeech(); pendingIntent = null; assistAct = null;
-    showAssist('', 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
+    assistBig = !!(opts && opts.big) || !!settings.sprechGross;
+    showAssist('', assistBig && SR ? 'Tippe auf den großen Knopf und sprich. Ich höre zu.' : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
     const ex = askExamples('start').ex, form = $('#assist .assist-form');
     if (form && ex.length) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Beispielfragen">${ex.map((x) => `<button type="button" class="vf-chip" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('')}</div>`);
-    if (SR && settings.voiceIn) listen();
+    if (SR && settings.voiceIn && !(opts && opts.launch)) listen();
   }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
@@ -6568,6 +6573,23 @@
   }
   ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = id === '#btn-mic' || !SR; b.addEventListener('click', () => listen()); } });
   askBar(document.body.dataset.view || 'start');
+  // Symbol des Sprechen-Knopfes (Mikrofon oder Telefonhörer) und großer Sprachmodus
+  function applySprechIcon() {
+    const u = $('#fab-mic use'); if (u) u.setAttribute('href', '#i-' + sprechIcon());
+    $('#fab-mic').setAttribute('aria-label', settings.sprechIcon === 'phone' ? 'Mit Flowtown sprechen' : 'Flowtown fragen');
+    $('#set-sprechicon').value = settings.sprechIcon === 'phone' ? 'phone' : 'mic';
+    $('#set-sprechgross').checked = !!settings.sprechGross;
+  }
+  $('#set-sprechicon').addEventListener('change', (ev) => { settings.sprechIcon = ev.target.value; store.set('settings', settings); applySprechIcon(); });
+  $('#set-sprechgross').addEventListener('change', (ev) => { settings.sprechGross = ev.target.checked; store.set('settings', settings); });
+  const sprechUrl = new URL('./?sprechen=1', location.href).href;
+  $('#sprech-url').value = sprechUrl;
+  $('#btn-sprech-copy').addEventListener('click', async () => {
+    const i = $('#sprech-url'); let ok = false;
+    try { await navigator.clipboard.writeText(sprechUrl); ok = true; } catch (e) { i.focus(); i.select(); }
+    moreMsg(ok ? 'Link kopiert.' : 'Link markiert: bitte kopieren.');
+  });
+  applySprechIcon();
   let sosBack = null;
   function openSos() {
     const el = $('#sos'), src = $('#box-krise .tip-detail');
@@ -6595,8 +6617,8 @@
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;
     const a = b.dataset.assist;
-    if (a === 'close') { pendingIntent = null; $('#assist').hidden = true; if (canSpeak) speechSynthesis.cancel(); if (recog && recog.auto) recog.abort(); micStatus(''); }
-    else if (a === 'mic') listen();
+    if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog && recog.auto) recog.abort(); micStatus(''); }
+    else if (a === 'mic') { unlockSpeech(); listen(); }
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (a === 'ziel' && assistAct) {
       const x = assistAct, near = settings.ziele.find((z) => dist(z, x) < 150);
@@ -6607,7 +6629,7 @@
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
   $('#ask-mic').addEventListener('click', () => listen());
-  $('#fab-mic').addEventListener('click', openAssistEmpty);
+  $('#fab-mic').addEventListener('click', () => openAssistEmpty());
   $('#plan-mic').addEventListener('click', () => { unlockSpeech(); startIntent('weg'); });
   // Beispielfragen auf Heute: ein Tipp stellt die Frage
   $('#ask-hero').addEventListener('click', (ev) => {
@@ -6727,6 +6749,13 @@
   renderLastTrip();
   renderA2hs();
   if (!settings.onboarded || new URLSearchParams(location.search).get('code')) openWelcome();
+  else if (new URLSearchParams(location.search).get('sprechen') === '1' || location.hash === '#sprechen') {
+    // Link zum Startbildschirm: gleich der Sprachmodus; zum Sprechen genügt ein Tipp (Handys erlauben das Mikrofon nur nach einer Berührung)
+    document.title = 'Flowtown sprechen';
+    const m = document.querySelector('meta[name="apple-mobile-web-app-title"]'); if (m) m.setAttribute('content', 'Flowtown sprechen');
+    showView('start');
+    if (apiBase()) openAssistEmpty({ big: true, launch: true });
+  }
   syncPilot();
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});

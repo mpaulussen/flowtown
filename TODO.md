@@ -72,6 +72,7 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 
 ## J. Telefon-Assistenz (Meilenstein für absolute Barrierefreiheit)
 Konzept: Abschnitt „Telefon-Assistenz“ im Gesamtkonzept. Eine Rufnummer, unter der sehr alte Menschen ohne Smartphone mit Flowtown sprechen: Abfahrten, Aufzug, Weg beschreiben, Toiletten, Hilfe, Notfall.
+- [x] J0 (0.98.0) Zwischenschritt ohne Rufnummer: Sprechen-Knopf unten rechts als Mikrofon oder Telefonhörer, großer Sprachmodus, Link `?sprechen=1` für den Startbildschirm und als Verknüpfung im Manifest
 - [ ] J1 Rahmen klären: Anbieter und deutsche Rufnummer (0521) mit Auftragsverarbeitungsvertrag, Kosten je Minute, Tageslimit, wer die Nummer dauerhaft betreibt
 - [ ] J2 Mistral Voxtral 3 prüfen: Telefonie über SIP, deutsche Stimme, Latenz im Telefonklang (Ankündigung vom Oktober 2026, Dokumentation lesen)
 - [ ] J3 Prototyp: eine Nummer, nur Abfahrten und Aufzug, mit Server-Endpunkt, der die Frage als Text entgegennimmt (dieselben Werkzeuge wie die App)

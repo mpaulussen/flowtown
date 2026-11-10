@@ -1487,3 +1487,24 @@ body[data-view="map"] .fab-mic{right:auto;left:max(16px,env(safe-area-inset-left
 .hero-wohin .plan-note{display:none}
 #plan-form:focus-within+.plan-note{display:block}
 #view-start .today-list[hidden]{display:none}
+
+/* 0.98.0 Großer Sprachmodus: ein Knopf, große Schrift (Link ?sprechen=1 oder Einstellung) */
+.assist.big{left:0;right:0;top:0;bottom:0;max-height:none;border-radius:0;box-shadow:none;padding:calc(18px + env(safe-area-inset-top,0px)) max(20px,env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) max(20px,env(safe-area-inset-left,0px));gap:16px;z-index:1300}
+body[data-view] .assist.big{top:0;bottom:0;max-height:none}
+.assist.big .assist-head b{font-size:22px}
+.assist.big .assist-q{font-size:20px}
+.assist.big .assist-a{font-size:28px;line-height:1.35;flex:1;overflow:auto;font-family:var(--display)}
+.assist.big .assist-form{flex-direction:column;align-items:center;gap:14px}
+.assist.big .assist-form input{width:100%;min-height:52px;font-size:18px}
+.assist.big .assist-form button[type="submit"]{width:100%;min-height:52px}
+.assist.big .assist-mic{order:-1;width:140px;height:140px;min-height:140px;border-radius:50%;background:#0f5c3c;border-color:#0f5c3c;color:#fff;box-shadow:0 10px 26px rgba(15,92,60,.35)}
+.assist.big .assist-mic .ic{width:68px;height:68px}
+.assist.big .assist-mic.listening{animation:fabpulse 1.2s ease-in-out infinite}
+.assist.big .assist-pick .vf-chip{min-height:52px;font-size:18px}
+.assist.big>.small{display:none}
+.sprech-link{display:flex;flex-direction:column;gap:8px;margin-top:6px;padding-top:12px;border-top:1px solid var(--line)}
+.sprech-link input{font:inherit;font-size:15px;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);width:100%}
+.sprech-steps{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+@media (prefers-reduced-motion:reduce){.assist.big .assist-mic.listening{animation:none}}
+.assist.big:not(.nosr) .assist-form input,.assist.big:not(.nosr) .assist-form button[type="submit"],.assist.big:not(.nosr) .assist-pick{display:none}
+.assist.big:not(.nosr) .assist-form{margin-bottom:12px}
