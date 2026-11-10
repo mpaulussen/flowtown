@@ -1564,3 +1564,10 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .hero-wohin #h-start{line-height:1.02}
 .hero-wohin #h-start.long{font-size:clamp(30px,9.5vw,42px)}
 @media (max-height:740px){.hero-wohin #h-start.long{font-size:30px}}
+
+/* 0.99.1 Suchfeld auf Heute zurückgenommen: dünnerer Rand, kleinerer, heller Mikrofonknopf, kein Schatten */
+.hero-wohin #plan-card .plan-form{border:1.5px solid #4f8f6e;box-shadow:none;border-radius:18px;padding:4px 4px 4px 16px;background:#fff}
+.hero-wohin #plan-card .plan-form:focus-within{border-color:#0f5c3c;box-shadow:0 0 0 3px #cfe8da}
+.hero-wohin #plan-card .plan-form input{font-size:18px;min-height:46px}
+.hero-wohin .plan-mic{width:44px;height:44px;border-radius:14px;background:#e3f2ea;color:#0f5c3c}
+.hero-wohin .plan-mic .ic{width:22px;height:22px}
