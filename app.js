@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.96.4';
+  const VERSION = '0.96.5';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4114,7 +4114,7 @@
     document.body.dataset.view = name;   // Farbe und Ruhe je Ansicht (Aufzeichnung ohne Menü)
     // Frag Flowtown oben auf den Hauptseiten, mit einem Beispiel, das zur Seite passt
     askBar(name);
-    const tabFor = { drive: 'start', review: 'stats', plan: 'start' };
+    const tabFor = { drive: 'start', review: 'stats', plan: 'start', best: 'start' };
     // Womit? und das Profil gehören zu beiden Seiten: Heute (Losfahren) und Planen
     if (name === 'start' || name === 'plan') { const slot = $('#mode-slot-' + name), box = $('#mode-box'); if (box.parentNode !== slot) slot.appendChild(box); }
     $$('.tabs button').forEach((b) => {
@@ -4124,13 +4124,14 @@
     if (name === 'stats') renderStats();
     if (name === 'tips') renderTips();
     if (name === 'map') { mapFitted = false; renderMap(); }
-    if (name === 'start') { renderToday(); renderLastTrip(); }
+    if (name === 'start') { planFromBest = false; renderToday(); renderLastTrip(); }
+    if (name === 'best') renderBest();
     if (name === 'plan') { $('#plan-off').hidden = !!apiBase(); renderToday(); }
     if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
     if (name === 'start') renderA2hs();
     const h = $('#view-' + name + ' h2');
     // Seitentitel nennt die Ansicht, damit Screenreader und App-Umschalter wissen, wo man ist
-    const titles = { welcome: 'Willkommen', start: 'Heute', plan: 'Wohin?', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
+    const titles = { welcome: 'Willkommen', start: 'Heute', plan: 'Wohin?', best: 'Weg zum Ziel', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
     document.title = (titles[name] ? titles[name] + ' – ' : '') + 'Flowtown';
     if (h && name !== 'drive') { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
@@ -4156,24 +4157,26 @@
   let bestZiel = null;
   const BEST_NAME = { auto: 'Auto', oepnv: 'Bus & Bahn', rad: 'Rad', fuss: 'Zu Fuß' };
   const BEST_MODE = { auto: 'auto', oepnv: 'bahn', rad: 'rad', fuss: 'fuss' };
-  // Eine Hauptzeile und höchstens ein Hinweis; alle Einzelheiten stehen beim Antippen und für Screenreader im Namen der Zeile
-  function bestRow(o, rec) {
+  // Je Verkehrsmittel: Name und Zeit groß, höchstens ein Hinweis; Einzelheiten stehen beim Antippen und für Screenreader im Namen
+  function bestInfo(o) {
     const all = [];
-    let main = '';
-    if (o.verkehrsmittel === 'auto') { main = `${o.dauer_min} min${o.verzoegerung_min >= 3 ? `, ${o.verzoegerung_min} min Stau` : ''}`; all.push(`${o.dauer_min} min mit Parken`); if (o.verzoegerung_min >= 3) all.push(`${o.verzoegerung_min} min Stau`); }
-    if (o.verkehrsmittel === 'oepnv') { main = `ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}${o.umstiege ? `, ${o.umstiege}× umsteigen` : ''}`; all.push(main); if (o.stufenlos) all.push('stufenlos: ' + o.stufenlos); }
-    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') { main = `${o.dauer_min} min · ${fmtNum(o.km, 1)} km`; all.push(main); }
-    if (o.ausweichroute) all.push(`Ausweichroute ${o.ausweichroute.dauer_min} min`);
-    if (o.behindertenparkplatz) all.push('Behindertenparkplatz ' + o.behindertenparkplatz);
+    if (o.verkehrsmittel === 'auto') { all.push(`${o.dauer_min} min${o.verzoegerung_min >= 3 ? `, ${o.verzoegerung_min} min Stau` : ''} mit Parken`); if (o.ausweichroute) all.push(`Ausweichroute ${o.ausweichroute.dauer_min} min`); if (o.behindertenparkplatz) all.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
+    if (o.verkehrsmittel === 'oepnv') { all.push(`ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}${o.umstiege ? `, ${o.umstiege}× umsteigen` : ''}`); if (o.stufenlos) all.push('stufenlos: ' + o.stufenlos); }
+    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') all.push(`${o.dauer_min} min, ${fmtNum(o.km, 1)} km`);
     if (o.hindernisse && o.hindernisse.length) all.push(o.hindernisse.slice(0, 2).join(', '));
     if (o.gemeldet && o.gemeldet.length) all.push('gemeldet: ' + o.gemeldet.map((x) => x.art).slice(0, 2).join(', '));
     if (o.meldungen && o.meldungen.length) all.push(o.meldungen[0]);
     if (o.co2) all.push(o.co2_g ? `CO₂ ${o.co2}` : 'ohne CO₂');
     const flag = !o.geeignet ? (settings.access.on ? 'nicht für dein Profil' : 'eher nicht')
-      : o.ausweichroute && o.verkehrsmittel === 'auto' ? `Ausweichroute ${o.ausweichroute.dauer_min} min`
+      : o.verkehrsmittel === 'auto' && o.ausweichroute ? `Ausweichroute ${o.ausweichroute.dauer_min} min`
       : (o.hindernisse && o.hindernisse[0]) || (o.gemeldet && o.gemeldet.length ? 'gemeldet: ' + o.gemeldet[0].art : '') || (o.meldungen && o.meldungen[0]) || '';
+    const time = o.dauer_min ? `${o.dauer_min} min` : `an ${o.ankunft}`;
     if (!o.geeignet) all.unshift(flag);
-    return `<button type="button" class="best-row${rec ? ' rec' : ''}${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}" aria-label="${esc(`${BEST_NAME[o.verkehrsmittel]}, an ${o.ankunft}${rec ? ', Empfehlung' : ''}. ${all.join(', ')}`)}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}<span class="best-an"> · an ${esc(o.ankunft)}</span></b><span>${esc(main)}</span>${flag ? `<span class="best-flag${o.geeignet ? '' : ' no'}">${esc(flag)}</span>` : ''}</span>${rec ? '<span class="best-tag">Empfehlung</span>' : ''}</button>`;
+    return { all, flag, time, label: `${BEST_NAME[o.verkehrsmittel]}, an ${o.ankunft}. ${all.join(', ')}` };
+  }
+  function bestRow(o, rec) {
+    const b = bestInfo(o);
+    return `<button type="button" class="best-row${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}" aria-label="${esc(b.label)}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}</b>${b.flag ? `<span class="best-flag${o.geeignet ? '' : ' no'}">${esc(b.flag)}</span>` : ''}</span><span class="best-time">${esc(b.time)}</span></button>`;
   }
   function bestHtml() {
     if (!apiBase() || !serverTools.includes('vergleich')) return '';
@@ -4185,10 +4188,15 @@
     else if (r.error) body = `<p class="small">${esc(r.error)}</p><button type="button" class="btn quiet" data-best="go">Noch einmal versuchen</button>`;
     else {
       const d = r.data, e = d.empfehlung;
-      const rows = d.optionen.slice().sort((a, b) => (a.verkehrsmittel === e.verkehrsmittel ? -1 : b.verkehrsmittel === e.verkehrsmittel ? 1 : 0) || (a.geeignet === b.geeignet ? 0 : a.geeignet ? -1 : 1) || String(a.ankunft).localeCompare(String(b.ankunft)));
-      const am = d.am_ziel ? amZielText(d.am_ziel).split(' · ').slice(0, 2).join(' · ') : '';
-      const gr = String(e.grund || '').split(';').map((x) => x.trim()).filter(Boolean), grund = [gr[0]].concat(gr.slice(1).filter((x) => /CO₂/.test(x)).slice(0, 1)).filter(Boolean).join(' · ');
-      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · CO₂ grob geschätzt. Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
+      const rec = d.optionen.find((o) => o.verkehrsmittel === e.verkehrsmittel) || d.optionen[0];
+      const rest = d.optionen.filter((o) => o !== rec).sort((a, b) => (a.geeignet === b.geeignet ? 0 : a.geeignet ? -1 : 1) || String(a.ankunft).localeCompare(String(b.ankunft)));
+      const am = d.am_ziel ? amZielText(d.am_ziel).split(' · ').slice(0, 2) : [];
+      const gr = String(e.grund || '').split(';').map((x) => x.trim()).filter(Boolean), grund = (gr[0] || '').replace(/,?\s*Ankunft gegen \d\d:\d\d/, '');
+      const rb = bestInfo(rec);
+      body = `<button type="button" class="best-hero" data-best-mode="${rec.verkehrsmittel}" aria-label="${esc('Empfehlung: ' + rb.label)}"><span class="bh-ic">${ic(MODE_ICON[rec.verkehrsmittel])}</span><span class="bh-main"><span class="bh-kick">Am besten</span><b>${esc(cap(GROUP_WITH[rec.verkehrsmittel]))}</b><span class="bh-time">${esc(rb.time)} · an ${esc(rec.ankunft)}</span>${grund ? `<span class="bh-why">${esc(cap(grund))}</span>` : ''}</span>${ic('chevron', 'bh-go')}</button>`
+        + `<h3 class="best-h">Andere Möglichkeiten</h3><div class="best-list">${rest.map((o) => bestRow(o, false)).join('')}</div>`
+        + (am.length ? `<div class="best-am">${am.map((x) => `<p>${ic('pin')}<span>${esc(x)}</span></p>`).join('')}</div>` : '')
+        + `<p class="best-foot">Stand ${esc(d.jetzt)} Uhr · <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
     }
     return `<div class="best"><div id="best-body" aria-live="polite">${body}</div></div>`;
   }
@@ -4226,7 +4234,7 @@
     renderPlanTeaser();
   }
   // Heute: Suchfeld „Wohin?“, darunter die Treffer, dann der Vergleich „Womit am besten?“ für das gewählte Ziel
-  let planList = null, planMsg = '';
+  let planList = null, planMsg = '', planFromBest = false;
   function renderPlanTeaser() {
     const el = $('#plan-teaser');
     $('#plan-form').hidden = !apiBase();
@@ -4235,7 +4243,8 @@
     if (planMsg || planList) {
       el.innerHTML = (planMsg ? `<p class="small muted" role="status">${esc(planMsg)}</p>` : '')
         + (planList ? (planList.length ? `<ul class="vf-orte">${planList.map((o, i) => `<li><button type="button" class="vf-ort" data-plan-ort="${i}"><b>${esc(o.name)}</b>${o.sub ? `<span class="small muted">${esc(o.sub)}</span>` : ''}</button></li>`).join('')}</ul>` : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '');
-    } else el.innerHTML = bestHtml() || zielChips();
+    } else el.innerHTML = zielChips();
+    renderBest();
     $('#btn-plan span').textContent = settings.ziele.length ? 'Deine Ziele und Wege' : 'Weg planen';
   }
   // Heute: gespeicherte Ziele als Chips unter dem Suchfeld, ein Tipp vergleicht gleich
@@ -4245,7 +4254,14 @@
     return `<div class="vf-chips" role="group" aria-label="Deine Ziele">${z.map((x) => `<button type="button" class="vf-chip" data-plan-go="${x.id}">${esc(x.name)}</button>`).join('')}</div>`;
   }
   function planGoZiel(z) {
-    if (serverTools.includes('vergleich')) { bestZiel = z.id; unlockSpeech(); runBest(); } else openPlan(z.id);
+    if (serverTools.includes('vergleich')) { bestZiel = z.id; unlockSpeech(); showView('best'); runBest(); } else openPlan(z.id);
+  }
+  // eigene Seite „Weg zum Ziel“: groß die Empfehlung, darunter die anderen Verkehrsmittel
+  function renderBest() {
+    const v = $('#view-best'); if (!v || v.hidden) return;
+    const z = settings.ziele.find((x) => x.id === bestZiel);
+    $('#h-best').textContent = z ? z.name : 'Ziel';
+    $('#best-wrap').innerHTML = bestHtml();
   }
   async function planSearch(q) {
     planMsg = 'Suche …'; planList = null; renderPlanTeaser();
@@ -6398,7 +6414,13 @@
     const bm = ev.target.closest('[data-best-mode]');
     if (bm) { const z = settings.ziele.find((x) => x.id === bestZiel); setModeVoice(BEST_MODE[bm.dataset.bestMode]); if (z) openPlan(z.id); }
   });
-  $('#btn-plan-back').addEventListener('click', () => showView('start'));
+  $('#btn-plan-back').addEventListener('click', () => { if (planFromBest && bestZiel) { planFromBest = false; showView('best'); } else showView('start'); });
+  $('#btn-best-back').addEventListener('click', () => showView('start'));
+  $('#best-wrap').addEventListener('click', (ev) => {
+    if (ev.target.closest('[data-best="go"]')) { unlockSpeech(); runBest(); return; }
+    const bm = ev.target.closest('[data-best-mode]');
+    if (bm) { const z = settings.ziele.find((x) => x.id === bestZiel); setModeVoice(BEST_MODE[bm.dataset.bestMode]); if (z) { planFromBest = true; openPlan(z.id); } }
+  });
   $('#tips-body').addEventListener('click', (ev) => {
     if (ev.target.closest('#btn-ki')) { runKi(); return; }
     if (ev.target.closest('[data-profset]')) { openProfileSettings(); return; }
