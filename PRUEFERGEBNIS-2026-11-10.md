@@ -194,6 +194,37 @@ Gegenüber dem letzten Gesamtlauf sind 24 Fragen besser, 16 schlechter und 247 g
 - K146, K147: Radwege und Radweganteil (E10).
 - Zeitfragen (E1): die Assistenz bleibt bei „nur ab jetzt“.
 
+## Fünfter Lauf: dritter Gesamtlauf mit Festantworten, Direktantworten und genauem Standort
+
+| Ergebnis | Lauf 1 | Gesamtlauf 2 (Lauf 4) | Gesamtlauf 3 (Lauf 5) |
+| --- | ---: | ---: | ---: |
+| erfüllt | 163 | 199 | **244** |
+| teils | 53 | 65 | 30 |
+| nicht erfüllt | 26 | 8 | **2** |
+| falsch | 37 | 7 | **3** |
+| nicht prüfbar | 8 | 8 | 8 |
+
+Gegenüber dem vorigen Gesamtlauf sind 55 Fragen besser, 11 schlechter und 221 gleich. Gegenüber dem ersten Lauf sind 81 Fragen mehr erfüllt und 34 weniger falsch.
+
+**Was die Festantworten und Direktantworten gebracht haben:**
+- 142 Katalogfragen werden jetzt vom Server selbst beantwortet. Davon sind 135 erfüllt. Die Antworten sind im Lauf wortgleich so erschienen, wie in der Tabelle.
+- **Standort mit Adresse** (K001, K004, K009): „Du stehst bei Altstädter Kirchplatz 3, Bielefeld.“ und „… nicht bei Hausnummer 14.“ Der genaue Standort und die Adresse von HERE funktionieren.
+- **Jahnplatz und Hauptbahnhof** (K046, K047, K064, K117, K284, K311): „Am Jahnplatz gibt es laut Fahrplan einen Aufzug. Für Aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status, bitte vor Ort prüfen.“ Der Ostbahnhof (K284) wird nicht mehr erfunden, Paderborn (K046) kommt nicht mehr vor. Auch die Haltestellenliste (K314) kommt aus den Daten.
+- **Zeitfragen, Preise, Notruf, Hilfe zur App, Fragen über Flowtown:** wortgleich, ohne erfundene Telefonnummern und ohne erfundene Menüpunkte.
+
+**Die 3 falschen Antworten und was ich daraufhin getan habe:**
+- **K032** „nach Brackwede“, aber Linie 2 Richtung Sieker: Die KI mischt die Richtungen. Bleibt offen (E12).
+- **K109** „keine laute Baustelle“: Lärm kennen die Daten nicht. Jetzt Festantwort FA91, noch nicht im Lauf geprüft.
+- **K146** „der Radweg ist sicher“: unbelegt. Jetzt Festantwort FA92, noch nicht im Lauf geprüft.
+
+**Rückschritte (11), davon einer von mir verursacht:**
+- **K156** „Offen bis 22 Uhr?“ → „ich kenne nur Öffnungszeiten ab jetzt“. Das hat mein Zeit-Hinweis ausgelöst: Er hängt der Frage den Satz „Die Werkzeuge kennen nur Zeiten ab jetzt“ an, auch bei Öffnungszeiten. Im Code behoben, noch nicht im Lauf geprüft.
+- Übrige: K038, K069, K118, K159, K167, K184, K252, K259 sind schwächere, aber nicht falsche Antworten der KI.
+
+**Noch nicht gut (nicht erfüllt):** K156 (siehe oben) und K317 („Rollstuhl und schlecht sehen: Wie finde ich den Aufzug?“ fragt wieder nach dem Standort; Regel ergänzt, Mehrfachprofil E16).
+
+**Einordnung:** Die KI-Antworten (Wege, Vergleiche, Abfahrten) bleiben der Teil, der schwankt. Dort liegt der Rest: 30 mal „teils“, vor allem Rückfragen statt Hilfe, Fußweg statt Bahn, Auto vor Bahn bei Rollstuhl und Rollator, kühle Absagen bei Orten (Arzt, Apotheke, Werkstatt). Diese Fälle lösen die Werkzeug-Änderungen E8, E11 bis E16 und neue Quellen, nicht weitere Texte.
+
 ## So prüfen wir, ob es besser geworden ist
 
 Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):
