@@ -61,3 +61,10 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [x] G1 (vorläufig: ohne Einstellung im Begleitmodus alle 25 m, sonst aus; wählbar aus, 10, 25, 50 m) Vorgabe für „Weiter geradeaus“: 10 m wie in der Norm oder 25 m?
 - [ ] G2 Zeitformat „1 min 26 s“: ja oder nein?
 - [ ] G3 Google-Sheets-Connector freischalten, damit die Tabelle direkt bearbeitet werden kann?
+
+## H. Grundstruktur der App (Variante A)
+- [x] H1 (0.96.0) Heute beginnt mit „Wohin?“: Suchfeld mit Mikrofon, gespeicherte Ziele als Chips, darunter Verkehrsmittel und Profil; „Ohne Ziel aufzeichnen“ bleibt als zweite Möglichkeit
+- [x] H2 (0.96.0) Fester Mikrofonknopf auf allen Seiten öffnet Frag Flowtown mit Beispielfragen; die KI-Karte auf Heute entfällt
+- [x] H3 (0.96.0) Abfahrten mit Echtzeit stehen auf Heute statt unter „Wohin?“
+- [ ] H4 Profil und Ansagen unter „Mehr“ an einem Ort bündeln
+- [ ] H5 Englisches Konzept auf den Stand 0.96 bringen

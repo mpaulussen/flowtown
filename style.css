@@ -1324,3 +1324,41 @@ html,body{touch-action:manipulation}
 
 /* Navigation: Ansage wiederholen, eine große Taste */
 .nav-rep{width:100%;min-height:52px;font-size:18px;margin-top:8px}
+
+/* 0.96 Variante A: Heute beginnt mit „Wohin?“, ein fester Mikrofonknopf, Aufzeichnen ohne Ziel als zweite Möglichkeit */
+#ask-slot-start{display:none}
+#view-start .claim-sub{margin:0;font-size:18px;color:var(--muted)}
+#plan-card .go-head{display:none}
+#plan-card{background:transparent;background-image:none;box-shadow:none;padding:0;border:0;gap:12px}
+#plan-card .plan-form{display:flex;align-items:center;gap:8px;margin:0;background:var(--surface);border:2px solid var(--accent);border-radius:20px;padding:6px 6px 6px 16px}
+#plan-card .plan-form:focus-within{box-shadow:0 0 0 3px var(--tint)}
+#plan-card .plan-form input{flex:1;min-width:0;border:0;box-shadow:none;background:transparent;font-size:19px;min-height:48px;padding:6px 0}
+#plan-card .plan-form input:focus-visible{outline:none}
+#plan-card .plan-form .plan-search{border-radius:14px;min-height:48px}
+.plan-mic{width:52px;height:52px;flex:none;border-radius:16px;border:0;background:var(--accent);color:#fff;display:grid;place-items:center;cursor:pointer}
+.plan-mic[hidden]{display:none}
+.plan-mic:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.go-card{background:var(--surface);background-image:none;border:1px solid var(--line);box-shadow:none}
+.go-card .go-head{display:none}
+#btn-start.btn{background:transparent;border:1.5px solid var(--accent);color:var(--accent)}
+#btn-start.btn:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.go-note{margin:-4px 2px 0;color:var(--muted)}
+.fab-mic{position:fixed;right:max(16px,env(safe-area-inset-right,0px));bottom:calc(92px + env(safe-area-inset-bottom,0px));z-index:1120;width:64px;height:64px;border-radius:22px;border:0;background:var(--accent);color:#fff;display:grid;place-items:center;box-shadow:0 8px 22px rgba(0,0,0,.28);cursor:pointer}
+.fab-mic[hidden]{display:none}
+.fab-mic .ic{width:28px;height:28px}
+.fab-mic:focus-visible{outline:3px solid var(--fg);outline-offset:3px}
+.fab-mic.listening{animation:fabpulse 1.2s ease-in-out infinite}
+@keyframes fabpulse{50%{box-shadow:0 0 0 10px color-mix(in srgb,var(--accent) 30%,transparent)}}
+body[data-view="drive"] .fab-mic,body[data-view="welcome"] .fab-mic,body:has(.assist:not([hidden])) .fab-mic{display:none}
+body[data-view="map"] .fab-mic{right:auto;left:max(16px,env(safe-area-inset-left,0px))}
+@media (prefers-reduced-motion:reduce){.fab-mic.listening{animation:none}}
+#view-start{padding-bottom:calc(150px + env(safe-area-inset-bottom,0px))}
+/* Wohin? bleibt auch auf kleinen Bildschirmen sichtbar, nur ohne Untertitel */
+@media (max-height:740px){#view-start .claim{position:static;width:auto;height:auto;overflow:visible;clip:auto;white-space:normal}#view-start .claim-sub{display:none}#h-start{font-size:32px}}
+#plan-card .plan-form .plan-search{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);padding:0;border:0;white-space:nowrap}
+#plan-card .plan-note{color:var(--muted);margin:0;font-size:14px}
+#view-start{gap:12px}
+#view-start .go-card{padding:12px;gap:10px}
+#plan-card .plan-note{font-size:13px;line-height:1.35}
+#view-start .claim{padding-bottom:2px}
+#btn-plan{min-height:40px;font-size:16px;background:transparent;border:0;box-shadow:none;color:var(--accent);justify-content:flex-start;padding:4px 2px}

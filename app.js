@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.95.0';
+  const VERSION = '0.96.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -36,10 +36,10 @@
   // Zu Fuß ist man einen Weg gegangen, nicht gefahren
   const DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   const WORDS = {
-    fahrt: { one: 'Fahrt', many: 'Fahrten', none: 'Noch keine Fahrt', start: 'Losfahren', end: 'Fahrt beenden', cont: 'Weiterfahren', time: 'Fahrzeit',
+    fahrt: { one: 'Fahrt', many: 'Fahrten', none: 'Noch keine Fahrt', start: 'Ohne Ziel aufzeichnen', end: 'Fahrt beenden', cont: 'Weiterfahren', time: 'Fahrzeit',
       past: 'gefahren', bilanz: 'Fahrtbilanz', last: 'Letzte Fahrt', review: 'Wie war deine Fahrt?', short: 'Die Fahrt war zu kurz und wurde nicht gespeichert.',
       hold: 'Handy in die Halterung, App geöffnet lassen. Der Bildschirm bleibt an.', during: 'Während der Fahrt nichts antippen. Bewertet wird erst danach.' },
-    weg: { one: 'Weg', many: 'Wege', none: 'Noch kein Weg', start: 'Losgehen', end: 'Weg beenden', cont: 'Weitergehen', time: 'Gehzeit',
+    weg: { one: 'Weg', many: 'Wege', none: 'Noch kein Weg', start: 'Ohne Ziel aufzeichnen', end: 'Weg beenden', cont: 'Weitergehen', time: 'Gehzeit',
       past: 'gegangen', bilanz: 'Wegbilanz', last: 'Letzter Weg', review: 'Wie war dein Weg?', short: 'Der Weg war zu kurz und wurde nicht gespeichert.',
       hold: 'Handy in der Hand oder in der Tasche, App geöffnet lassen. Der Bildschirm bleibt an.', during: 'Unterwegs nichts antippen. Bewertet wird erst danach.' }
   };
@@ -1683,7 +1683,7 @@
     if (text && !keep) micT = setTimeout(() => { el.hidden = true; }, 6000);
   }
   function micUI(on) {
-    ['#btn-mic', '#btn-mic-drive', '.assist-mic', '#ask-mic'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
+    ['#btn-mic', '#btn-mic-drive', '.assist-mic', '#ask-mic', '#fab-mic'].forEach((id) => { const b = $(id); if (b) { b.setAttribute('aria-pressed', String(on)); b.classList.toggle('listening', on); } });
   }
   // Gesprächsmodus: nach einer gesprochenen Antwort oder Rückfrage geht das Mikrofon von selbst wieder an.
   // Kommt nichts, endet es still; „Danke“, „Das war's“ oder „Tschüss“ beenden das Gespräch.
@@ -1946,7 +1946,7 @@
   const isLastTripQ = (q) => { const c = cmdNorm(q); return LAST_RE.test(c) && LAST_TOPIC.test(c) && LAST_WHAT.test(c) && !/\b(woche|monat|tage|immer|meistens|schnitt)\b/.test(c); };
   function answerLastTrip(frage, spoken) {
     const t = trips.filter((x) => !x.demo).sort((a, b) => b.start - a.start)[0];
-    const msg = t ? lastTripText(t, frage) : 'Ich habe noch keine Fahrt von dir. Tippe auf Losfahren, dann zeichnet Flowtown deine erste Fahrt auf.';
+    const msg = t ? lastTripText(t, frage) : 'Ich habe noch keine Fahrt von dir. Tippe auf „Ohne Ziel aufzeichnen“, dann zeichnet Flowtown deine erste Fahrt auf.';
     assistAct = null; assistLast = msg;
     showAssist(frage, msg);
     $('#assist').querySelector('.small.muted:last-child').textContent = 'Aus deinen Fahrten, auf deinem Gerät berechnet. Dieselben Zahlen wie in der Fahrtbilanz.';
@@ -3966,7 +3966,7 @@
 
   // ---------- Navigation ----------
   // Frag Flowtown oben auf den Hauptseiten, mit einem kurzen Beispiel, das zur Seite passt
-  const ASK_EX = { start: 'Nächste Bahn?', plan: 'Rollstuhl-WC?', tips: 'Park + Ride?', stats: 'Baustellen?' };
+  const ASK_EX = { plan: 'Rollstuhl-WC?', tips: 'Park + Ride?', stats: 'Baustellen?' };
   const ASK_EX_MINE = { tips: 'Mein Zeitfresser?', stats: 'Wo warte ich lange?' };   // mit eingeschalteter Auswertung
   // KI-Karte je Seite. Die Vorschläge fragen erst offen („Wohin möchtest du?“) und werden dann mit der Antwort konkret:
   // Weg prüfen, Verkehrsmittel vergleichen und sagen, was am Ziel zählt. Einträge: { l: Knopf, i: Gespräch } oder
@@ -4074,6 +4074,14 @@
     if (inp) { inp.placeholder = k === 'ort' ? 'Ort, Gebäude oder Adresse …' : 'Ziel: Ort, Adresse oder Einrichtung …'; if (!touch && !voiceOn()) inp.focus({ preventScroll: true }); }
     if (voiceOn()) speak(d.open, { now: true, force: true, onend: () => { if (!$('#assist').hidden && pendingIntent) listenAfter('Ich höre zu …'); } });
   }
+  // Fester Mikrofonknopf auf allen Seiten: öffnet Frag Flowtown mit Beispielfragen und hört zu, wenn Sprachbefehle erlaubt sind
+  function openAssistEmpty() {
+    unlockSpeech(); pendingIntent = null; assistAct = null;
+    showAssist('', 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
+    const ex = askExamples('start').ex, form = $('#assist .assist-form');
+    if (form && ex.length) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Beispielfragen">${ex.map((x) => `<button type="button" class="vf-chip" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('')}</div>`);
+    if (SR && settings.voiceIn) listen();
+  }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
     const hero = ASK_HERO[name];
@@ -4097,7 +4105,8 @@
     $('#ask-mic').hidden = !SR;
     $('#ask-hero').hidden = !(on && hero);
     // ein Mikrofon genügt: steht das Feld da, sitzt es im Feld statt oben in der Leiste
-    const hm = $('#btn-mic'); if (hm) hm.hidden = !SR || on;
+    const hm = $('#btn-mic'); if (hm) hm.hidden = true;
+    const fm = $('#fab-mic'); if (fm) fm.hidden = !apiBase();
   }
   function showView(name) {
     if (name !== 'map') stopMyLocation();
@@ -4213,11 +4222,22 @@
   function renderPlanTeaser() {
     const el = $('#plan-teaser');
     $('#plan-form').hidden = !apiBase();
+    $('#plan-mic').hidden = !SR;
+    $('#btn-plan').hidden = !!apiBase() && !settings.ziele.length;   // mit Server und ohne gespeicherte Ziele genügt das Feld
     if (planMsg || planList) {
       el.innerHTML = (planMsg ? `<p class="small muted" role="status">${esc(planMsg)}</p>` : '')
         + (planList ? (planList.length ? `<ul class="vf-orte">${planList.map((o, i) => `<li><button type="button" class="vf-ort" data-plan-ort="${i}"><b>${esc(o.name)}</b>${o.sub ? `<span class="small muted">${esc(o.sub)}</span>` : ''}</button></li>`).join('')}</ul>` : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '');
-    } else el.innerHTML = bestHtml();
+    } else el.innerHTML = bestHtml() || zielChips();
     $('#btn-plan span').textContent = settings.ziele.length ? 'Deine Ziele und Wege' : 'Weg planen';
+  }
+  // Heute: gespeicherte Ziele als Chips unter dem Suchfeld, ein Tipp vergleicht gleich
+  function zielChips() {
+    if (!apiBase() || !settings.ziele.length) return '';
+    const z = settings.ziele.slice().sort((a, b) => (b.u || 0) - (a.u || 0)).slice(0, 4);
+    return `<div class="vf-chips" role="group" aria-label="Deine Ziele">${z.map((x) => `<button type="button" class="vf-chip" data-plan-go="${x.id}">${esc(x.name)}</button>`).join('')}</div>`;
+  }
+  function planGoZiel(z) {
+    if (serverTools.includes('vergleich')) { bestZiel = z.id; unlockSpeech(); runBest(); } else openPlan(z.id);
   }
   async function planSearch(q) {
     planMsg = 'Suche …'; planList = null; renderPlanTeaser();
@@ -4237,7 +4257,7 @@
       settings.ziele.push(z); store.set('settings', settings);
     }
     planList = null; planMsg = ''; $('#plan-q').value = '';
-    if (serverTools.includes('vergleich')) { bestZiel = z.id; unlockSpeech(); runBest(); } else openPlan(z.id);
+    planGoZiel(z);
   }
   function openPlan(id) {
     zielEdit = false;
@@ -4423,7 +4443,7 @@
         + more + '</div>';
       say.push(`${title}: ${badge === 'frei' ? 'frei' : badge}. ${nums.map(([v, l]) => `${v} ${l}`).join(', ')}${nums.length ? '.' : ''} ${items.map((x) => `${x.art ? x.art + ': ' : ''}${x.name}${x.right ? ', ' + x.right : ''}.`).join(' ')}`);
     }
-    if (!real.length) { html += wrow('grey', 'Noch keine Fahrt. Wähle oben, womit du unterwegs bist, und tippe auf Losfahren.', ''); say.push('Noch keine Fahrt.'); }
+    if (!real.length) { html += wrow('grey', 'Noch keine Fahrt. Gib ein Ziel ein oder tippe auf „Ohne Ziel aufzeichnen“.', ''); say.push('Noch keine Fahrt.'); }
     wegSay = say.join(' ').replace(/\s+/g, ' ').trim();
     $('#weg').innerHTML = html;
     $('#st-detail').innerHTML = detail;
@@ -4435,7 +4455,7 @@
     if (!b) return;
     if (b.dataset.goto) showView(b.dataset.goto);
     else if (b.dataset.weg === 'lage') { vfOpen = !vfOpen; renderStatus(MODE_GROUP[selectedMode()]); }
-    else if (b.dataset.weg === 'mobiel') { showView('plan'); if (!$('#vorfahrt').hidden) $('#vorfahrt').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+    else if (b.dataset.weg === 'mobiel') { if (!$('#vorfahrt').hidden) $('#vorfahrt').scrollIntoView({ behavior: 'smooth', block: 'start' }); }
   }));
 
   // ---------- Flowtown-Server: Ebene „Wir“, KI-Einschätzung, Meldungen ----------
@@ -4868,7 +4888,7 @@
     wo.innerHTML = wohin;
     drawVfMaps();
     // Bus und Bahn: unter den Kacheln die Abfahrten und die Umleitungen von moBiel
-    const rest = group === 'oepnv' && lageOn() ? abfahrtSection() + mobielSection() : '';
+    const rest = !lageOn() ? '' : group === 'oepnv' ? abfahrtSection() + mobielSection() : settings.haltestellen.length ? abfahrtSection() : '';
     el.hidden = !rest; el.innerHTML = rest;
   }
   // Kleine Karte im Zielfenster: Strecke, Start, Ziel und Meldungen; nicht verschiebbar, Tippen öffnet die große Karte
@@ -6062,7 +6082,7 @@
   function renderLastTrip() {
     $('#today-date').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
     const hr = new Date().getHours();
-    $('#h-start').textContent = hr < 5 ? 'Gute Nacht' : hr < 11 ? 'Guten Morgen' : hr < 18 ? 'Guten Tag' : 'Guten Abend';
+    $('#today-date').textContent = (hr < 5 ? 'Gute Nacht' : hr < 11 ? 'Guten Morgen' : hr < 18 ? 'Guten Tag' : 'Guten Abend') + ' · ' + $('#today-date').textContent;
     $('#hints').open = !trips.some((x) => !x.demo);   // Hinweise nur offen, solange es noch keine Fahrt gibt
   }
 
@@ -6322,7 +6342,7 @@
     settings.onboarded = VERSION;
     store.set('settings', settings);
     showView('start');
-    speak('Flowtown ist bereit. Oben wählst du, womit du unterwegs bist, und tippst auf Losfahren. Darunter planst du deinen Weg.', { now: true });
+    speak('Flowtown ist bereit. Oben gibst du dein Ziel ein, oder du wählst, womit du unterwegs bist, und tippst auf Ohne Ziel aufzeichnen.', { now: true });
   });
 
   // ---------- Hinweis: zum Home-Bildschirm hinzufügen ----------
@@ -6357,6 +6377,8 @@
   $('#plan-teaser').addEventListener('click', (ev) => {
     const po = ev.target.closest('[data-plan-ort]');
     if (po && planList) { planPick(planList[Number(po.dataset.planOrt)]); return; }
+    const pg = ev.target.closest('[data-plan-go]');
+    if (pg) { const z = settings.ziele.find((x) => x.id === pg.dataset.planGo); if (z) { z.u = Date.now(); store.set('settings', settings); planGoZiel(z); } return; }
     const c = ev.target.closest('[data-plan-ziel]');
     if (c) { openPlan(c.dataset.planZiel); return; }
     const bz = ev.target.closest('[data-best-ziel]');
@@ -6490,7 +6512,7 @@
     store.set('settings', settings);
     applyAccessUI(); updateVoiceBtn();
   }
-  ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = !SR; b.addEventListener('click', () => listen()); } });
+  ['#btn-mic', '#btn-mic-drive'].forEach((id) => { const b = $(id); if (b) { b.hidden = id === '#btn-mic' || !SR; b.addEventListener('click', () => listen()); } });
   askBar(document.body.dataset.view || 'start');
   let sosBack = null;
   function openSos() {
@@ -6510,6 +6532,10 @@
   $('#sos').addEventListener('click', (ev) => { if (ev.target.closest('[data-sos="close"]')) closeSos(); });
   document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('#sos').hidden) closeSos(); });
   $('#assist').addEventListener('click', (ev) => {
+    const ai = ev.target.closest('[data-askintent]');
+    if (ai) { unlockSpeech(); startIntent(ai.dataset.askintent); return; }
+    const ae = ev.target.closest('[data-askex]');
+    if (ae) { unlockSpeech(); askAssist(ae.dataset.askex, false); return; }
     const ans = ev.target.closest('[data-intentans]');
     if (ans) { unlockSpeech(); askAssist(ans.dataset.intentans, false); return; }
     const b = ev.target.closest('[data-assist]');
@@ -6527,6 +6553,8 @@
   });
   $('#assist').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#assist-inp'); if (i && i.value.trim()) askAssist(i.value, false); });
   $('#ask-mic').addEventListener('click', () => listen());
+  $('#fab-mic').addEventListener('click', openAssistEmpty);
+  $('#plan-mic').addEventListener('click', () => { unlockSpeech(); startIntent('weg'); });
   // Beispielfragen auf Heute: ein Tipp stellt die Frage
   $('#ask-hero').addEventListener('click', (ev) => {
     if (ev.target.closest('#ask-allow')) {
@@ -6544,7 +6572,7 @@
   });
   $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else if (TIPS_RE.test(cmdNorm(i.value))) { renderTips(); readTips(); } else askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
-  document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
+  document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, #fab-mic, #plan-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
   $('#set-compass').checked = compassWanted();
   $('#set-begleit').checked = begleitOn();
   $('#set-navtone').checked = settings.navTone !== false;
