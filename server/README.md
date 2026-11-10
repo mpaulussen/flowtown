@@ -222,6 +222,12 @@ Ab App-Version 0.88 kann der Server mehr. Die App fragt `/api/health` und zeigt 
   - `ort_info`: was an einem Ort zählt, an dem die Person sein will: Barrierefreiheit des Gebäudes (Bethel), nächstes rollstuhlgerechtes WC, Toilette, Behindertenparkplatz, Stadtbahn mit Hochbahnsteig, gemeldete Hindernisse. Dieselben Angaben stehen als `am_ziel` auch in `vergleich` und `weg_check`.
 - `meine_auswertung` enthält jetzt auch den Vergleich der eigenen Fahrten nach Verkehrsmittel und die eigenen Ampel-Bewertungen (etwa „Grün zu kurz“).
 
+### Rangfolge nach Profil und Gehtempo
+
+- **Rollstuhl und Rollator:** `vergleich` (Assistenz und „Womit heute am besten?“ in der App) ordnet zu Fuß vor Bus und Bahn vor Auto, mit größerem Spielraum als ohne Profil (ein Drittel der schnellsten Zeit, 10 bis 20 Minuten statt 5 bis 15). Sagt die Person „mit dem Rollator“, „mit dem Rollstuhl“ oder „zu Fuß“, geht ein geeigneter Fußweg (ohne Stufen, höchstens 40 Minuten) vor. Das Auto bleibt möglich, wenn es deutlich schneller ist, etwa bei Fernreisen.
+- **Gehtempo:** Für Rollator und Rollstuhl rechnet der Server die Gehzeit nach einer Annahme: Rollator 2,5 km/h, Rollstuhl 3,5 km/h (HERE rechnet mit Fußgängern ohne Hilfsmittel). Die Antwort sagt „geschätzt“. Einstellbar mit `GEHTEMPO_ROLLATOR_KMH` und `GEHTEMPO_ROLLSTUHL_KMH` in `/etc/flowtown.env`. Die Werte sind Annahmen und sollten im Pilot mit echten Wegen geprüft werden.
+- **Genauer Standort:** Die Werkzeuge `weg` und `vergleich` nutzen jetzt den genauen Standort (etwa 1 m) statt 100 m.
+
 ### Festantworten und Direktantworten (ohne KI)
 
 Fragen, bei denen die Antwort sicher und immer gleich sein muss, beantwortet der Server selbst, ohne Mistral. Das Regelwerk steht in `ASSISTENZ-REGELN.md`.

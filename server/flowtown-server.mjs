@@ -2328,7 +2328,9 @@ Regeln:
 - „Letzte Bahn von A nach B“: nenne die Richtung genau so wie gefragt. Passt die Richtung der Abfahrten nicht, sag, dass du nur die letzten Abfahrten an der Haltestelle kennst.
 - Liefert ein Werkzeug nichts, sag „dazu habe ich nichts gefunden“, nie „es gibt keine“ (zum Beispiel keine barrierefreien Restaurants). Nenne einen Ort nur mit dem Typ, der zu seinem Namen passt: eine Staatsanwaltschaft oder ein Gericht ist keine Polizeiwache.
 - „Bahnhof“ ohne Zusatz heißt der Hauptbahnhof (Werkzeuge: „Hauptbahnhof“). Frag nicht nach.
-- Hat die Person keinen Ort genannt, aber der Standort ist im Kontext bekannt, nutze ihn (Werkzeuge ohne Ortsangabe). Frag nie nach dem Standort, wenn er bekannt ist. Sag nie, ein Weg oder Radweg sei „sicher“.`;
+- Hat die Person keinen Ort genannt, aber der Standort ist im Kontext bekannt, nutze ihn (Werkzeuge ohne Ortsangabe). Frag nie nach dem Standort, wenn er bekannt ist. Sag nie, ein Weg oder Radweg sei „sicher“.
+- „Wie lange dauert der Weg zu X?“ ohne Verkehrsmittel: Werkzeug vergleich, nenne die empfohlene Möglichkeit mit Dauer und, bei Bus und Bahn, der Zahl der Umstiege, nicht nur den Fußweg.
+- Bei Rollstuhl oder Rollator nennst du die Gehzeit mit dem Zusatz „geschätzt“ (Feld tempo) und empfiehlst nie das Auto, wenn die Person „mit dem Rollator“ oder „mit dem Rollstuhl“ geht. Gibt es Stufen, nenne Bus und Bahn mit Hochbahnsteig.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -2615,7 +2617,31 @@ const hbsOf = (n) => { const y = hst && hst.liste.find((z) => z.k === hstNorm(n)
 // CO2 je Personenkilometer, grob nach Durchschnittswerten des Umweltbundesamts (gerundet): Auto 160 g, Bus 80 g, Stadtbahn und Zug 60 g
 const CO2_G = { auto: 160, bus: 80, bahn: 60, zug: 60, rad: 0, fuss: 0 };
 const kgText = (g) => (g >= 1000 ? `${(Math.round(g / 100) / 10).toLocaleString('de-DE')} kg` : `${Math.round(g / 10) * 10} g`);
-async function vergleichZiel(from, to, typ, vorrang) {
+// <waehle>
+// Gehtempo je Profil (Annahme, einstellbar): Rollator etwa 2,5 km/h, Rollstuhl etwa 3,5 km/h. HERE rechnet mit einem Fußgänger ohne Hilfsmittel.
+const GEH_KMH = { rollator: Number(process.env.GEHTEMPO_ROLLATOR_KMH) || 2.5, rollstuhl: Number(process.env.GEHTEMPO_ROLLSTUHL_KMH) || 3.5 };
+function gehDauerS(dauerS, km, typ) {
+  const kmh = GEH_KMH[typ];
+  if (!kmh || !km) return dauerS;
+  return Math.max(dauerS, Math.round((km / kmh) * 3600));
+}
+// Welche Möglichkeit empfohlen wird. Ohne Profil: umweltfreundlichste, wenn kaum langsamer. Rollstuhl und Rollator: zu Fuß vor Bus und Bahn vor Auto,
+// mit größerem Spielraum; sagt die Person „mit dem Rollator“ oder „zu Fuß“, geht der geeignete Fußweg vor.
+function waehleBeste(opt, { typ, vorrang, now, zuFuss }) {
+  const mob = ['rollstuhl', 'rollator'].includes(typ);
+  const ok = opt.filter((o) => o.geeignet);
+  const pool = ok.length ? ok : opt;
+  const ECO = mob ? { fuss: 0, oepnv: 1, rad: 2, auto: 3 } : { fuss: 0, rad: 1, oepnv: 2, auto: 3 };
+  const fastest = pool.slice().sort((a, b) => a.ankunft - b.ankunft)[0];
+  if (mob && zuFuss) { const f = pool.find((o) => o.verkehrsmittel === 'fuss'); if (f) return { best: f, fastest, pool }; }
+  // Spielraum: höchstens so viel später wie ein Viertel der schnellsten Reisezeit, mindestens 5, höchstens 15 Minuten (Rollstuhl, Rollator: etwa ein Drittel, 10 bis 20 Minuten)
+  const lo = mob ? 10 : 5, hi = mob ? 20 : 15, anteil = mob ? 0.35 : 0.25;
+  const tol = vorrang === 'schnell' ? 3 * 60000 : Math.min(hi * 60000, Math.max(lo * 60000, (fastest.ankunft - now) * anteil));
+  const best = pool.filter((o) => o.ankunft <= fastest.ankunft + tol).sort((a, b) => ECO[a.verkehrsmittel] - ECO[b.verkehrsmittel] || a.ankunft - b.ankunft)[0] || fastest;
+  return { best, fastest, pool };
+}
+// </waehle>
+async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
   const now = Date.now();
   const luft = mAbs(from, to), weit = (m) => Promise.reject(new Error('zu weit'));
   const [ra, rr, rf, ro] = await Promise.allSettled([checkZiel(from, to, 'auto', true), luft > 60000 ? weit() : checkZiel(from, to, 'rad', true), luft > 25000 ? weit() : checkZiel(from, to, 'fuss', true), checkZielOepnv(from, to)]);
@@ -2652,19 +2678,14 @@ async function vergleichZiel(from, to, typ, vorrang) {
   }
   if (rr.status === 'fulfilled') { const v = rr.value; opt.push({ verkehrsmittel: 'rad', dauer_min: Math.round(v.dauer / 60), ankunft: now + v.dauer * 1000, km: v.km, co2_g: 0, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: !['rollstuhl', 'rollator', 'sehen'].includes(typ) && v.dauer <= 45 * 60 }); }
   if (rf.status === 'fulfilled') {
-    const v = rf.value, o = { verkehrsmittel: 'fuss', dauer_min: Math.round(v.dauer / 60), ankunft: now + v.dauer * 1000, km: v.km, co2_g: 0, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: v.dauer <= 40 * 60 };
+    const v = rf.value, dF = gehDauerS(v.dauer, v.km, typ), o = { verkehrsmittel: 'fuss', dauer_min: Math.round(dF / 60), ankunft: now + dF * 1000, km: v.km, co2_g: 0, meldungen: v.items.slice(0, 2).map((it) => it.titel), geeignet: dF <= 40 * 60 };
+    if (GEH_KMH[typ]) o.tempo = `geschätzt mit ${String(GEH_KMH[typ]).replace('.', ',')} km/h für dein Profil`;
     if (typ) { const ck = await wegCheck(v.pts, 3000).catch(() => null); const w = wichtigFuer(typ, ck); if (w) { o.hindernisse = w; if (mob && ck.stellen.some((x) => x.c === 'stufen')) o.geeignet = false; } const g = hinweiseAm(v.pts, 25); if (g.length) o.gemeldet = g; }
     opt.push(o);
   }
   if (!opt.length) throw Object.assign(new Error('Für dieses Ziel habe ich gerade keine Strecke gefunden.'), { status: 404 });
-  const ok = opt.filter((o) => o.geeignet);
-  const pool = ok.length ? ok : opt;
   const NAME = { auto: 'mit dem Auto', oepnv: 'mit Bus und Bahn', rad: 'mit dem Rad', fuss: 'zu Fuß' };
-  const ECO = { fuss: 0, rad: 1, oepnv: 2, auto: 3 };
-  const fastest = pool.slice().sort((a, b) => a.ankunft - b.ankunft)[0];
-  // Spielraum: höchstens so viel später wie ein Viertel der schnellsten Reisezeit, mindestens 5, höchstens 15 Minuten
-  const tol = vorrang === 'schnell' ? 3 * 60000 : Math.min(15 * 60000, Math.max(5 * 60000, (fastest.ankunft - now) * 0.25));
-  const best = pool.filter((o) => o.ankunft <= fastest.ankunft + tol).sort((a, b) => ECO[a.verkehrsmittel] - ECO[b.verkehrsmittel] || a.ankunft - b.ankunft)[0] || fastest;
+  const { best, fastest, pool } = waehleBeste(opt, { typ, vorrang, now, zuFuss });
   const car = opt.find((o) => o.verkehrsmittel === 'auto');
   const spart = car && best.verkehrsmittel !== 'auto' && car.co2_g > best.co2_g ? car.co2_g - best.co2_g : 0;
   let grund;
@@ -2868,7 +2889,7 @@ async function assistTool(name, a, ctx, act) {
     if (am.bahnhof_aufzuege) out.bahnhof_aufzuege = am.bahnhof_aufzuege;
     out.plan_b = planB('ort', { typ: ctx.typ, am });
     if (nach && HERE_KEY) {
-      try { const v = await vergleichZiel(von.pos.map((x) => Math.round(x * 1000) / 1000), nach.pos.map((x) => Math.round(x * 10000) / 10000), ctx.typ, ctx.vorrang); out.jetzt_zurueck = { empfehlung: v.empfehlung, optionen: v.optionen.map((o) => ({ verkehrsmittel: o.verkehrsmittel, dauer_min: o.dauer_min, ankunft: o.ankunft, geeignet: o.geeignet, hindernisse: o.hindernisse })) }; } catch (e) { out.jetzt_zurueck = 'gerade nicht berechenbar'; }
+      try { const v = await vergleichZiel(von.pos.map((x) => Math.round(x * 100000) / 100000), nach.pos.map((x) => Math.round(x * 10000) / 10000), ctx.typ, ctx.vorrang, false); out.jetzt_zurueck = { empfehlung: v.empfehlung, optionen: v.optionen.map((o) => ({ verkehrsmittel: o.verkehrsmittel, dauer_min: o.dauer_min, ankunft: o.ankunft, geeignet: o.geeignet, hindernisse: o.hindernisse })) }; } catch (e) { out.jetzt_zurueck = 'gerade nicht berechenbar'; }
     }
     return out;
   }
@@ -2887,10 +2908,10 @@ async function assistTool(name, a, ctx, act) {
     const to = await assistOrt(a.ziel, ctx), from = a.start ? await assistOrt(a.start, ctx) : (ctx.pos ? { name: 'Standort', pos: ctx.pos } : null);
     if (!to) return { fehler: 'Ziel nicht gefunden' };
     if (!from) return { fehler: 'Kein Standort; bitte einen Startort nennen' };
-    const f = from.pos.map((x) => Math.round(x * 1000) / 1000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
+    const f = from.pos.map((x) => Math.round(x * 100000) / 100000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
     if (name === 'vergleich') {
       const pOsm = osmAussen(to.pos, ctx.typ, 5000), pEg = zuerst(eingangNahe(to.pos, ctx.typ), 5000);   // gleichzeitig mit dem Vergleich, nicht danach
-      const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang);
+      const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang, ctx.zuFuss);
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
       const am = zielInfo(to.pos, to.name, ctx.typ, await pOsm), eg = await pEg;
       return Object.assign({ ziel: to.name, plan_b: planB('vergleich', { v, typ: ctx.typ, am }), eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer } : undefined }, v, { am_ziel: am });
@@ -3007,7 +3028,7 @@ async function assistTool(name, a, ctx, act) {
     if (!to) return { fehler: 'Ziel nicht gefunden' };
     if (!from) return { fehler: 'Kein Standort; bitte einen Startort nennen' };
     const mode = ['auto', 'rad', 'fuss', 'oepnv'].includes(a.verkehrsmittel) ? a.verkehrsmittel : 'auto';
-    const f = from.pos.map((x) => Math.round(x * 1000) / 1000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
+    const f = from.pos.map((x) => Math.round(x * 100000) / 100000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
     act.ziel = { name: to.name, lat: t[0], lon: t[1], mode };
     if (mode === 'oepnv') {
       const v = await checkZielOepnv(f, t);
@@ -3015,7 +3036,8 @@ async function assistTool(name, a, ctx, act) {
         teile: c.teile.filter((x) => x.art !== 'fuss').map((x) => { const e = x.art === 'bahn' && hst && hst.liste; const hb = (n) => { const y = e && e.find((z) => z.k === hstNorm(n)); return y ? y.hbs : 'keine Angabe'; }; return { linie: x.linie, von: x.von, nach: x.nach, richtung: x.ziel, hochbahnsteig_von: x.art === 'bahn' ? hb(x.von) : undefined, hochbahnsteig_nach: x.art === 'bahn' ? hb(x.nach) : undefined }; }) })) };
     }
     const v = await checkZiel(f, t, mode);
-    return { ziel: to.name, verkehrsmittel: mode, dauer_min: Math.round(v.dauer / 60), km: Math.round(v.km * 10) / 10, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)),
+    if (mode === 'fuss' && GEH_KMH[ctx.typ]) { const dF = gehDauerS(v.dauer, v.km, ctx.typ); v.tempo = `geschätzt mit ${String(GEH_KMH[ctx.typ]).replace('.', ',')} km/h für dein Profil`; v.dauer = dF; }
+    return { ziel: to.name, verkehrsmittel: mode, tempo: v.tempo, dauer_min: Math.round(v.dauer / 60), km: Math.round(v.km * 10) / 10, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)),
       meldungen: (v.items || []).slice(0, 3).map((it) => ({ art: it.art, titel: it.titel || '', hinweis: it.text || '' })),
       beste_abfahrt: v.abfahrt && v.abfahrt.length > 1 ? v.abfahrt.reduce((b, x) => (x.dauer < b.dauer ? x : b)) : null,
       ausweichroute: v.alternative ? { ueber: v.alternative.strassen, mehr_min: v.alternative.mehr_min, km: v.alternative.km, ohne_stau: v.alternative.ohne } : undefined };
@@ -3263,6 +3285,7 @@ async function assist(body) {
   const pos = Array.isArray(k.pos) && k.pos.length === 2 && Number(k.pos[0]) > 35 && Number(k.pos[0]) < 72 && Number(k.pos[1]) > -12 && Number(k.pos[1]) < 35 ? k.pos.map((x) => Math.round(Number(x) * 100000) / 100000) : null;   // genau (auf etwa 1 m); geht nur an HERE und die eigenen Werkzeuge, nie an Mistral; auch unterwegs in anderen Städten (Europa)
   const auswertung = assistStatsClean(k.auswertung);
   const ctx = { pos, auswertung, typ: profilTyp(k), vorrang: k.vorrang === 'schnell' || /schnellsten|am schnellsten|eilig/i.test(frage) ? 'schnell' : '', ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
+  ctx.zuFuss = /mit (dem|meinem|meiner) (rollator|rollstuhl|gehhilfe|krücken|gehstock)|\bzu fuß\b|\blaufen\b/i.test(frage);
   ctx.aussen = ausserhalb(pos);
   ctx.stadt = ctx.aussen ? (fpStadtAt(pos) || {}).name || (await placeNear(pos).catch(() => '')) || '' : 'Bielefeld';
   // Antworten, die der Server selbst aus Daten zusammensetzt (Standort mit Adresse, Aufzug an der Stadtbahn): ohne KI

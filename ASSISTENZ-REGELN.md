@@ -29,7 +29,7 @@ Der Server prüft jede Frage in dieser Reihenfolge. Der erste passende Weg antwo
 | R9 | **Absicherung gegen Ausrutscher der KI:** keine wiederholten Sätze, höchstens fünf Sätze, kein Markdown, keine Telefonnummern, keine unbekannten Werkzeugnamen. Antwortet Mistral mit Fehler 400, antwortet der Server einmal ohne Werkzeuge. | `sauber()`, Prüfung der Werkzeugnamen im Server |
 | R10 | **Rückfragen nur, wenn das Ziel wirklich fehlt.** Bei allgemeinen Fragen („Gibt es Gebärdensprache?“) antwortet sie oder sagt „keine Angabe“. | FA28, FA81, Systemtext |
 | R11 | **Ton:** Bei Angst oder Unruhe zuerst ein ruhiger Satz. Keine kühle Absage („Dazu kann ich nichts sagen“), sondern was die Person stattdessen tun kann. | FA13, FA82, FA87; Systemtext |
-| R12 | **Profil:** Rollstuhl und Rollator: stufenlose Bahn vor Auto, nie Treppen oder Rolltreppe empfehlen. Hören: nie zum Anrufen raten. Sehen: Orientierung und Ampeln mit Ton. Gruppen ab fünf Personen: kein Auto. | FA03, FA86; Gruppen-Hinweis im Server; Rangfolge im Werkzeug `vergleich` (E15) |
+| R12 | **Profil:** Rollstuhl und Rollator: stufenlose Bahn vor Auto, nie Treppen oder Rolltreppe empfehlen. Hören: nie zum Anrufen raten. Sehen: Orientierung und Ampeln mit Ton. Gruppen ab fünf Personen: kein Auto. | FA03, FA86; Gruppen-Hinweis im Server; Rangfolge im Werkzeug `vergleich` (E15, gebaut) |
 | R13 | **Länge:** Antworten für die Sprachausgabe haben höchstens drei Sätze, Festantworten höchstens vier, ohne Tabellen und Sonderzeichen. | `sauber()`; Festantworten werden so geschrieben |
 | R14 | **Sprache:** Die Antwort kommt in der Sprache der Frage; Orts- und Liniennamen bleiben unverändert. | Systemtext |
 | R15 | **Pflege der Festantworten:** Jede Zeile nennt Quelle und Stand. Zeilen mit Fakten (Nummern, Regeln, Zuständigkeiten) gehen erst nach Prüfung auf Status `freigegeben`. | Spalten Quelle, Stand, Status in `festantworten.csv` |
@@ -53,8 +53,8 @@ Spalte „Sicherheit“: **fest** = der Server antwortet ohne KI, das Ergebnis i
 | Daten, die es nicht gibt (Wetter, Auslastung, Grünphase, Steigung, Bänke, Trinkwasser, Laden, Stellplätze, Parkregeln) | K067 K068 K105 K112 K043 K059 K158 K053 K137 K139 | Ehrliche Festantworten FA42 bis FA51; Quellen siehe Abschnitt 4 | fest | gebaut; Daten E3, E4, E8 offen |
 | Orte, die die Suche je Lauf anders liefert (Apotheke, Arzt, Supermarkt, Werkstatt) | K150 K159 K160 K164 | Orte aus OpenStreetMap fest im Server speichern, statt HERE-Freitext je Frage (E8) | Daten | offen |
 | Hinweise, die bei jedem Lauf wechseln (Eingang, Rückweg, Pünktlichkeit, unbekannte Linie) | K116 K135 K032 K144 | Direktantworten oder Werkzeug-Änderungen (E11, E12, E14) | Werkzeug | offen |
-| Rollstuhl: Auto vor Bahn, Rollator: Auto | K266 K271 K070 K127 K110 | Rangfolge nach Profil im Werkzeug `vergleich` (E15) | Werkzeug | offen |
-| Gehtempo mit Rollator, Radwege, Radweganteil | K061 K146 K147 | Gehtempo je Profil (E13), Radverkehrsnetz der Stadt, das der Server schon lädt (E10); bis dahin FA55 | Daten | offen |
+| Rollstuhl und Rollator: Auto statt Fußweg oder Bahn, nur Fußweg ohne Umstiege | K070 K110 K127 (K266 K271 bleiben mit beiden Angaben) | Rangfolge nach Profil im Werkzeug `vergleich`, Fußweg bei „mit dem Rollator“, Umstiege im Systemtext (E15) | Werkzeug | gebaut, noch nicht im Lauf geprüft |
+| Gehtempo mit Rollator, Radwege, Radweganteil | K061 K146 K147 | Gehtempo je Profil als Annahme (E13, gebaut, mit Pilot prüfen); Radverkehrsnetz der Stadt, das der Server schon lädt (E10); bis dahin FA55 | Daten | E13 gebaut, E10 offen |
 | Mehrere Behinderungen gleichzeitig | K317 | Mehrfachprofil in der App (E16) | Werkzeug | offen |
 | Antworten, die ohne Verlauf nicht prüfbar sind | K096 K196 und die 8 „nicht prüfbar“ | Testlauf mit Verlauf, Auswertung und gespeichertem Ziel (E5) | Test | offen |
 
