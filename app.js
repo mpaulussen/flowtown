@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.98.3';
+  const VERSION = '0.98.4';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6209,7 +6209,7 @@
   }
 
   function renderLastTrip() {
-    $('#today-date').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
+    $('#today-date').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
     const hr = new Date().getHours();
     $('#today-date').textContent = (hr < 5 ? 'Gute Nacht' : hr < 11 ? 'Guten Morgen' : hr < 18 ? 'Guten Tag' : 'Guten Abend') + ' · ' + $('#today-date').textContent;
     $('#hints').open = false;
@@ -6595,6 +6595,8 @@
     const show = group === 'oepnv' || group === 'fuss';
     const a = settings.access;
     $('#prof-line-text').innerHTML = a.on ? `Profil: <b>${esc(ACCESS_LABEL[a.type])}</b> · ändern` : 'Barrierefrei? Profil wählen';
+    const pb = $('#prof-btn');
+    if (pb) { pb.classList.toggle('on', !!a.on); const t = a.on ? `Profil: ${ACCESS_LABEL[a.type]}. Ändern` : 'Barrierefrei? Profil wählen'; pb.setAttribute('aria-label', t); pb.title = t; }
     const box = $('#acc-tips');
     if (!show || !settings.access.on) { box.hidden = true; box.innerHTML = ''; return; }
     if (!faq) { loadFaq().then(() => { if (faq) renderAccRow(); }); return; }
@@ -6614,6 +6616,7 @@
     setTimeout(() => { d.scrollIntoView({ block: 'start' }); $('#set-access').focus({ preventScroll: true }); }, 50);
   }
   $('#prof-line').addEventListener('click', openProfileSettings);
+  $('#prof-btn').addEventListener('click', openProfileSettings);
   $('#acc-tips').addEventListener('click', (ev) => {
     const t = ev.target.closest('[data-acctip]');
     if (t) { accTipOpen = accTipOpen === t.dataset.acctip ? null : t.dataset.acctip; renderAccRow(); }
