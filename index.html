@@ -189,7 +189,18 @@
     <button type="button" class="prof-line" id="prof-line"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg><span id="prof-line-text">Barrierefrei? Profil wählen</span><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg></button>
     </div>
     <div id="mode-slot-start"></div>
-    <button id="btn-start" class="btn big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Ohne Ziel aufzeichnen</span></button>
+    <div class="rec-row">
+      <button id="btn-start" class="btn big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Ohne Ziel aufzeichnen</span></button>
+      <button id="btn-mode" class="mode-chip" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mode-pop"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg><span class="sr-only" id="btn-mode-t">Verkehrsmittel: Auto. Ändern</span></button>
+    </div>
+    <div id="mode-pop" class="mode-pop" role="group" aria-label="Womit bist du unterwegs?" hidden>
+      <button type="button" data-setmode="auto"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg>Auto</button>
+      <button type="button" data-setmode="rad"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Rad</button>
+      <button type="button" data-setmode="fuss"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg>Zu Fuß</button>
+      <button type="button" data-setmode="bahn"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</button>
+      <button type="button" data-setmode="bus"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg>Bus</button>
+      <button type="button" data-setmode="zug"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Zug</button>
+    </div>
     <p class="small go-note" id="go-note">Du fährst wie sonst. Flowtown misst Halte und Wartezeiten, ein Ziel brauchst du dafür nicht.</p>
     </section>
     <div id="acc-tips" class="acc-tips" hidden></div>

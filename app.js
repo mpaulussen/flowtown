@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.98.2';
+  const VERSION = '0.98.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4463,7 +4463,30 @@
       ${ids.size ? `<ul class="facts"><li>${ic('sound')}<span>Ampeln mit Tonsignal</span><b>${yes}</b></li><li>${ic('light')}<span>ohne Tonsignal</span><b>${no}</b></li><li>${ic('info')}<span>ohne Angabe</span><b>${unk}</b></li></ul>` : `<p class="small muted">Nach den ersten Fahrten: Ampeln mit Tonsignal auf deinen Wegen.</p>`}
       </div>`;
   }
+  // Verkehrsmittel für „Ohne Ziel aufzeichnen“: ein Symbol neben dem Knopf, ein Tipp öffnet die Auswahl
+  function updateModeChip() {
+    const m = selectedMode(), u = $('#btn-mode use');
+    if (u) u.setAttribute('href', '#i-' + (MODE_ICON[m] || 'route'));
+    $('#btn-mode-t').textContent = `Verkehrsmittel: ${MODES[m] ? MODES[m].label : m}. Ändern`;
+    $$('#mode-pop [data-setmode]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.setmode === m)));
+  }
+  function closeModePop(focusChip) {
+    $('#mode-pop').hidden = true; $('#btn-mode').setAttribute('aria-expanded', 'false');
+    if (focusChip) $('#btn-mode').focus();
+  }
+  $('#btn-mode').addEventListener('click', () => {
+    const open = $('#mode-pop').hidden;
+    $('#mode-pop').hidden = !open; $('#btn-mode').setAttribute('aria-expanded', String(open));
+    if (open) { updateModeChip(); const on = $('#mode-pop [aria-pressed="true"]'); if (on) on.focus({ preventScroll: true }); }
+  });
+  $('#mode-pop').addEventListener('click', (ev) => {
+    const b = ev.target.closest('[data-setmode]');
+    if (!b) return;
+    setModeVoice(b.dataset.setmode); closeModePop(true);
+  });
+  document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape' && !$('#mode-pop').hidden) closeModePop(true); });
   function renderToday() {
+    updateModeChip();
     const group = MODE_GROUP[selectedMode()];
     renderAccRow();
     renderStatus(group);
