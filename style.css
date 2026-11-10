@@ -1589,3 +1589,8 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 /* 0.99.8 Überschrift mit Flowtown: lange Varianten etwas kleiner */
 .hero-wohin #h-start.xlong{font-size:clamp(26px,7.8vw,34px);line-height:1.06}
 @media (max-height:740px){.hero-wohin #h-start.xlong{font-size:26px}}
+
+/* 0.99.9 Überschriften in Tipps und Verlauf wie auf Heute */
+.hero-wohin #h-tips.long,.hero-wohin #h-stats.long{font-size:clamp(30px,9.5vw,42px);line-height:1.02}
+.hero-wohin #h-tips.xlong,.hero-wohin #h-stats.xlong{font-size:clamp(26px,7.8vw,34px);line-height:1.06}
+@media (max-height:740px){.hero-wohin #h-tips.long,.hero-wohin #h-stats.long{font-size:30px}.hero-wohin #h-tips.xlong,.hero-wohin #h-stats.xlong{font-size:26px}}

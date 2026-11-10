@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.99.8';
+  const VERSION = '0.99.9';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6220,21 +6220,30 @@
     rad: ['Sicher mit dem Rad, mit Flowtown.', 'Flowtown fährt mit dir Rad.'],
     stadt: ['Gemeinsam mit Flowtown besser ankommen.', 'Mit Flowtown die Stadt besser machen.']
   };
-  let heuteTitel = null, heuteTitelKey = '';
-  function pickHeuteTitel() {
-    const g = goals();
-    const pool = TITEL_ALLG.concat(...g.map((k) => (TITEL_ZIEL[k] || []).concat(TITEL_ZIEL[k] || [])));
-    const last = store.get('heuteTitelLast', '');
+  // Tipps und Verlauf bekommen ebenfalls wechselnde Überschriften, die zur Funktion passen
+  const TITEL_TIPPS = ['Tipps für deinen Weg.', 'Was dir heute hilft.', 'Tipps, die zu dir passen.', 'Flowtown-Tipps für unterwegs.', 'Gut vorbereitet losgehen.'];
+  const TITEL_VERLAUF = ['Dein Verlauf mit Flowtown.', 'Wo du überall warst.', 'Deine Wege im Blick.', 'Was deine Wege zeigen.', 'Dein Flow in Zahlen.'];
+  // wählt eine Überschrift, nie dieselbe wie beim letzten Öffnen
+  function pickTitel(pool, lastKey) {
+    const last = store.get(lastKey, '');
     const rest = pool.filter((t) => t !== last);
     const t = rest[Math.floor(Math.random() * rest.length)] || pool[0];
-    store.set('heuteTitelLast', t);
+    store.set(lastKey, t);
     return t;
   }
-  function renderHeuteTitel() {
-    const key = goals().join(',');
-    if (!heuteTitel || key !== heuteTitelKey) { heuteTitel = pickHeuteTitel(); heuteTitelKey = key; }
-    const t = heuteTitel, h = $('#h-start');
+  function setTitel(sel, t) {
+    const h = $(sel); if (!h) return;
     h.textContent = t; h.classList.toggle('long', t.length > 18); h.classList.toggle('xlong', t.length > 24);
+  }
+  let heuteTitel = null, heuteTitelKey = '', tabTitel = null;
+  function renderHeuteTitel() {
+    const g = goals(), key = g.join(',');
+    if (!heuteTitel || key !== heuteTitelKey) {
+      heuteTitel = pickTitel(TITEL_ALLG.concat(...g.map((k) => (TITEL_ZIEL[k] || []).concat(TITEL_ZIEL[k] || []))), 'heuteTitelLast');
+      heuteTitelKey = key;
+    }
+    if (!tabTitel) tabTitel = { tipps: pickTitel(TITEL_TIPPS, 'tippsTitelLast'), verlauf: pickTitel(TITEL_VERLAUF, 'verlaufTitelLast') };
+    setTitel('#h-start', heuteTitel); setTitel('#h-tips', tabTitel.tipps); setTitel('#h-stats', tabTitel.verlauf);
   }
   function renderLastTrip() {
     renderHeuteTitel();
