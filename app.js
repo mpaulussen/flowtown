@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.99.2';
+  const VERSION = '0.99.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1700,9 +1700,10 @@
     setTimeout(() => { if (!recog && !(canSpeak && speechSynthesis.speaking)) listen({ auto: true, prompt }); }, 300);
   }
   // Geduldiges Zuhören im großen Sprachmodus: Das Gerät beendet das Zuhören sonst schon nach einer kurzen Pause.
-  // Hier warten wir nach dem letzten Wort noch 4 Sekunden, hören bis zu 30 Sekunden lang auf den Anfang
-  // und zeigen mit, was verstanden wurde. Ein Tipp auf den Knopf beendet das Zuhören sofort.
-  const PATIENT_MS = 30000, PATIENT_SILENCE = 4000;
+  // Hier warten wir nach dem letzten Wort etwas länger (nach einem abgeschlossenen Satz 1,6 s, mitten im Satz 2,8 s),
+  // hören bis zu 30 Sekunden lang auf den Anfang und zeigen mit, was verstanden wurde.
+  // Ein Tipp auf den Knopf beendet das Zuhören sofort.
+  const PATIENT_MS = 30000, PATIENT_SILENCE = 2800, PATIENT_AFTER_FINAL = 1600;
   function listen(opts) {
     if (!SR) return;
     const auto = !!(opts && opts.auto), restart = !!(opts && opts.restart);
@@ -1734,14 +1735,15 @@
         if (alts.length) handleCommand(alts);
         return;
       }
-      let interim = '';
+      let interim = '', lastFinal = false;
       for (let k = e.resultIndex; k < e.results.length; k++) {
         const r = e.results[k];
         if (r.isFinal) finals.push(Array.from(r).map((a) => a.transcript).filter(Boolean)); else interim += r[0] ? r[0].transcript : '';
+        lastFinal = !!r.isFinal;
       }
       r0.gotSpeech = true; heard(interim);
       clearTimeout(silenceT);
-      silenceT = setTimeout(() => { try { r0.stop(); } catch (er) { /* schon beendet */ } }, PATIENT_SILENCE);
+      silenceT = setTimeout(() => { try { r0.stop(); } catch (er) { /* schon beendet */ } }, lastFinal ? PATIENT_AFTER_FINAL : PATIENT_SILENCE);
     };
     recog.onerror = (e) => {
       if (patient) {
