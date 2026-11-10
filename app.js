@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.96.3';
+  const VERSION = '0.96.4';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2954,7 +2954,7 @@
     const boxes = [
       { k: 'fahrten', icon: 'list', head: 'Fahrten', num: String(list.length),
         sub: `Zuletzt ${lastWhen}, ${MODES[last.mode] ? MODES[last.mode].label : last.mode}${lastWait ? `, ${fmtDur(lastWait)} min an Ampeln` : ', ohne Ampelhalt'}`,
-        html: () => `${legend}<div class="timeline">${tripTimeline(list, 6)}</div>${list.length > 6 ? `<details class="more-box"><summary>${ic('list')}Ältere anzeigen (${list.length - 6} weitere)</summary><div class="timeline">${tripTimeline(list.slice().sort((x, y) => y.start - x.start).slice(6))}</div></details>` : ''}` },
+        html: () => `<div class="timeline">${tripTimeline(list, 6)}</div>${list.length > 6 ? `<details class="more-box"><summary>${ic('list')}Ältere anzeigen (${list.length - 6} weitere)</summary><div class="timeline">${tripTimeline(list.slice().sort((x, y) => y.start - x.start).slice(6))}</div></details>` : ''}` },
       routes.length && { k: 'wege', icon: 'route', head: 'Deine Wege', num: String(Math.min(3, routes.length)),
         sub: `${esc(labelFor(routes[0].first))} → ${esc(labelFor(routes[0].last))}, ${routes[0].trips.length}×`, html: () => routeRows(group) },
       ag.per.length && { k: 'ampeln', icon: 'light', head: 'Ampeln', num: worst ? `${fmtDur(worst.wait)} min` : String(ag.per.length),
@@ -4156,17 +4156,24 @@
   let bestZiel = null;
   const BEST_NAME = { auto: 'Auto', oepnv: 'Bus & Bahn', rad: 'Rad', fuss: 'Zu Fuß' };
   const BEST_MODE = { auto: 'auto', oepnv: 'bahn', rad: 'rad', fuss: 'fuss' };
+  // Eine Hauptzeile und höchstens ein Hinweis; alle Einzelheiten stehen beim Antippen und für Screenreader im Namen der Zeile
   function bestRow(o, rec) {
-    const bits = [];
-    if (o.verkehrsmittel === 'auto') { bits.push(`${o.dauer_min} min mit Parken`); if (o.verzoegerung_min >= 3) bits.push(`${o.verzoegerung_min} min Stau`); if (o.ausweichroute) bits.push(`Ausweichroute ${o.ausweichroute.dauer_min} min${o.ausweichroute.ueber && o.ausweichroute.ueber.length ? ' über ' + o.ausweichroute.ueber.join(', ') : ''}${o.ausweichroute.ohne_stau && o.ausweichroute.ohne_stau.length ? ', ohne Stau ' + o.ausweichroute.ohne_stau.join(', ') : ''}`); if (o.behindertenparkplatz) bits.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
-    if (o.verkehrsmittel === 'oepnv') { bits.push(`ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}`); if (o.umstiege) bits.push(`${o.umstiege}× umsteigen`); if (o.stufenlos) bits.push('stufenlos: ' + o.stufenlos); }
-    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') bits.push(`${o.dauer_min} min, ${fmtNum(o.km, 1)} km`);
-    if (o.hindernisse && o.hindernisse.length) bits.push(o.hindernisse.slice(0, 2).join(', '));
-    if (o.gemeldet && o.gemeldet.length) bits.push('gemeldet: ' + o.gemeldet.map((x) => x.art).slice(0, 2).join(', '));
-    if (o.meldungen && o.meldungen.length) bits.push(o.meldungen[0]);
-    if (o.co2) bits.push(o.co2_g ? `CO₂ ${o.co2}` : 'ohne CO₂');
-    if (!o.geeignet) bits.unshift(settings.access.on ? 'nicht für dein Profil' : 'eher nicht');
-    return `<button type="button" class="best-row${rec ? ' rec' : ''}${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}<span class="best-an"> · an ${esc(o.ankunft)}</span></b><span>${esc(bits.join(' · '))}</span></span>${rec ? '<span class="best-tag">Empfehlung</span>' : ''}</button>`;
+    const all = [];
+    let main = '';
+    if (o.verkehrsmittel === 'auto') { main = `${o.dauer_min} min${o.verzoegerung_min >= 3 ? `, ${o.verzoegerung_min} min Stau` : ''}`; all.push(`${o.dauer_min} min mit Parken`); if (o.verzoegerung_min >= 3) all.push(`${o.verzoegerung_min} min Stau`); }
+    if (o.verkehrsmittel === 'oepnv') { main = `ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}${o.umstiege ? `, ${o.umstiege}× umsteigen` : ''}`; all.push(main); if (o.stufenlos) all.push('stufenlos: ' + o.stufenlos); }
+    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') { main = `${o.dauer_min} min · ${fmtNum(o.km, 1)} km`; all.push(main); }
+    if (o.ausweichroute) all.push(`Ausweichroute ${o.ausweichroute.dauer_min} min`);
+    if (o.behindertenparkplatz) all.push('Behindertenparkplatz ' + o.behindertenparkplatz);
+    if (o.hindernisse && o.hindernisse.length) all.push(o.hindernisse.slice(0, 2).join(', '));
+    if (o.gemeldet && o.gemeldet.length) all.push('gemeldet: ' + o.gemeldet.map((x) => x.art).slice(0, 2).join(', '));
+    if (o.meldungen && o.meldungen.length) all.push(o.meldungen[0]);
+    if (o.co2) all.push(o.co2_g ? `CO₂ ${o.co2}` : 'ohne CO₂');
+    const flag = !o.geeignet ? (settings.access.on ? 'nicht für dein Profil' : 'eher nicht')
+      : o.ausweichroute && o.verkehrsmittel === 'auto' ? `Ausweichroute ${o.ausweichroute.dauer_min} min`
+      : (o.hindernisse && o.hindernisse[0]) || (o.gemeldet && o.gemeldet.length ? 'gemeldet: ' + o.gemeldet[0].art : '') || (o.meldungen && o.meldungen[0]) || '';
+    if (!o.geeignet) all.unshift(flag);
+    return `<button type="button" class="best-row${rec ? ' rec' : ''}${o.geeignet ? '' : ' no'}" data-best-mode="${o.verkehrsmittel}" aria-label="${esc(`${BEST_NAME[o.verkehrsmittel]}, an ${o.ankunft}${rec ? ', Empfehlung' : ''}. ${all.join(', ')}`)}">${ic(MODE_ICON[o.verkehrsmittel])}<span class="best-main"><b>${BEST_NAME[o.verkehrsmittel]}<span class="best-an"> · an ${esc(o.ankunft)}</span></b><span>${esc(main)}</span>${flag ? `<span class="best-flag${o.geeignet ? '' : ' no'}">${esc(flag)}</span>` : ''}</span>${rec ? '<span class="best-tag">Empfehlung</span>' : ''}</button>`;
   }
   function bestHtml() {
     if (!apiBase() || !serverTools.includes('vergleich')) return '';
@@ -4179,8 +4186,9 @@
     else {
       const d = r.data, e = d.empfehlung;
       const rows = d.optionen.slice().sort((a, b) => (a.verkehrsmittel === e.verkehrsmittel ? -1 : b.verkehrsmittel === e.verkehrsmittel ? 1 : 0) || (a.geeignet === b.geeignet ? 0 : a.geeignet ? -1 : 1) || String(a.ankunft).localeCompare(String(b.ankunft)));
-      const am = d.am_ziel ? amZielText(d.am_ziel) : '';
-      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(e.grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · CO₂ grob geschätzt nach Werten des Umweltbundesamts · Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
+      const am = d.am_ziel ? amZielText(d.am_ziel).split(' · ').slice(0, 2).join(' · ') : '';
+      const gr = String(e.grund || '').split(';').map((x) => x.trim()).filter(Boolean), grund = [gr[0]].concat(gr.slice(1).filter((x) => /CO₂/.test(x)).slice(0, 1)).filter(Boolean).join(' · ');
+      body = `<p class="best-rec"><b>„${esc(z.name)}“: am besten ${esc(GROUP_WITH[e.verkehrsmittel])}</b><span>${esc(cap(grund))}</span></p><div class="best-list">${rows.map((o) => bestRow(o, o.verkehrsmittel === e.verkehrsmittel)).join('')}</div>${am ? `<p class="best-am">${ic('pin')}<span><b>Am Ziel:</b> ${esc(am)}</span></p>` : ''}<p class="small muted">Stand ${esc(d.jetzt)} Uhr · CO₂ grob geschätzt. Tippe auf ein Verkehrsmittel für den ganzen Weg. <button type="button" class="btn-link" data-best="go">Neu vergleichen</button></p>`;
     }
     return `<div class="best"><div id="best-body" aria-live="polite">${body}</div></div>`;
   }
@@ -6059,16 +6067,18 @@
     const ms = (t.legs && t.legs.length > 1 ? t.legs.map((l) => l.mode) : [t.mode]).filter((m, i, a) => i === 0 || m !== a[i - 1]);
     return ms.map((m) => (MODES[m] ? MODES[m].label : m)).join(' → ');
   }
+  // Eine Zeile je Fahrt: Uhrzeit, Verkehrsmittel, Ziel, Dauer und Strecke, rechts nur die Wartezeit an Ampeln
   function tripRow(t) {
     const h = t.events.filter((e) => e.type === 'halt' && e.signal);
     const wait = h.reduce((x, e) => x + e.wait, 0);
     const time = new Date(t.start).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
     const trs = (t.transfers || []).length;
+    const pill = h.length ? `<span class="pill ${wait > 60000 ? 'red' : 'amber'}">${ic('hourglass')}${fmtDur(wait)}<span class="sr-only"> Wartezeit an ${h.length} Ampel${h.length === 1 ? '' : 'n'}</span></span>` : `<span class="pill green">${ic('check')}<span class="sr-only">Ohne Ampelhalt</span></span>`;
     return `<li><button type="button" class="trow" data-review="${t.id}">
       <span class="t-time">${time}</span>
       <span class="chip sm">${ic(MODE_ICON[t.mode] || 'route')}</span>
-      <span class="t-main"><b>${legChain(t)}${t.demo ? ' <span class="badge">Demo</span>' : ''}</b><span class="t-sub">${t.plan ? `<span>→ ${esc(t.plan.name)}</span> · ` : ''}<span>${Math.max(1, Math.round(((t.end || t.start) - t.start) / 60000))} min</span> · <span>${fmtNum(t.distance / 1000, 1)} km</span>${trs ? ` · <span>${trs} Umstieg${trs === 1 ? '' : 'e'}</span>` : ''}</span>${tripBar(t, wait)}</span>
-      <span class="t-pills"><span class="pill${h.length ? ' amber' : ' green'}" title="Halte an Ampeln">${ic('light')}${h.length}</span>${h.length ? `<span class="pill ${wait > 60000 ? 'red' : 'amber'}" title="gewartet">${ic('hourglass')}${fmtDur(wait)}</span>` : ''}</span>
+      <span class="t-main"><b>${legChain(t)}${t.demo ? ' <span class="badge">Demo</span>' : ''}</b>${t.plan ? `<span class="t-dest">${esc(t.plan.name)}</span>` : ''}<span class="t-sub">${Math.max(1, Math.round(((t.end || t.start) - t.start) / 60000))} min · ${fmtNum(t.distance / 1000, 1)} km${trs ? ` · ${trs} Umstieg${trs === 1 ? '' : 'e'}` : ''}</span></span>
+      <span class="t-pills">${pill}</span>
       ${ic('chevron', 't-go')}
     </button></li>`;
   }
