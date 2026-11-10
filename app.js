@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.99.9';
+  const VERSION = '0.100.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2009,10 +2009,10 @@
     let shown = frage;
     if (pendingIntent) { const d = intentDef(pendingIntent); pendingIntent = null; frage = d.tpl.replace('{x}', frage.replace(/^(zu[mr]?|nach|in die|ins|zur|zum)\s+/i, '')); }
     if (isLastTripQ(frage)) { answerLastTrip(frage, spoken); return; }
-    if (!settings.assist) {
-      const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein ungefährer Standort (auf etwa 100 m gerundet) an den Flowtown-Server und an Mistral (KI-Anbieter, Rechenzentren in der EU). Gespeichert wird nichts. Einverstanden?');
+    if (settings.assist !== 2) {   // 2 = Einwilligung zur genauen Standortnutzung (ab 0.100.0); ältere Einwilligungen fragen neu
+      const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein genauer Standort an den Flowtown-Server, und die Frage, dein Profil und Wegdaten an Mistral (KI-Anbieter, Rechenzentren in der EU). Dein genauer Standort geht nur an den Flowtown-Server und an HERE für Adresse und Wege, nie an Mistral. Gespeichert wird nichts. Einverstanden?');
       if (!ok) { speak('Gut, dann ohne Assistenz.', { now: true, force: true }); return; }
-      settings.assist = true; store.set('settings', settings);
+      settings.assist = 2; store.set('settings', settings);
     }
     assistBusy = true;
     showAssist(shown, null);
@@ -2024,7 +2024,7 @@
       const k = stemKey(frage);
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
-      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 1000) / 1000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '', vorrang: vorrangSchnell() ? 'schnell' : '',
+      const kontext = { pos: pos ? pos.map((x) => Math.round(x * 100000) / 100000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '', vorrang: vorrangSchnell() ? 'schnell' : '',
         unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen

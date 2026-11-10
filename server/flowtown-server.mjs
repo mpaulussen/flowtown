@@ -2249,7 +2249,7 @@ function sendStadt2(req, res, origin) {
 }
 
 // ---------- Assistenz (Stufe 3): freie Fragen, beantwortet von Mistral aus den Flowtown-Daten ----------
-// Die App schickt die Frage, Profil, Verkehrsmittel und den Standort auf etwa 100 m gerundet. Mistral darf nur über die
+// Die App schickt die Frage, Profil, Verkehrsmittel und den genauen Standort (nur an HERE und die eigenen Werkzeuge, nie an Mistral). Mistral darf nur über die
 // Werkzeuge unten nachschlagen und soll nur aus deren Ergebnissen antworten. Gespeichert wird nichts.
 const ASSIST_PER_DAY = Number(process.env.ASSIST_PER_DAY || 60);
 const assistAllowed = limiter(ASSIST_PER_DAY);
@@ -2269,7 +2269,7 @@ Regeln:
 - Ziele in anderen Städten (etwa „Mönchengladbach Hauptbahnhof“) sind erlaubt: Gib den Ort mit Stadtnamen an das Werkzeug weiter und ersetze ihn nie durch einen Ort in Bielefeld.
 - Ist die Person in einer anderen Stadt (Kontext standort), meinen „Hauptbahnhof“, „Rathaus“, „Innenstadt“ und Haltestellennamen den Ort in dieser Stadt. Häng nie „Bielefeld“ an und nenne keine Bielefelder Linien.
 - Ist die Person oder das Ziel außerhalb von Bielefeld, hilfst du trotzdem: Wege, Verkehrsmittel-Vergleich mit CO₂, Staus und Sperrungen auf der Strecke gibt es überall. Barrierefreiheit von Gebäuden, Toiletten, Behindertenparkplätze, Fahrplan, Störungen von moBiel und Tonsignale an Ampeln gibt es nur für Bielefeld; sag das offen.
-- Der Standort der Person ist im Kontext (auf etwa 100 m gerundet). Ohne Standort frag nach einem Ort.
+- Der Standort der Person ist im Kontext (genau). Die Adresse nennt der Server selbst. Ohne Standort frag nach einem Ort.
 - Fragen zur Barrierefreiheit eines bestimmten Gebäudes (Theater, Museum, Amt, Café, Halle) beantwortest du mit dem Werkzeug ort_barrierefreiheit. Nenne die wichtigsten Punkte für das Profil der Person, mit Maßen aus den Hinweisen, und sag „laut Bielefeld barrierefrei erleben, Stand …“. Ist der Name mehrdeutig, frag nach.
 - Fragen zu den eigenen Fahrten (meine Wartezeit, wo warte ich am längsten, Zeitfresser, meine Ampeln, mein Weg, Fahrten diese Woche, meine Tipps) beantwortest du mit dem Werkzeug meine_auswertung, nie mit anderen Werkzeugen. Nenne dabei konkrete Zahlen und Ampelnamen. Fragen zu einer bestimmten Fahrt (letzte Fahrt, heute früh, gestern) beantwortest du aus „letzte_fahrten“ (die neueste zuerst): Dauer, Gestanden und die Aufteilung übernimmst du wörtlich, ohne zu runden, zu addieren oder umzurechnen; „gestanden_gesamt“ ist die ganze Standzeit, „an_ampeln“ nur der Teil an Ampeln. Meldet es „ausgeschaltet“, sag kurz, dass man unter Mehr, Server und Dienste, „Frag Flowtown darf meine Auswertung nutzen“ einschalten kann.
 - „Womit komme ich am besten, schnellsten oder günstigsten hin?“, „Lohnt sich Rad, Bus oder Auto?“, „Wie komme ich umweltfreundlich hin, wie spare ich CO₂ oder Sprit?“: Werkzeug vergleich. Nenne die Empfehlung mit ihrem Grund und in einem Satz die nächstbeste Möglichkeit. Flowtown empfiehlt das umweltfreundlichste Verkehrsmittel, wenn es kaum langsamer ist: Nenne dann die CO₂-Ersparnis gegenüber dem Auto (co2_gespart_g, als „etwa“). Empfiehl das Auto nur, wenn vergleich es empfiehlt, und sag dann, wie viel länger Bus und Bahn oder Rad dauern würden. Mit Profil: sag, was für das Profil zählt (stufenlos, Hindernisse, Behindertenparkplatz).
@@ -2326,7 +2326,8 @@ Regeln:
 - Die App sucht nicht nach Restaurants, Fahrdiensten, Taxis, Apotheken, Ärzten, Werkstätten oder Ladestationen. Verweise dafür nie auf „Wohin?“ oder „Mehr“. Standort teilen gibt es in Flowtown nicht; das macht das Handy zum Beispiel in der Nachrichten-App.
 - Angst vor dem Umsteigen, vor Menschenmengen oder vor dem Fahren, ohne Bedrohung: ein beruhigender Satz, dann Hilfe nennen (Umsteigezeit, Personal am Bahnhof). Dann kein 110 und kein „belebter Ort“.
 - „Letzte Bahn von A nach B“: nenne die Richtung genau so wie gefragt. Passt die Richtung der Abfahrten nicht, sag, dass du nur die letzten Abfahrten an der Haltestelle kennst.
-- Liefert ein Werkzeug nichts, sag „dazu habe ich nichts gefunden“, nie „es gibt keine“ (zum Beispiel keine barrierefreien Restaurants). Nenne einen Ort nur mit dem Typ, der zu seinem Namen passt: eine Staatsanwaltschaft oder ein Gericht ist keine Polizeiwache.`;
+- Liefert ein Werkzeug nichts, sag „dazu habe ich nichts gefunden“, nie „es gibt keine“ (zum Beispiel keine barrierefreien Restaurants). Nenne einen Ort nur mit dem Typ, der zu seinem Namen passt: eine Staatsanwaltschaft oder ein Gericht ist keine Polizeiwache.
+- „Bahnhof“ ohne Zusatz heißt der Hauptbahnhof (Werkzeuge: „Hauptbahnhof“). Frag nicht nach.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -3036,6 +3037,107 @@ async function assistTool(name, a, ctx, act) {
   }
   return { fehler: 'unbekanntes Werkzeug' };
 }
+// ---------- Festantworten und Direktantworten: ohne KI, damit sie jedes Mal gleich und sicher sind ----------
+// server/festantworten.csv: Frage-Muster (Regex) -> feste Antwort. Die erste passende Zeile mit Status „freigegeben“ gewinnt.
+// Die Datei wird bei Änderung nach spätestens einer Minute neu gelesen, ein Neustart ist nicht nötig.
+let fest = [], festMtime = 0, festCheck = 0;
+const FEST_FILE = process.env.FESTANTWORTEN_CSV || path.join(path.dirname(new URL(import.meta.url).pathname), 'festantworten.csv');
+function loadFest() {
+  try {
+    const rows = parseCsv(fs.readFileSync(FEST_FILE, 'utf8'));
+    const head = rows[0].map((h) => h.trim().toLowerCase()), ci = (n) => head.indexOf(n);
+    const out = [];
+    for (const r of rows.slice(1)) {
+      const id = (r[ci('id')] || '').trim(), muster = r[ci('muster')] || '', antwort = clip(r[ci('antwort')] || '', 900);
+      if (!id || !muster || !antwort) continue;
+      if ((r[ci('status')] || '').trim().toLowerCase() !== 'freigegeben') continue;
+      try {
+        const aus = (r[ci('ausnahme')] || '').trim();
+        out.push({ id, res: new RegExp(muster, 'i'), aus: aus ? new RegExp(aus, 'i') : null, profil: (r[ci('profil')] || '').trim().toLowerCase(), antwort });
+      } catch (e) { console.error('Festantwort ' + id + ': ungültiges Muster'); }
+    }
+    fest = out;
+    return out.length;
+  } catch (e) { fest = []; return 0; }
+}
+function festFor(frage, typ) {
+  if (Date.now() - festCheck > 60000) {
+    festCheck = Date.now();
+    try { const m = fs.statSync(FEST_FILE).mtimeMs; if (m !== festMtime) { festMtime = m; loadFest(); } } catch (e) { /* ohne Datei weiter */ }
+  }
+  const t = String(frage || '').toLowerCase();
+  for (const f of fest) {
+    if (f.profil && f.profil !== typ) continue;
+    if (f.res.test(t) && !(f.aus && f.aus.test(t))) return f;
+  }
+  return null;
+}
+// <aufzug>
+// Welche Antwort zu einer Frage über einen Aufzug an Stadtbahn oder Bahnhof gehört (rein, ohne Netz, damit prüfbar)
+// stopNames: Namen der Stadtbahn-Haltestellen. Ergebnis: null (nicht zuständig), { typ: 'stop', name }, { typ: 'bahnhof' }, { typ: 'unbekannt', ort }, { typ: 'allgemein' }
+function aufzugPlan(frage, stopNames) {
+  const t = String(frage || '').toLowerCase();
+  if (!/aufzug|\blift\b/.test(t)) return null;
+  if (/melden|passt|größe|breit|tief|wie komme ich|alternative|plan b|umweg|\bim\b|wann fährt|nächste (bahn|bus)|abfahrt|reparier|\bwelche\b|\bliste\b|\balle\b/.test(t)) return null;
+  const stadt = String(frage).match(/\b([A-ZÄÖÜ][a-zäöüß]+)\s+(?:Hauptbahnhof|Hbf)\b/);
+  if (stadt && !/^Bielefeld/i.test(stadt[1])) return null;   // „Hamburger Hauptbahnhof“ ist nicht unser Hauptbahnhof
+  const norm = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9äöü]/g, '');
+  const tn = norm(t);
+  if (/hauptbahnhof|\bhbf\b/.test(t)) return { typ: 'bahnhof', name: 'Hauptbahnhof' };
+  let best = null;
+  for (const n of stopNames || []) { const k = norm(n); if (k.length > 3 && tn.includes(k) && (!best || k.length > norm(best).length)) best = n; }
+  if (best) return { typ: 'stop', name: best };
+  const m = String(frage).match(/\b(?:am|an der|beim|bei der)\s+([A-Za-zÄÖÜäöüß][\wÄÖÜäöüß\- ]{2,40}?)(?:\s+(?:gerade|in|ist|geht|funktioniert|heute|noch)\b|[?.!,]|$)/i);
+  if (m && !/haltestelle|bahnsteig|ziel|moment|ende/i.test(m[1])) return { typ: 'unbekannt', ort: m[1].trim() };
+  if (/haltestelle|stadtbahn|bahnsteig|bahnhof|\bbahn\b|ausgefallen|ausfall|außer betrieb|defekt|kaputt|gerade in ordnung|funktioniert|in betrieb|geht der aufzug/.test(t)) return { typ: 'allgemein' };
+  return null;
+}
+// </aufzug>
+// <direkt>
+// Antworten, die der Server selbst zusammensetzt, aus Daten und ohne KI: Standort mit Adresse, Aufzug an der Stadtbahn
+async function direktAntwort(frage, ctx) {
+  const t = String(frage).toLowerCase();
+  if (ctx.pos && /\bwo bin ich\b|wo stehe ich|wo befinde ich mich|welche straße|wie heißt (die|diese) straße|straßenname|in welcher straße|hausnummer|bei welcher hausnummer/.test(t)) {
+    const a = await addrAt(ctx.pos[0], ctx.pos[1]).catch(() => null);
+    if (a && a.strasse) {
+      const hier = `${a.strasse}${a.nr ? ' ' + a.nr : ''}${a.teil ? ', ' + a.teil : ''}`;
+      const gesucht = (t.match(/hausnummer\s*(\d+\s*[a-z]?)/) || [])[1];
+      if (gesucht && a.nr) {
+        const g = gesucht.replace(/\s/g, '').toLowerCase();
+        return g === a.nr.replace(/\s/g, '').toLowerCase() ? `Ja, du stehst bei Hausnummer ${a.nr}, ${a.strasse}.` : `Du stehst bei ${hier}, nicht bei Hausnummer ${gesucht.replace(/\s/g, '')}.`;
+      }
+      return `Du stehst bei ${hier}.` + (a.m != null && a.m > 30 ? ` Das ist die nächste Adresse, etwa ${a.m} Meter entfernt.` : '');
+    }
+    return null;
+  }
+  // Liste der Haltestellen mit Hochbahnsteig (aus der Haltestellen-Tabelle)
+  if (/liste.{0,30}(stufenlos|hochbahnsteig|haltestelle)|alle (stufenlosen|barrierefreien) haltestellen/.test(t) && hst && hst.liste && !ctx.aussen) {
+    const ja = hst.liste.filter((x) => x.hbs === 'ja').map((x) => x.name);
+    if (ja.length) return `Laut meinen Daten haben ${ja.length} Haltestellen einen Hochbahnsteig, zum Beispiel ${ja.slice(0, 5).join(', ')}. Eine vollständige Liste lese ich nicht vor. Frag nach einer bestimmten Haltestelle, dann sage ich dir, ob sie stufenlos ist.`;
+  }
+  const stops = tramStops();
+  if (ctx.aussen || !stops) return null;   // außerhalb von Bielefeld oder ohne geladenen Fahrplan weiß der Server hier nichts Sicheres
+  const plan = aufzugPlan(frage, [...stops.values()].map((st) => st.name));
+  if (!plan) return null;
+  const KEIN = 'Für Aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status, bitte vor Ort prüfen.';
+  let meld = null, st = null;
+  try { st = await assistTool('oepnv_stoerungen', {}, ctx, {}); meld = Array.isArray(st.aufzuege_gemeldet) ? st.aufzuege_gemeldet : []; } catch (e) { /* ohne Meldungen weiter */ }
+  const db = st && st.db_aufzuege_ausser_betrieb;
+  const dbSatz = ctx.aussen ? '' : Array.isArray(db) && db.length ? ` Laut DB sind außer Betrieb: ${db.slice(0, 2).join('; ')}.` : db === 'alle in Betrieb' ? ' Laut DB sind die Aufzüge an den Bahnhöfen in Betrieb.' : ' Für die Aufzüge der Bahn zeigt die App „DB Bahnhof live“ den Status.';
+  const flow = (name) => meld == null ? '' : name ? (meld.some((x) => new RegExp(name, 'i').test(x.bei)) ? ' In Flowtown ist dort ein Ausfall gemeldet.' : ' In Flowtown ist dort kein Ausfall gemeldet.') : meld.length ? (meld.length === 1 ? ' In Flowtown ist 1 Ausfall gemeldet.' : ` In Flowtown sind ${meld.length} Ausfälle gemeldet.`) : ' In Flowtown ist kein Ausfall gemeldet.';
+  if (plan.typ === 'stop') {
+    let lift = null;
+    try { lift = (await assistTool('haltestelle', { name: plan.name }, ctx, {})).aufzug; } catch (e) { /* ohne Angabe */ }
+    return `${lift === 'ja' ? `Am ${plan.name} gibt es laut Fahrplan einen Aufzug.` : `Zu einem Aufzug am ${plan.name} habe ich keine Angabe.`} ${KEIN}${flow(plan.name)}`.trim();
+  }
+  if (plan.typ === 'bahnhof') return `${KEIN}${dbSatz}${flow('Hauptbahnhof')}`.trim();
+  if (plan.typ === 'unbekannt') return `Den Ort „${plan.ort}“ finde ich nicht bei den Haltestellen. ${KEIN}`.trim();
+  return `${KEIN}${flow(null)}${dbSatz}`.trim();
+}
+// </direkt>
+loadFest();
+festMtime = (() => { try { return fs.statSync(FEST_FILE).mtimeMs; } catch (e) { return 0; } })();
+
 // <sauber>
 // Mistral liefert den Text manchmal als Liste von Teilen statt als Zeichenkette
 function msgText(c) {
@@ -3151,17 +3253,22 @@ function beispieleFuer(frage, typ) {
   }).filter((x) => x.both >= 1 && (x.both >= 2 || w.size <= 3) && x.sc >= 0.15).sort((a, b) => b.sc - a.sc).slice(0, 3).map((x) => x.b);
 }
 async function assist(body) {
-  if (!MISTRAL_KEY) throw Object.assign(new Error('Die Assistenz ist auf dem Server noch nicht eingerichtet.'), { status: 503 });
   const frage = clip(body.frage, 300);
   if (!frage) throw Object.assign(new Error('Keine Frage'), { status: 400 });
   const k = body.kontext || {};
-  const pos = Array.isArray(k.pos) && k.pos.length === 2 && Number(k.pos[0]) > 35 && Number(k.pos[0]) < 72 && Number(k.pos[1]) > -12 && Number(k.pos[1]) < 35 ? k.pos.map((x) => Math.round(Number(x) * 1000) / 1000) : null;   // höchstens auf 100 m genau; auch unterwegs in anderen Städten (Europa)
+  // feste Antwort aus der Tabelle: ohne KI, immer gleich
+  const fa = festFor(frage, profilTyp(k));
+  if (fa) return { antwort: fa.antwort, aktion: null, werkzeuge: ['festantwort ' + fa.id], beispiele: 0 };
+  const pos = Array.isArray(k.pos) && k.pos.length === 2 && Number(k.pos[0]) > 35 && Number(k.pos[0]) < 72 && Number(k.pos[1]) > -12 && Number(k.pos[1]) < 35 ? k.pos.map((x) => Math.round(Number(x) * 100000) / 100000) : null;   // genau (auf etwa 1 m); geht nur an HERE und die eigenen Werkzeuge, nie an Mistral; auch unterwegs in anderen Städten (Europa)
   const auswertung = assistStatsClean(k.auswertung);
   const ctx = { pos, auswertung, typ: profilTyp(k), vorrang: k.vorrang === 'schnell' || /schnellsten|am schnellsten|eilig/i.test(frage) ? 'schnell' : '', ziele: (Array.isArray(k.ziele) ? k.ziele : []).slice(0, 8).map((z) => ({ name: clip(z.name, 40), lat: Math.round(Number(z.lat) * 1000) / 1000, lon: Math.round(Number(z.lon) * 1000) / 1000 })) };
   ctx.aussen = ausserhalb(pos);
   ctx.stadt = ctx.aussen ? (fpStadtAt(pos) || {}).name || (await placeNear(pos).catch(() => '')) || '' : 'Bielefeld';
-  const kontext = { standort: pos ? (ctx.aussen ? `bekannt, außerhalb von Bielefeld${ctx.stadt ? ', in ' + ctx.stadt : ''} (auf 100 m gerundet)` : 'bekannt (auf 100 m gerundet)') : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
-  const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
+  // Antworten, die der Server selbst aus Daten zusammensetzt (Standort mit Adresse, Aufzug an der Stadtbahn): ohne KI
+  try { const da = await direktAntwort(frage, ctx); if (da) return { antwort: da, aktion: null, werkzeuge: ['direkt'], beispiele: 0 }; } catch (e) { /* dann die KI */ }
+  if (!MISTRAL_KEY) throw Object.assign(new Error('Die Assistenz ist auf dem Server noch nicht eingerichtet.'), { status: 503 });
+  const kontext = { standort: pos ? (ctx.aussen ? `bekannt, außerhalb von Bielefeld${ctx.stadt ? ', in ' + ctx.stadt : ''}` : 'bekannt (genau)') : 'unbekannt', verkehrsmittel: clip(k.verkehrsmittel, 20), profil: clip(k.profil, 60), unterwegs: !!k.unterwegs, haltestelle_jetzt: clip(k.haltestelle, 50), gespeicherte_ziele: ctx.ziele.map((z) => z.name), uhrzeit: new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }), eigene_auswertung: auswertung === 'ausgeschaltet' ? 'ausgeschaltet' : 'eingeschaltet, abrufbar mit meine_auswertung' };
+  const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant') && !(m.role === 'assistant' && /stehst bei /i.test(String(m.content)))).map((m) => ({ role: m.role, content: clip(m.content, 400) }));   // Adressen aus „Wo bin ich?“ gehen nie an Mistral
   // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
   const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
   const gn = (frage.match(/\b(\d{1,3})\s*(kinder|personen|leute|schüler|menschen|rollstuhl)/i) || [])[1];
@@ -3522,6 +3629,25 @@ if (cli === 'faq') {
     console.log(`\n${out.length - 1} Antworten in ${file}`);
     process.exit(0);
   })();
+} else if (cli === 'festantworten') {
+  // Prüft die Tabelle der Festantworten: node flowtown-server.mjs festantworten [katalog.csv]  (zeigt je Frage, welche Festantwort passt)
+  const n = loadFest();
+  console.log(n + ' Festantworten freigegeben (' + FEST_FILE + ')');
+  const src = process.argv[3];
+  if (src) {
+    const rows = parseCsv(fs.readFileSync(src, 'utf8'));
+    const head = rows[0].map((h) => h.trim().toLowerCase()), ci = (x) => head.indexOf(x);
+    let hit = 0, tot = 0;
+    for (const r of rows.slice(1)) {
+      const frage = (r[ci('frage')] || '').trim(); if (!frage) continue; tot++;
+      const f = festFor(frage, (r[ci('profil')] || '').trim().toLowerCase());
+      const pl = aufzugPlan(frage, ['Jahnplatz', 'Rathaus', 'Universität', 'Hauptbahnhof', 'Adenauerplatz']);
+      if (f) { hit++; console.log(`${r[ci('nr')]} ${f.id}: ${frage.slice(0, 60)}  →  ${f.antwort.slice(0, 80)}`); }
+      else if (pl) console.log(`${r[ci('nr')]} aufzug/${pl.typ}${pl.name ? ' ' + pl.name : pl.ort ? ' ' + pl.ort : ''}: ${frage.slice(0, 60)}`);
+    }
+    console.log(`\n${hit} von ${tot} Fragen haben eine Festantwort.`);
+  }
+  process.exit(0);
 } else if (cli === 'beispiele') {
   refreshBeispiele().then((m) => { console.log(m); for (const b of beispiele.slice(0, 5)) console.log(' -', b.frage.slice(0, 70), '→', b.antwort.slice(0, 60)); process.exit(0); }).catch((e) => { console.error(e.message); process.exit(1); });
 } else if (cli === 'barrierefrei') {

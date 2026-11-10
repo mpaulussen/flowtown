@@ -98,3 +98,9 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [ ] K4 Beobachtungs-Zeilen mit echten Personen und Geräten (VoiceOver, TalkBack, Dialekt, Display aus)
 - [ ] K5 Nach den ersten Pilot-Wochen echte Fragen aus der Nutzung (ohne personenbezogene Daten) in den Katalog aufnehmen
 - [ ] K6 Entwicklungsliste aus dem ersten Testlauf: E1 Fahrplan mit Zeitpunkt, E2 Aufzugsstatus der Stadtbahn (moBiel), E3 Wetter, E4 Höhenprofil, E5 Testlauf mit Auswertung und Verlauf, E6 Standort als Straße (Datenschutz klären), E7 Sprachen prüfen, E8 fehlende Datenquellen (Bänke, Trinkwasser, Apotheken, Ärzte, Stellplätze, Ladeorte), E9 zweite Prüfung der Antworten, E10 Radweganteil für die Assistenz (K147)
+- [x] K7 (10.11.) Regelwerk und Lösungsplan: `ASSISTENZ-REGELN.md` (drei Antwortwege, 16 Regeln, Quellenplan, Pflege der Tabelle)
+- [x] K8 (10.11.) Festantworten: `server/festantworten.csv` mit 67 Zeilen, trifft 128 von 287 Katalogfragen, 0 Fehltreffer bei 28 Gegenfragen; Direktantworten für Standort (genau, Adresse von HERE), Aufzug (Stadtbahn, Hauptbahnhof), Haltestellenliste
+- [x] K9 (10.11.) Genauer Standort für Fragen (App 0.100.0, Einwilligung wird neu abgefragt, Datenschutzerklärung angepasst, Adressen nie an Mistral)
+- [ ] K10 Server aktualisieren, Gesamtlauf: Ziel 0 falsch bei den Fragen mit Festantwort. Zeilen mit Fakten (FA04, FA10, FA11, FA70 bis FA77) gegenlesen
+- [ ] K11 Neue Werkzeug-Aufgaben aus dem Lösungsplan: E11 Pünktlichkeit direkt, E12 rueckweg mit Richtung, E13 Gehtempo je Profil, E14 unbekannte Linie, E15 Rangfolge nach Profil in vergleich und weg (kein Auto vor Bahn bei Rollstuhl), E16 Mehrfachprofil in der App
+- [ ] K12 Quellen einbinden (Reihenfolge nach Nutzen): E2 moBiel-Aufzugsstatus, E1 Fahrplan mit Zeitpunkt, E10 Radweganteil, E8 Orte aus OpenStreetMap (Bänke, Trinkwasser, Apotheken, Ärzte, Geldautomaten, Ladesäulen, Fahrradständer), E3 Wetter, E4 Höhenprofil

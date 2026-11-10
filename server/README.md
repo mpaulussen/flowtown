@@ -222,6 +222,15 @@ Ab App-Version 0.88 kann der Server mehr. Die App fragt `/api/health` und zeigt 
   - `ort_info`: was an einem Ort zählt, an dem die Person sein will: Barrierefreiheit des Gebäudes (Bethel), nächstes rollstuhlgerechtes WC, Toilette, Behindertenparkplatz, Stadtbahn mit Hochbahnsteig, gemeldete Hindernisse. Dieselben Angaben stehen als `am_ziel` auch in `vergleich` und `weg_check`.
 - `meine_auswertung` enthält jetzt auch den Vergleich der eigenen Fahrten nach Verkehrsmittel und die eigenen Ampel-Bewertungen (etwa „Grün zu kurz“).
 
+### Festantworten und Direktantworten (ohne KI)
+
+Fragen, bei denen die Antwort sicher und immer gleich sein muss, beantwortet der Server selbst, ohne Mistral. Das Regelwerk steht in `ASSISTENZ-REGELN.md`.
+
+- **Festantworten:** `server/festantworten.csv` (Spalten ID, Thema, Muster, Ausnahme, Profil, Antwort, Quelle, Stand, Katalog, Status). Das Muster ist ein regulärer Ausdruck auf die Frage in Kleinbuchstaben. Die erste Zeile mit Status `freigegeben`, deren Muster trifft und deren Ausnahme nicht trifft, gewinnt. Der Server liest die Datei bei Änderung nach spätestens einer Minute neu. Eine andere Datei: `FESTANTWORTEN_CSV="/pfad/datei.csv"` in `/etc/flowtown.env`. Festantworten brauchen keinen Mistral-Schlüssel.
+- **Direktantworten** (im Code): „Wo bin ich?“, „Wie heißt die Straße?“, „Ich suche Hausnummer 14“ (Adresse von HERE, `HERE_KEY` nötig); Fragen zu Aufzügen an Stadtbahn und Hauptbahnhof (kein Live-Status von moBiel, gemeldete Ausfälle aus Flowtown, Status der DB); „Liste der stufenlosen Haltestellen“.
+- **Standort:** Die App schickt für Fragen den genauen Standort (auf etwa 1 m). Er geht nur an HERE und die eigenen Werkzeuge, nie an Mistral. Adressen aus „Wo bin ich?“ entfernt der Server aus dem Gesprächsverlauf, bevor er ihn an Mistral weitergibt.
+- **Prüfen ohne Mistral:** `node flowtown-server.mjs festantworten pruefkatalog.csv` zeigt je Frage die passende Festantwort und am Ende die Abdeckung. Eine eigene Liste mit Fragen, die keine Festantwort bekommen dürfen, prüft man mit derselben CSV-Form (Spalten `Nr;Frage;Profil`).
+
 ### Teststrecke: Antworten der Assistenz prüfen und korrigieren
 
 Die Assistenz lernt aus geprüften Beispielen: Zu jeder neuen Frage bekommt Mistral die bis zu drei ähnlichsten korrigierten Antworten als Vorbild für Aufbau, Ton und Länge. Die Fakten kommen weiter nur aus den Werkzeugen.
