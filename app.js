@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.99.7';
+  const VERSION = '0.99.8';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6210,11 +6210,31 @@
     return days.map((d) => `<div class="day"><h4 class="day-title">${dayTitle(d.k)}</h4><ul class="tlist">${d.trips.map(tripRow).join('')}</ul></div>`).join('');
   }
 
-  // Überschrift auf Heute: das Versprechen von Flowtown, passend zu dem, was beim Einstieg wichtig war
-  const HEUTE_TITEL = { schnell: 'Schneller ankommen.', stufenlos: 'Stufenlos ankommen.', blick: 'Ohne Blick aufs Display.', rad: 'Sicher mit dem Rad.', stadt: 'Gemeinsam besser ankommen.' };
+  // Überschrift auf Heute: wechselt bei jedem Öffnen der App (nie zweimal dieselbe hintereinander), enthält den Namen Flowtown
+  // und gewichtet doppelt, was beim Einstieg wichtig war
+  const TITEL_ALLG = ['Besser ankommen mit Flowtown.', 'Flowtown, dein Flow in der Stadt.', 'Zeichne deine Routen mit Flowtown auf.', 'Barrierefrei ankommen mit Flowtown.', 'Begib dich in den Flow in Town.', 'Flowtown. Besser ankommen.'];
+  const TITEL_ZIEL = {
+    schnell: ['Schneller ankommen mit Flowtown.', 'Weniger warten mit Flowtown.'],
+    stufenlos: ['Stufenlos ankommen mit Flowtown.', 'Stufenlos durch die Stadt mit Flowtown.'],
+    blick: ['Ohne Blick aufs Display, mit Flowtown.', 'Flowtown spricht mit dir.'],
+    rad: ['Sicher mit dem Rad, mit Flowtown.', 'Flowtown fährt mit dir Rad.'],
+    stadt: ['Gemeinsam mit Flowtown besser ankommen.', 'Mit Flowtown die Stadt besser machen.']
+  };
+  let heuteTitel = null, heuteTitelKey = '';
+  function pickHeuteTitel() {
+    const g = goals();
+    const pool = TITEL_ALLG.concat(...g.map((k) => (TITEL_ZIEL[k] || []).concat(TITEL_ZIEL[k] || [])));
+    const last = store.get('heuteTitelLast', '');
+    const rest = pool.filter((t) => t !== last);
+    const t = rest[Math.floor(Math.random() * rest.length)] || pool[0];
+    store.set('heuteTitelLast', t);
+    return t;
+  }
   function renderHeuteTitel() {
-    const g = goals()[0], t = (g && HEUTE_TITEL[g]) || 'Besser ankommen.', h = $('#h-start');
-    h.textContent = t; h.classList.toggle('long', t.length > 18);
+    const key = goals().join(',');
+    if (!heuteTitel || key !== heuteTitelKey) { heuteTitel = pickHeuteTitel(); heuteTitelKey = key; }
+    const t = heuteTitel, h = $('#h-start');
+    h.textContent = t; h.classList.toggle('long', t.length > 18); h.classList.toggle('xlong', t.length > 24);
   }
   function renderLastTrip() {
     renderHeuteTitel();

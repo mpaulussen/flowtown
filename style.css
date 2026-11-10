@@ -1585,3 +1585,7 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 #view-start .claim-mark circle:nth-child(-n+2),#view-best .claim-mark circle:nth-child(-n+2),#view-plan .claim-mark circle:nth-child(-n+2),#view-map .claim-mark circle:nth-child(-n+2){fill:#bfc7c2}
 #view-tips .claim-mark circle:nth-child(n+2),#view-more .claim-mark circle:nth-child(n+2){fill:#bfc7c2}
 #view-stats .claim-mark circle:nth-child(3){fill:#bfc7c2}
+
+/* 0.99.8 Überschrift mit Flowtown: lange Varianten etwas kleiner */
+.hero-wohin #h-start.xlong{font-size:clamp(26px,7.8vw,34px);line-height:1.06}
+@media (max-height:740px){.hero-wohin #h-start.xlong{font-size:26px}}
