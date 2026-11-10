@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.98.1';
+  const VERSION = '0.98.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1699,29 +1699,57 @@
     if (!SR || !settings.voiceIn) return;
     setTimeout(() => { if (!recog && !(canSpeak && speechSynthesis.speaking)) listen({ auto: true, prompt }); }, 300);
   }
+  // Geduldiges Zuhören im großen Sprachmodus: Das Gerät beendet das Zuhören sonst schon nach einer kurzen Pause.
+  // Hier warten wir nach dem letzten Wort noch 4 Sekunden, hören bis zu 30 Sekunden lang auf den Anfang
+  // und zeigen mit, was verstanden wurde. Ein Tipp auf den Knopf beendet das Zuhören sofort.
+  const PATIENT_MS = 30000, PATIENT_SILENCE = 4000;
   function listen(opts) {
     if (!SR) return;
-    const auto = !!(opts && opts.auto);
-    if (recog) { if (auto) return; recog.abort(); return; }
+    const auto = !!(opts && opts.auto), restart = !!(opts && opts.restart);
+    if (recog) {
+      if (auto) return;
+      if (recog.patient && recog.gotSpeech) recog.stop(); else { recog.userAbort = true; recog.abort(); }
+      return;
+    }
     if (auto && !settings.voiceIn) return;
     if (!settings.voiceIn) {
       const ok = window.confirm('Sprachbefehle nutzen die Spracherkennung deines Handys. Dabei geht die Aufnahme an den Anbieter des Betriebssystems (Apple oder Google). Flowtown speichert davon nichts. Einverstanden?');
       if (!ok) return;
       settings.voiceIn = true; store.set('settings', settings);
     }
-    if (canSpeak && !auto) speechSynthesis.cancel();
-    if (!auto) unlockSpeech();
+    if (canSpeak && !auto && !restart) speechSynthesis.cancel();
+    if (!auto && !restart) unlockSpeech();
     const prompt = (opts && opts.prompt) || 'Ich höre zu …';
+    const patient = assistBig && !$('#assist').hidden;
     recog = new SR();
-    recog.auto = auto;
-    recog.lang = 'de-DE'; recog.interimResults = false; recog.maxAlternatives = 3; recog.continuous = false;
+    recog.auto = auto; recog.patient = patient;
+    recog.lang = 'de-DE'; recog.interimResults = patient; recog.maxAlternatives = 3; recog.continuous = patient;
+    const r0 = recog, t0 = (opts && opts.t0) || Date.now();
+    let autoT = null, silenceT = null;
+    const finals = [];
+    const heard = (interim) => { const ch = $('#call-heard'); if (ch) { const t = finals.map((f) => f[0]).concat(interim ? [interim] : []).join(' ').trim(); ch.textContent = t ? `„${t}“` : ''; } };
     recog.onresult = (e) => {
-      const alts = Array.from(e.results[0] || []).map((a) => a.transcript).filter(Boolean);
-      if (alts.length) handleCommand(alts);
+      if (!patient) {
+        const alts = Array.from(e.results[0] || []).map((a) => a.transcript).filter(Boolean);
+        if (alts.length) handleCommand(alts);
+        return;
+      }
+      let interim = '';
+      for (let k = e.resultIndex; k < e.results.length; k++) {
+        const r = e.results[k];
+        if (r.isFinal) finals.push(Array.from(r).map((a) => a.transcript).filter(Boolean)); else interim += r[0] ? r[0].transcript : '';
+      }
+      r0.gotSpeech = true; heard(interim);
+      clearTimeout(silenceT);
+      silenceT = setTimeout(() => { try { r0.stop(); } catch (er) { /* schon beendet */ } }, PATIENT_SILENCE);
     };
-    const r0 = recog;
-    let autoT = null;
     recog.onerror = (e) => {
+      if (patient) {
+        if (e.error === 'no-speech' || e.error === 'aborted') return;   // das Ende entscheidet: neu zuhören oder aufhören
+        r0.userAbort = true;
+        micStatus(e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Das Mikrofon ist für Flowtown nicht freigegeben. Erlaube es in den Einstellungen des Browsers.' : 'Die Spracherkennung ist gerade nicht erreichbar.');
+        return;
+      }
       if (auto) {
         // im Gespräch: Schweigen beendet es still; verweigert das Gerät den Start ohne Antippen, ein Hinweis
         if (e.error === 'not-allowed' || e.error === 'service-not-allowed') micStatus('Zum Antworten aufs Mikrofon tippen.');
@@ -1732,12 +1760,22 @@
       const msg = e.error === 'not-allowed' || e.error === 'service-not-allowed' ? 'Das Mikrofon ist für Flowtown nicht freigegeben. Erlaube es in den Einstellungen des Browsers.' : e.error === 'no-speech' ? 'Ich habe nichts gehört.' : e.error === 'aborted' ? '' : 'Die Spracherkennung ist gerade nicht erreichbar.';
       if (msg) { micStatus(msg); speak(msg, { now: true, force: true }); }
     };
-    recog.onend = () => { clearTimeout(autoT); if (recog === r0) recog = null; micUI(false); if ($('#mic-status').textContent === prompt) micStatus(''); };
+    recog.onend = () => {
+      clearTimeout(autoT); clearTimeout(silenceT);
+      const mine = recog === r0;
+      if (mine) recog = null;
+      micUI(false);
+      if ($('#mic-status').textContent === prompt) micStatus('');
+      if (!patient || !mine) return;
+      if (finals.length) { handleCommand([finals.map((f) => f[0]).join(' ')]); return; }
+      // nichts gesagt: bis zu 30 Sekunden weiter zuhören, außer jemand hat aufgelegt oder den Knopf getippt
+      if (!r0.userAbort && !$('#assist').hidden && Date.now() - t0 < PATIENT_MS) setTimeout(() => { if (!recog && !$('#assist').hidden) listen({ auto: true, restart: true, t0, prompt }); }, 120);
+    };
     try {
       recog.start(); micUI(true); micStatus(prompt, true);
-      try { if (navigator.vibrate) navigator.vibrate(auto ? [40, 60, 40] : 60); } catch (e) { /* ohne */ }
-      // Sicherheitsnetz: im Gespräch höchstens 10 Sekunden zuhören
-      if (auto) autoT = setTimeout(() => { if (recog === r0) r0.abort(); }, 10000);
+      if (!restart) { try { if (navigator.vibrate) navigator.vibrate(auto ? [40, 60, 40] : 60); } catch (e) { /* ohne */ } }
+      // Sicherheitsnetz: im Gespräch höchstens 10 Sekunden zuhören (im geduldigen Modus regelt das die Pausenzeit)
+      if (auto && !patient) autoT = setTimeout(() => { if (recog === r0) r0.abort(); }, 10000);
     } catch (e) { recog = null; micUI(false); micStatus(auto ? 'Zum Antworten aufs Mikrofon tippen.' : 'Die Spracherkennung konnte nicht starten.'); }
   }
   const cmdNorm = (x) => String(x || '').toLowerCase().replace(/[.,!?;:„“"']/g, ' ').replace(/\s+/g, ' ').trim();
@@ -2056,7 +2094,7 @@
     el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
     el.innerHTML = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
-      ${assistBig ? '<p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>' : ''}
+      ${assistBig ? '<p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><p class="call-heard" id="call-heard" aria-live="off"></p>' : ''}
       ${frage ? `<p class="assist-q">${esc(frage)}</p>` : ''}
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
       <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>
@@ -6635,7 +6673,7 @@
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;
     const a = b.dataset.assist;
-    if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog) recog.abort(); micStatus(''); }
+    if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog) { recog.userAbort = true; recog.abort(); } micStatus(''); }
     else if (a === 'mic') { unlockSpeech(); listen(); }
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (a === 'ziel' && assistAct) {
