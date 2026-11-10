@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.97.2';
+  const VERSION = '0.97.4';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4475,10 +4475,11 @@
         + more + '</div>';
       say.push(`${title}: ${badge === 'frei' ? 'frei' : badge}. ${nums.map(([v, l]) => `${v} ${l}`).join(', ')}${nums.length ? '.' : ''} ${items.map((x) => `${x.art ? x.art + ': ' : ''}${x.name}${x.right ? ', ' + x.right : ''}.`).join(' ')}`);
     }
-    if (!real.length) { html += wrow('grey', 'Noch keine Fahrt. Gib ein Ziel ein oder tippe auf „Ohne Ziel aufzeichnen“.', ''); say.push('Noch keine Fahrt.'); }
+    if (!real.length) say.push('Noch keine Fahrt.');
     wegSay = say.join(' ').replace(/\s+/g, ' ').trim();
     $('#weg').innerHTML = html;
     $('#st-detail').innerHTML = detail;
+    const tl = $('#weg').closest('.today-list'); if (tl) tl.hidden = !html && !detail;   // ohne Fahrten und Meldungen keine leere Überschrift
     const top = computeTips()[0];
     $('#tip-strip').innerHTML = top ? `<button type="button" class="tip-strip" data-goto="tips">${ic('bulb')}<span>${top.num ? `<b>${top.num}</b> · ` : ''}${plain(top.short)}</span>${ic('chevron')}</button>` : '';
   }
@@ -4911,6 +4912,7 @@
   const hm = (s) => minText(s / 60);
   const hmSay = (s) => { const m = Math.round(s / 60), h = Math.floor(m / 60); return (h ? `${h} Stunde${h === 1 ? '' : 'n'} ` : '') + `${m % 60} Minute${m % 60 === 1 ? '' : 'n'}`; };
 
+  const PLAN_SUB = $('#plan-sub').innerHTML;
   function renderVorfahrt() {
     const el = $('#vorfahrt'), wo = $('#wohin');
     if (!apiBase()) { el.hidden = true; el.innerHTML = ''; wo.innerHTML = ''; return; }
@@ -4918,6 +4920,12 @@
     const wohin = wohinSection(group);
     if (wohin === null) return;   // wird gerade geprüft, zeichnet sich danach neu
     wo.innerHTML = wohin;
+    // offenes Ziel: eigene, reduzierte Seite („Weg“): Titel und Untertitel ändern sich, Ziele und Verkehrsmittel treten zurück
+    const routeZ = zielOpen && zielOpen !== 'neu' && !zielEdit ? settings.ziele.find((z) => z.id === zielOpen) : null;
+    $('#view-plan').classList.toggle('route', !!routeZ);
+    $('#h-plan-page').textContent = routeZ ? routeZ.name : 'Wohin?';
+    $('#plan-sub').innerHTML = routeZ ? esc(cap(GROUP_WITH[group])) : PLAN_SUB;
+    $('#plan-back-t').textContent = routeZ && planFromBest ? 'Weg zum Ziel' : 'Heute';
     drawVfMaps();
     // Bus und Bahn: unter den Kacheln die Abfahrten und die Umleitungen von moBiel
     const rest = !lageOn() ? '' : group === 'oepnv' ? abfahrtSection() + mobielSection() : settings.haltestellen.length ? abfahrtSection() : '';
@@ -5047,7 +5055,10 @@
     const larts = items.map((it) => (it.segs || [it.pts]).map(() => it.art).join('|')).join('|');
     const mini = `<div class="vf-map" data-peek="l" data-name="${esc(z.name)}" data-art="stau" data-lines="${lines}" data-arts="${larts}" data-pts="${route}" role="img" aria-label="Karte der Strecke nach ${esc(z.name)}${items.length ? ', Meldungen farbig' : ''}. Tippen öffnet die große Karte."></div>`;
     const eing = group === 'fuss' && d.eingang ? `<p class="small">${ic('pin')} Der Weg führt zum ${esc(d.eingang.art)}${d.eingang.stufenlos === 'ja' ? ', stufenlos' : d.eingang.stufenlos === 'nein' ? ', mit Stufen' : d.eingang.stufenlos === 'eingeschränkt' ? ', nur eingeschränkt stufenlos' : ''}${d.eingang.automatiktuer === 'ja' ? ', Automatiktür' : ''}. <span class="muted">OpenStreetMap</span></p>` : '';
-    return `<div class="vf-panel">${head}${sum}${eing}${mini}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${alt}${rows}${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${go}${all}${foot}</div>`;
+    // Reihenfolge für die Seite „Weg“: erst Zeit und Start, dann das Wichtigste auf dem Weg, alles andere zum Aufklappen
+    const sayBtn = canSpeak ? `<button type="button" class="vf-x vf-say vf-route-say" data-vf="say" aria-label="Vorlesen">${ic('sound')}</button>` : '';
+    const more = `<details class="more-box vf-more"${settings.access.on ? ' open' : ''}><summary>${ic('list')}Weitere Angaben</summary>${bars}${group === 'auto' ? prBlock(z, d) + bppBlock(z) : ''}${bfZielBlock(z, group)}${zielHistory(z)}${all}<p class="small muted"><button type="button" class="btn-link" data-vf="edit">Ziel bearbeiten</button></p>${foot}</details>`;
+    return `<div class="vf-panel vf-route">${head}<div class="vf-top">${sum}${sayBtn}</div>${go}${mini}${alt}${rows}${eing}${group === 'rad' ? radBlock(r.rad, route) : group === 'fuss' ? fussBlock(r.fuss, route) : ''}${more}</div>`;
   }
   // ---------- Park + Ride und Radverkehrsnetz der Stadt Bielefeld (Open Data) ----------
   let stadt2 = store.get('stadt2', null), stadt2Loading = null, netzGrid = null;
@@ -6117,7 +6128,9 @@
     $('#today-date').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'long', day: 'numeric', month: 'long' });
     const hr = new Date().getHours();
     $('#today-date').textContent = (hr < 5 ? 'Gute Nacht' : hr < 11 ? 'Guten Morgen' : hr < 18 ? 'Guten Tag' : 'Guten Abend') + ' · ' + $('#today-date').textContent;
-    $('#hints').open = !trips.some((x) => !x.demo);   // Hinweise nur offen, solange es noch keine Fahrt gibt
+    $('#hints').open = false;
+    $('#hints').hidden = trips.some((x) => !x.demo);   // die Anleitung nur bis zur ersten echten Fahrt
+    $('#go-note').hidden = trips.some((x) => !x.demo);   // die Erklärung unter „Ohne Ziel aufzeichnen“ nur, solange es noch keine Fahrt gibt
   }
 
   // ---------- Pilot: Fahrten pseudonym auf den Server, mit Code ----------
@@ -6285,7 +6298,7 @@
       return;
     }
     el.hidden = !g.length;
-    el.innerHTML = g.length ? `<h3 class="eyebrow">Für dich</h3><div class="fd-list">${g.map((k) => { const [icon, t, sub] = GOALS[k].fd; return `<button type="button" class="fd${GOALS[k].cls ? ' ' + GOALS[k].cls : ''}" data-fd="${k}">${ic(icon)}<span><b>${t}</b><span>${sub}</span></span>${ic('chevron', 'wrow-go')}</button>`; }).join('')}</div>` : '';
+    el.innerHTML = g.length ? `<h3 class="eyebrow">Für dich</h3><div class="fd-list">${g.slice(0, 1).map((k) => { const [icon, t, sub] = GOALS[k].fd; return `<button type="button" class="fd${GOALS[k].cls ? ' ' + GOALS[k].cls : ''}" data-fd="${k}">${ic(icon)}<span><b>${t}</b><span>${sub}</span></span>${ic('chevron', 'wrow-go')}</button>`; }).join('')}</div>` : '';
   }
   function toggleGoal(k, fromWelcome) {
     const g = goals(), on = !g.includes(k);

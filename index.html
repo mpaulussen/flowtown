@@ -192,12 +192,12 @@
     <p class="small go-note" id="go-note">Du fährst wie sonst. Flowtown misst Halte und Wartezeiten, ein Ziel brauchst du dafür nicht.</p>
     </section>
     <div id="acc-tips" class="acc-tips" hidden></div>
-    <div class="fuer-dich" id="fuer-dich" hidden></div>
     <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="a2hs" class="a2hs" hidden></div>
     <section class="today-list" aria-labelledby="h-weg"><h3 class="eyebrow" id="h-weg">Dein Weg heute</h3><div id="weg"></div><div id="st-detail"></div></section>
     <div id="vorfahrt" class="vorfahrt" hidden></div>
     <div id="tip-strip"></div>
+    <div class="fuer-dich" id="fuer-dich" hidden></div>
     <details class="card hints" id="hints">
       <summary class="card-head"><span class="chip"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></span><h3>So klappt die Aufzeichnung</h3></summary>
       <ul class="ilist">
@@ -217,9 +217,9 @@
 
   <!-- Planen -->
   <section id="view-plan" class="view" hidden aria-labelledby="h-plan-page">
-    <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>Heute</button>
+    <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg><span id="plan-back-t">Heute</span></button>
     <div class="hero-wohin hero-page">
-    <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
+    <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub" id="plan-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
     </div>
     <div class="ask-slot" id="ask-slot-plan"></div>
     <div class="entry plan-mode"><div id="mode-slot-plan"></div></div>

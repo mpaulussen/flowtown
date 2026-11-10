@@ -1464,3 +1464,26 @@ body[data-view="map"] .fab-mic{right:auto;left:max(16px,env(safe-area-inset-left
 .best-foot{margin:4px 4px 0;font-size:14px;color:var(--muted)}
 #view-best #best-body>p.small,#view-best .best-foot .btn-link{font-size:17px}
 #view-best .best-foot{font-size:15px}
+
+/* 0.97.3 Seite „Weg“: Zeit und Start oben, nur das Wichtigste sichtbar, Rest zum Aufklappen */
+#view-plan.route .plan-mode,#view-plan.route #ask-slot-plan,#view-plan.route #wohin>.vf>.vf-title,#view-plan.route #wohin>.vf>.vf-chips,#view-plan.route .vf-phead b,#view-plan.route .vf-phead .vf-say,#view-plan.route .vf-phead [data-vf="edit"]{display:none}
+#view-plan.route .vf-phead{display:none}
+#view-plan.route #wohin .vf.world-vor{background:none;border:0;border-top:0;padding:0;box-shadow:none}
+#view-plan.route .vf-panel{border-top:0;padding-top:0;gap:14px}
+#view-plan.route .hero-page{padding:14px 16px}
+#view-plan.route .hero-page h2{font-size:clamp(30px,9vw,40px)}
+.vf-top{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.vf-route .vf-dur{font-family:var(--display);font-size:44px;line-height:1;letter-spacing:-.03em;color:#0f5c3c}
+.vf-route .vf-sum{flex-direction:column;align-items:flex-start;gap:4px}
+.vf-route .vf-sum .small{font-size:16px;line-height:1.35}
+.vf-route .btn.primary{min-height:62px;font-size:19px;border-radius:20px;background:#0f5c3c;border-color:#0f5c3c;color:#fff}
+.vf-route .vf-more{border-radius:22px;background:var(--surface)}
+.vf-route .vf-more>summary{min-height:48px;display:flex;align-items:center;gap:10px;font-weight:700}
+#view-plan .plan-back,#view-best .plan-back{color:#0f5c3c}
+.vf-route .btn.quiet,.vf-route .btn-link{color:#0f5c3c}
+.vf-route:has([data-vf="preview"]) .vf-route-say{display:none}
+
+/* 0.97.4 Heute ruhiger: Datenschutzhinweis erst beim Tippen ins Feld */
+.hero-wohin .plan-note{display:none}
+#plan-form:focus-within+.plan-note{display:block}
+#view-start .today-list[hidden]{display:none}
