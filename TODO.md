@@ -69,3 +69,13 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [x] H4 (0.96.1) „Mehr“ in vier Bereiche geordnet (Für dich, Daten und Datenschutz, Mitmachen und Testen, Hilfe); Profil und „Ansagen und Sprache“ getrennt
 - [ ] H5 Englisches Konzept auf den Stand 0.96 bringen
 - [x] F8 (0.97.0) Paderborn: Fahrplan aus DELFI (Eintrag in STADT_FP und FP_STAEDTE), A44 in LAGE_ROADS. Gefunden wurde keine offene Datenquelle der Stadt mit Toiletten oder Behindertenparkplätzen; offen: opendata-paderborn.de prüfen, Echtzeit der PaderSprinter
+
+## J. Telefon-Assistenz (Meilenstein für absolute Barrierefreiheit)
+Konzept: Abschnitt „Telefon-Assistenz“ im Gesamtkonzept. Eine Rufnummer, unter der sehr alte Menschen ohne Smartphone mit Flowtown sprechen: Abfahrten, Aufzug, Weg beschreiben, Toiletten, Hilfe, Notfall.
+- [ ] J1 Rahmen klären: Anbieter und deutsche Rufnummer (0521) mit Auftragsverarbeitungsvertrag, Kosten je Minute, Tageslimit, wer die Nummer dauerhaft betreibt
+- [ ] J2 Mistral Voxtral 3 prüfen: Telefonie über SIP, deutsche Stimme, Latenz im Telefonklang (Ankündigung vom Oktober 2026, Dokumentation lesen)
+- [ ] J3 Prototyp: eine Nummer, nur Abfahrten und Aufzug, mit Server-Endpunkt, der die Frage als Text entgegennimmt (dieselben Werkzeuge wie die App)
+- [ ] J4 Gesprächsregeln: langsam, höchstens zwei Sätze, Wiederholen, Taste 0 für Servicekontakte, Ziffern statt Sprache, Notfall sofort 112
+- [ ] J5 Datenschutz: Hinweis am Anfang, keine Aufnahme, keine Speicherung der Nummer, Datenschutzseite ergänzen
+- [ ] J6 Test mit älteren Menschen und Menschen mit Hörbehinderung (Telefonklang, Dialekt, Hörgerät), Messgrößen wie bei der Assistenz
+
