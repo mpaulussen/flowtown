@@ -1559,3 +1559,8 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 #view-start #mode-slot-start{display:none}
 #view-start .go-card{background:none;background-image:none;border:0;box-shadow:none;padding:0;gap:10px}
 #view-start .go-note{margin:0 4px}
+
+/* 0.99.0 Überschrift auf Heute: Versprechen statt Frage; längere Fassungen etwas kleiner */
+.hero-wohin #h-start{line-height:1.02}
+.hero-wohin #h-start.long{font-size:clamp(30px,9.5vw,42px)}
+@media (max-height:740px){.hero-wohin #h-start.long{font-size:30px}}

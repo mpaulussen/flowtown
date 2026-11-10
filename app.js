@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.98.4';
+  const VERSION = '0.99.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6208,7 +6208,14 @@
     return days.map((d) => `<div class="day"><h4 class="day-title">${dayTitle(d.k)}</h4><ul class="tlist">${d.trips.map(tripRow).join('')}</ul></div>`).join('');
   }
 
+  // Überschrift auf Heute: das Versprechen von Flowtown, passend zu dem, was beim Einstieg wichtig war
+  const HEUTE_TITEL = { schnell: 'Schneller ankommen.', stufenlos: 'Stufenlos ankommen.', blick: 'Ohne Blick aufs Display.', rad: 'Sicher mit dem Rad.', stadt: 'Gemeinsam besser ankommen.' };
+  function renderHeuteTitel() {
+    const g = goals()[0], t = (g && HEUTE_TITEL[g]) || 'Besser ankommen.', h = $('#h-start');
+    h.textContent = t; h.classList.toggle('long', t.length > 18);
+  }
   function renderLastTrip() {
+    renderHeuteTitel();
     $('#today-date').textContent = new Date().toLocaleDateString('de-DE', { weekday: 'short', day: 'numeric', month: 'long' });
     const hr = new Date().getHours();
     $('#today-date').textContent = (hr < 5 ? 'Gute Nacht' : hr < 11 ? 'Guten Morgen' : hr < 18 ? 'Guten Tag' : 'Guten Abend') + ' · ' + $('#today-date').textContent;
