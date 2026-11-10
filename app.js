@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.96.1';
+  const VERSION = '0.96.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4233,7 +4233,7 @@
   // Heute: gespeicherte Ziele als Chips unter dem Suchfeld, ein Tipp vergleicht gleich
   function zielChips() {
     if (!apiBase() || !settings.ziele.length) return '';
-    const z = settings.ziele.slice().sort((a, b) => (b.u || 0) - (a.u || 0)).slice(0, 4);
+    const z = settings.ziele.slice().sort((a, b) => (b.u || 0) - (a.u || 0)).slice(0, 2);
     return `<div class="vf-chips" role="group" aria-label="Deine Ziele">${z.map((x) => `<button type="button" class="vf-chip" data-plan-go="${x.id}">${esc(x.name)}</button>`).join('')}</div>`;
   }
   function planGoZiel(z) {

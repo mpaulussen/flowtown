@@ -141,11 +141,6 @@
 
   <!-- Fahren -->
   <section id="view-start" class="view" aria-labelledby="h-start">
-    <header class="claim">
-      <p class="eyebrow" id="today-date"></p>
-      <h2 id="h-start" class="display">Wohin?</h2>
-      <p class="claim-sub">Sag es oder tippe es ein.</p>
-    </header>
     <div class="ask-slot" id="ask-slot-start">
       <!-- Frag Flowtown: eine Karte mit Feld und Beispielfragen, wandert auf Heute, Tipps und Verlauf; auf Wohin? nur das Feld -->
     <section class="ask-hero" id="ask-hero" aria-labelledby="ask-hero-h" hidden>
@@ -159,13 +154,20 @@
       <button type="button" class="ask-allow" id="ask-allow" hidden><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Für Antworten zu deinen Fahrten: Auswertung erlauben</span></button>
     </section>
     </div>
+    <div class="hero-wohin">
+    <header class="claim">
+      <p class="eyebrow" id="today-date"></p>
+      <h2 id="h-start" class="display">Wohin?</h2>
+      <p class="claim-sub">Sag es oder tippe es ein.</p>
+    </header>
     <section class="entry plan-card" id="plan-card" aria-labelledby="h-plan">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-route"/></svg></span><div><h3 id="h-plan" class="go-h">Wohin?</h3><p class="go-sub">Plane deinen Weg.</p></div></div>
       <form id="plan-form" class="vf-form plan-form" role="search"><label class="sr-only" for="plan-q">Wohin? Ort, Adresse oder Einrichtung</label><input id="plan-q" type="search" placeholder="Ort oder Adresse" autocomplete="off" enterkeyhint="search"><button class="btn plan-search" type="submit">Suchen</button><button type="button" class="plan-mic" id="plan-mic" aria-label="Ziel sprechen" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button></form>
-      <p class="small plan-note">Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß, mit CO₂. Dafür gehen das Ziel und dein ungefährer Standort an den Flowtown-Server und an HERE; gespeichert wird nichts.</p>
+      <p class="small plan-note">Ziel und ungefährer Standort gehen an den Flowtown-Server und an HERE. Gespeichert wird nichts.</p>
       <div id="plan-teaser"></div>
       <button id="btn-plan" class="btn big plan-go quiet-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>
     </section>
+    </div>
     <section class="entry go-card" aria-labelledby="h-go">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
     <div id="mode-box" class="mode-box">

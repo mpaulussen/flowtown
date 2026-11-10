@@ -1362,3 +1362,24 @@ body[data-view="map"] .fab-mic{right:auto;left:max(16px,env(safe-area-inset-left
 #plan-card .plan-note{font-size:13px;line-height:1.35}
 #view-start .claim{padding-bottom:2px}
 #btn-plan{min-height:40px;font-size:16px;background:transparent;border:0;box-shadow:none;color:var(--accent);justify-content:flex-start;padding:4px 2px}
+/* 0.96.2 Heute als ein Bild: oben eine grüne Karte „Wohin?“, darunter Womit? und Aufzeichnen */
+.hero-wohin{background:#e3f2ea;background-image:radial-gradient(circle at 100% 0,#cfe8da 0 110px,transparent 111px);color:#0f5c3c;border-radius:30px;padding:18px 16px 16px;display:flex;flex-direction:column;gap:14px;box-shadow:var(--shadow)}
+.hero-wohin .claim{gap:4px;padding:0}
+.hero-wohin .eyebrow{color:#2f6f53}
+.hero-wohin #h-start{color:#0f5c3c;font-size:clamp(40px,12vw,54px)}
+.hero-wohin .claim-sub{color:#2f6f53;font-size:17px}
+.hero-wohin #plan-card{gap:10px}
+.hero-wohin #plan-card .plan-form{border-color:#0f5c3c;box-shadow:0 2px 0 rgba(15,92,60,.15)}
+.hero-wohin #plan-card .plan-form input{font-size:20px;min-height:52px}
+.hero-wohin .plan-mic{background:#0f5c3c}
+.hero-wohin #plan-card .plan-note{color:#2f6f53;font-size:13px}
+.hero-wohin #plan-teaser{margin-top:0}
+.hero-wohin .vf-chips{display:flex;flex-wrap:wrap;gap:8px}
+.hero-wohin .vf-chip{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-height:40px;padding:6px 14px;font-size:16px;font-weight:700;background:#fff;color:#0f5c3c;border:0;box-shadow:none}
+.hero-wohin #btn-plan{color:#0f5c3c;font-weight:700;min-height:36px;font-size:15.5px;padding:2px 2px}
+@media (max-height:740px){.hero-wohin #h-start{font-size:36px}}
+.hero-wohin #plan-card{padding:0;border:0}
+.hero-wohin .claim-sub{display:none}
+.hero-wohin .vf-chip{max-width:100%}
+#view-start .go-card .switch span{min-height:56px}
+@media (max-height:800px){#view-start .go-note{display:none}}
