@@ -24,7 +24,7 @@ Meine Vermutung vor der Prüfung lag oft daneben. Von 79 Fragen mit Vermutung �
 
 **Erfundene Telefonnummern.** K134 (Fundsache) nennt „030 29743333“ und den Fundservice der Bahn statt moBiel, K194 und K295 nennen Nummern, die nicht aus unseren Daten stammen. Die Regel „keine Telefonnummern“ steht im Systemtext, wird aber umgangen.
 
-**Falsche Fakten ohne Quelle.** K020 erfindet „Linie 95“ und ein Einzelticket, K018 gleicht „günstigster“ mit „wenig CO₂“ gleich, K132 sagt „Assistenzhunde ohne Maulkorb oder Leine“, K135 tut so, als gäbe es Linie 9, K313 empfiehlt das Auto für 20 Kinder mit Rollstühlen, K320 behauptet, alles sei „in Echtzeit“.
+**Falsche Fakten ohne Quelle.** K020 erfindet ein Einzelticket (die Linie 95 gibt es: Sie steht im dritten Lauf in den Abfahrtsdaten, ich hatte sie zu Unrecht als erfunden bezeichnet), K018 gleicht „günstigster“ mit „wenig CO₂“ gleich, K132 sagt „Assistenzhunde ohne Maulkorb oder Leine“, K135 tut so, als gäbe es Linie 9, K313 empfiehlt das Auto für 20 Kinder mit Rollstühlen, K320 behauptet, alles sei „in Echtzeit“.
 
 **Zeitfragen werden mit „jetzt“ beantwortet.** K021 „Ich muss um 8 Uhr an der Uni sein“ → „Geh spätestens um 19:02 los“, K022 „halb zehn“ → „21:35“, K033 „am Sonntag“ und K034 „Neujahr“ → Abfahrten von jetzt als Sonntagsfahrplan. Die Werkzeuge kennen nur den Zeitpunkt „jetzt“.
 
@@ -118,6 +118,46 @@ Gesamtbild des Katalogs, wenn man die Wiederholung einrechnet (die übrigen 224 
 - Gruppen ab fünf Personen: Der Server hängt der Frage einen Hinweis an, nicht das Auto zu empfehlen.
 
 **Neu in der Entwicklungsliste:** E10 Radweganteil für die Assistenz (die App rechnet ihn nur lokal, K147).
+
+## Dritter Lauf: der ganze Katalog nach den zwei Korrekturrunden
+
+| Ergebnis | Lauf 1 | nach Wiederholung | Lauf 3 (alle 287) |
+| --- | ---: | ---: | ---: |
+| erfüllt | 163 | 190 | 190 |
+| teils | 53 | 78 | 73 |
+| nicht erfüllt | 26 | 8 | 7 |
+| falsch | 37 | 3 | 9 |
+| nicht prüfbar | 8 | 8 | 8 |
+
+**Lesehilfe:** Gegenüber dem ersten Lauf sind 27 Fragen mehr erfüllt und 28 weniger falsch. Gegenüber dem Stand nach der Wiederholung ist es nicht besser geworden, vor allem weil mehr Fragen als „falsch“ zählen (3 → 9). Ein Teil davon sind echte Rückschritte, ein Teil kommt daher, dass ich diesmal alle Antworten gegen die Kriterien gelesen habe und strenger war als beim ersten Durchgang. Deshalb steht neben den Zahlen die Liste der echten Rückschritte.
+
+**Echte Rückschritte (die Antwort hat sich verschlechtert):**
+- **K046** nennt den Hauptbahnhof in Paderborn. Ursache war das Werkzeug `haltestelle`, das den Fahrplan der falschen Stadt nahm.
+- **K157** liefert einen Fehler („Mistral antwortet mit 400“).
+- **K116** sagt „laut Fahrplan pünktlich“ und prüft nur Störungen.
+- **K117** sagt wieder „laut moBiel und Flowtown sind heute keine Aufzüge ausgefallen“. Eine leere Meldeliste liest die KI als „alles in Ordnung“.
+- **K173, K210, K292** erfinden Funktionen („Restaurant suchen unter Wohin?“, „Standort teilen unter Mehr“, „Fahrdienst suchen unter Mehr“).
+- **K018** nennt den Weg mit dem wenigsten CO₂ „die billigste Möglichkeit“.
+- **K032** vertauscht die Richtung (letzte Bahn von Brackwede statt nach Brackwede).
+- **K102** rät bei Angst vor dem Umsteigen zum belebten Ort und zur Hilfe von Passanten, wie bei Bedrohung (die neue Sicherheitsregel hat auf andere Fragen abgefärbt).
+- **K127, K150, K186, K211** sind schwächer als vorher (Fußweg statt Bahn, keine Werkstatt, „Hindernis melden“ fehlt, „Bahn-Hotline“ statt Mobilitätsservice).
+
+**Deutlich besser als im ersten Lauf (alle drei Läufe zusammen betrachtet):**
+- **Aufzug am Jahnplatz** (K047, K064, K167, K311, K286, K280): „Für den Aufzug dort habe ich keinen Live-Status, bitte vor Ort prüfen.“
+- **K124** „Bus 25 fährt in 2 Minuten ab Jahnplatz“ (vorher nur Störungsprüfung).
+- **K126** Anschluss weg: nennt jetzt die nächsten Abfahrten.
+- **K313** empfiehlt kein Auto mehr für 20 Kinder.
+- **K213 und K216** (Verfolgung, sichere Stelle): „Geh zu einem belebten Ort … und ruf die 110“.
+- **K241** erklärt den Startbildschirm für iPhone und Android.
+- **K249, K250, K251, K303**: Englisch, Türkisch, Arabisch und Türkisch beim Übersetzen werden in der Sprache beantwortet. K252 (Ukrainisch) bleibt deutsch.
+- **K322 und K323**: nennen Quellen und wer hinter Flowtown steht.
+- Keine erfundenen Telefonnummern, keine Fließtext-Werkzeugnamen mehr, „[object Object]“ ist weg (K181 ✓).
+
+**Dritte Korrekturrunde (im Code, noch nicht auf dem Server geprüft):**
+- Werkzeug `haltestelle` nimmt den Fahrplan der Stadt am Standort (K046).
+- Eine leere Liste gemeldeter Aufzugsausfälle heißt jetzt „keine Meldung in Flowtown; das heißt nicht, dass alle Aufzüge funktionieren“ (K117).
+- Neue Regeln: günstigster Weg ohne Preise, Pünktlichkeit nur aus Abfahrten, keine Suche nach Restaurants, Fahrdiensten, Apotheken, Ärzten, Werkstätten oder Ladestationen in der App, Standort teilen macht das Handy, Angst vor dem Umsteigen ohne Bedrohung bekommt keine Sicherheitsregel, „letzte Bahn von A nach B“ in der gefragten Richtung.
+- Bei Fehler 400 von Mistral antwortet der Server einmal ohne Werkzeuge und schreibt den Grund ins Log (K157).
 
 ## So prüfen wir, ob es besser geworden ist
 

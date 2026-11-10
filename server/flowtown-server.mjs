@@ -2319,7 +2319,13 @@ Regeln:
 - Wird jemand verfolgt oder bedroht, oder fragt nach einer sicheren Stelle: zuerst „Geh zu einem belebten Ort, zum Beispiel einer Haltestelle oder einem Geschäft, und ruf die 110“, nenne mit haltestellen_in_der_naehe einen Ort in der Nähe. Nicht mit 112 anfangen.
 - Startbildschirm: iPhone: in Safari auf das Teilen-Symbol tippen, dann „Zum Home-Bildschirm“. Android: in Chrome im Menü „Zum Startbildschirm hinzufügen“.
 - Meldet die Person einen Fehler in deiner Antwort: kurz entschuldigen, danken und raten, wichtige Angaben vor Ort zu prüfen. Keine Rückfrage nach einem Ziel.
-- Maße, Breiten, Dauer oder Regeln zu Parkplätzen, Rampen oder Türen ohne Werkzeugangabe: „dazu habe ich keine Angabe“, keine Rückfrage nach dem Ziel.`;
+- Maße, Breiten, Dauer oder Regeln zu Parkplätzen, Rampen oder Türen ohne Werkzeugangabe: „dazu habe ich keine Angabe“, keine Rückfrage nach dem Ziel.
+- Günstigster Weg: Preise kennst du nicht. Nenne dann nicht den Weg mit dem wenigsten CO₂ als „billigsten“, sondern sag „zu Preisen habe ich keine Angabe“.
+- Pünktlichkeit („Ist die Linie pünktlich?“): Werkzeug abfahrten_in_der_naehe mit der Linie. Sag „pünktlich“ nur, wenn dort keine Verspätung steht; oepnv_stoerungen sagt dazu nichts. Sag nie „laut Fahrplan pünktlich“.
+- Gibt es keine gemeldeten Aufzugsausfälle, heißt das nicht, dass alle Aufzüge gehen. Sag: „Dazu liegt keine Meldung vor, einen Live-Status gibt es für die Stadtbahn nicht.“ Sag nie „laut moBiel“ zu Aufzügen.
+- Die App sucht nicht nach Restaurants, Fahrdiensten, Taxis, Apotheken, Ärzten, Werkstätten oder Ladestationen. Verweise dafür nie auf „Wohin?“ oder „Mehr“. Standort teilen gibt es in Flowtown nicht; das macht das Handy zum Beispiel in der Nachrichten-App.
+- Angst vor dem Umsteigen, vor Menschenmengen oder vor dem Fahren, ohne Bedrohung: ein beruhigender Satz, dann Hilfe nennen (Umsteigezeit, Personal am Bahnhof). Dann kein 110 und kein „belebter Ort“.
+- „Letzte Bahn von A nach B“: nenne die Richtung genau so wie gefragt. Passt die Richtung der Abfahrten nicht, sag, dass du nur die letzten Abfahrten an der Haltestelle kennst.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -2915,7 +2921,7 @@ async function assistTool(name, a, ctx, act) {
     const dbAus = dba ? dba.anlagen.filter((x) => inBox(x[5], x[6], 0.05) && /^(notAvailable|partiallyAvailable)$/.test(dbaState(x[0]) || '')).map((x) => `${x[2]}: ${x[1] === 'aufzug' ? 'Aufzug' : 'Rolltreppe'} ${x[4]} ${DBA_TEXT[dbaState(x[0])]}`) : null;
     const planb = planB('stoerung', { items: lin ? items : [], typ: ctx.typ });
     return { plan_b: planb, stadtbahn_aufzuege: 'Für Aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status von moBiel; nur gemeldete Ausfälle aus Flowtown (aufzuege_gemeldet). Nie „alle in Betrieb“ sagen. Am Hauptbahnhof kommt der Status der DB-Aufzüge dazu (db_aufzuege_ausser_betrieb).', db_hinweis: 'db_aufzuege_ausser_betrieb gilt nur für Aufzüge der DB an Bahnhöfen, nicht für die Stadtbahn.', anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
-      meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug, quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
+      meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug.length ? aufzug : 'keine Meldung in Flowtown; das heißt nicht, dass alle Aufzüge funktionieren', quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
   if (name === 'abfahrten_in_der_naehe') {
@@ -2968,7 +2974,8 @@ async function assistTool(name, a, ctx, act) {
   }
   if (name === 'haltestelle') {
     const stops = tramStops(), k = hstNorm(a.name);
-    const d = fpData();
+    const fs1 = ctx.pos ? fpStadtAt(ctx.pos) : null;
+    const d = fs1 ? fpData(fs1.id) : fpData();
     const real = d && (d.stops.find((st) => hstNorm(st[1]) === k) || d.stops.find((st) => hstNorm(st[1]).startsWith(k)) || d.stops.find((st) => hstNorm(st[1]).includes(k)));
     if (!real) return { fehler: 'Haltestelle nicht im Fahrplan' };
     const nm = real[1].replace(/^Bielefeld,\s*/, ''), kk = hstNorm(real[1]);
@@ -3054,7 +3061,13 @@ async function mistralChat(messages, ohneWerkzeuge, mussWerkzeug) {
       body: JSON.stringify({ model: MISTRAL_MODEL, temperature: 0.2, max_tokens: 400, tools: ASSIST_TOOLS, tool_choice: ohneWerkzeuge ? 'none' : mussWerkzeug ? 'any' : 'auto', messages }) });
     // lehnt Mistral den Zwang zum Werkzeug ab, einmal ohne ihn
     if (!res.ok && mussWerkzeug && res.status >= 400 && res.status < 500) { clearTimeout(timer); return mistralChat(messages, ohneWerkzeuge, false); }
-    if (!res.ok) throw Object.assign(new Error('Mistral antwortet mit ' + res.status), { status: 502 });
+    if (!res.ok) {
+      const body = await res.text().catch(() => '');
+      console.error('Mistral ' + res.status + ': ' + body.slice(0, 300));
+      // bei 400 einmal ohne Werkzeuge, damit wenigstens eine Antwort kommt
+      if (res.status === 400 && !ohneWerkzeuge) { clearTimeout(timer); return mistralChat(messages, true, false); }
+      throw Object.assign(new Error('Mistral antwortet mit ' + res.status), { status: 502 });
+    }
     const msg = (await res.json()).choices[0].message;
     msg.content = msgText(msg.content);
     return msg;

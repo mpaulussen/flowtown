@@ -88,7 +88,9 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [x] K1a (10.11.) Server: Texte als Liste, unbekannte Werkzeugnamen, Wiederholungen, Telefonnummern, Aufzug-Hinweis, elf neue Regeln im Systemtext (noch nicht auf dem Server geprüft)
 - [x] K1b (10.11.) Wiederholung der 63 Fehler: 16 falsch und 11 nicht erfüllt sind jetzt erfüllt, 3 bleiben falsch (K124, K284, K313), 8 nicht erfüllt
 - [x] K1c (10.11.) Zweite Korrekturrunde im Code (Aufzug am Ort, Fährt-noch, Steigung, Anschluss, Verfolgung, Startbildschirm, Gruppen-Hinweis), noch nicht auf dem Server
-- [ ] K1d Server aktualisieren und den ganzen Katalog laufen lassen (287 Fragen), danach Ergebnisse neu eintragen
+- [x] K1d (10.11.) Gesamtlauf mit 287 Fragen: 190 erfüllt, 73 teils, 7 nicht erfüllt, 9 falsch, 8 nicht prüfbar; Rückschritte bei K018, K032, K046, K102, K116, K117, K157, K173, K210, K292 u. a.
+- [x] K1e (10.11.) Dritte Korrekturrunde im Code (Haltestelle der richtigen Stadt, leere Aufzugsmeldungen, sieben neue Regeln, Fehler 400)
+- [ ] K1f Server aktualisieren, Gesamtlauf wiederholen; Ziel: höchstens 3 falsch, keine Rückschritte
 - [ ] K2 App-Zeilen (Prüfweg App) am Handy durchgehen, Ergebnis in die Spalten Status und Ergebnis
 - [ ] K3 Lücken auswerten: erst `falsch` (erfundene Auskünfte), dann `nicht erfüllt` nach Zahl der betroffenen Profile; daraus die nächsten Entwicklungsschritte
 - [ ] K4 Beobachtungs-Zeilen mit echten Personen und Geräten (VoiceOver, TalkBack, Dialekt, Display aus)
