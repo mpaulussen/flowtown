@@ -1577,5 +1577,5 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 @media (max-height:740px){.hero-wohin .claim-mark{width:96px;margin:0 0 4px}}
 
 /* 0.99.4 Ampel-Marke auf allen Kopfkacheln einheitlich */
-.hero-page .page-mark{width:84px;margin:0 0 -2px}
-.hero-compact .page-mark{width:64px;margin:0 0 -4px}
+.hero-page .page-mark,.hero-compact .page-mark{width:132px;margin:2px 0 10px}
+@media (max-height:740px){.hero-page .page-mark,.hero-compact .page-mark{width:96px;margin:0 0 4px}}
