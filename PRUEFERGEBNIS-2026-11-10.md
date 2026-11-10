@@ -247,6 +247,28 @@ Gegenüber dem letzten Gesamtlauf sind 9 Fragen besser und 3 schlechter, der Res
 
 **Einordnung:** Die Festantworten FA93 bis FA95 sind neu und noch nicht im Lauf geprüft, nur gegen den Katalog und die 28 Gegenfragen. Von den 145 Fragen, die der Server selbst beantwortet, sind 137 erfüllt. Die verbleibenden 24 „teils“-Antworten liegen bei den Fragen, die die KI formuliert (Wege, Orte, Vergleiche). Sie brauchen Werkzeug-Änderungen (E8, E11 bis E16), nicht weitere Festantworten.
 
+## Siebter Lauf: fünfter Gesamtlauf (mit FA93 bis FA95)
+
+| Ergebnis | Lauf 1 | Gesamtlauf 4 (Lauf 6) | Gesamtlauf 5 (Lauf 7) |
+| --- | ---: | ---: | ---: |
+| erfüllt | 163 | 251 | **252** |
+| teils | 53 | 24 | 25 |
+| nicht erfüllt | 26 | 2 | **0** |
+| falsch | 37 | 2 | 2 |
+| nicht prüfbar | 8 | 8 | 8 |
+
+Gegenüber dem letzten Gesamtlauf sind 7 Fragen besser und 6 schlechter. Nichts ist mehr „nicht erfüllt“. Die Zahl der falschen Antworten ist von 37 auf 2 gesunken.
+
+**Behoben:** K032 (FA94: ehrliche Aussage statt falscher Richtung), K138 (FA95), K317 (FA93), K252 (Ukrainisch wird auf Ukrainisch beantwortet), K086, K080, K116.
+
+**Die 2 falschen Antworten:**
+- **K118** „Welche Stadtbahnhaltestellen haben keinen Aufzug?“ → Fehler „Mistral antwortet mit 400“. **Ursache gefunden und behoben:** Die KI hatte mehr als drei Werkzeuge auf einmal angefordert. Der Server hat nur drei beantwortet, aber der KI alle gemeldet. Mistral lehnt das mit „Not the same number of function calls and responses“ ab. Der Fehler bestand schon im alten Code und war bisher nur nicht aufgefallen. Der Server meldet der KI jetzt genau die drei Aufrufe, die er beantwortet, und das ist mit einem Ersatz geprüft, der wie Mistral nachzählt. In diesem Fall hat auch mein Auffangversuch bei Fehler 400 nichts genützt, weil er dieselbe fehlerhafte Nachrichtenfolge mitschickte.
+- **K169** „Nimm die Stadtbahn Linie 22“. Die 22 ist ein Bus. Ein Einzelfall der KI.
+
+**Rückschritte:** K024 (Rad als bequemster Weg bei Profil Ruhe), K038, K069, K184 (schwächere Formulierungen), dazu die zwei falschen. Keiner davon ist ein Sicherheitsproblem.
+
+**Einordnung:** Der Katalog ist ausgereizt. Vier Läufe in Folge liegen bei 244 bis 252 erfüllt, und die Änderungen zwischen den Läufen sind jetzt vor allem zufällige Schwankungen der KI bei Wegen und Orten. Weitere Festantworten bringen kaum noch etwas. Die restlichen 25 „teils“-Antworten brauchen Werkzeug-Änderungen (E8, E11 bis E16) und neue Quellen.
+
 ## So prüfen wir, ob es besser geworden ist
 
 Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):

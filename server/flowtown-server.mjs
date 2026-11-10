@@ -3297,8 +3297,10 @@ async function assist(body) {
       const antwort = sauber(m.content) || 'Dazu habe ich gerade keine Antwort.';
       return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length };
     }
-    messages.push({ role: 'assistant', content: m.content || '', tool_calls: calls });
-    for (const c of calls.slice(0, 3)) {
+    // höchstens drei Werkzeuge je Runde, und die Nachricht der KI nennt genau diese drei: sonst lehnt Mistral mit 400 ab (zu wenige Antworten)
+    const use = calls.slice(0, 3);
+    messages.push({ role: 'assistant', content: m.content || '', tool_calls: use });
+    for (const c of use) {
       let args = {};
       try { args = typeof c.function.arguments === 'string' ? JSON.parse(c.function.arguments) : c.function.arguments || {}; } catch (e) { args = {}; }
       let out;

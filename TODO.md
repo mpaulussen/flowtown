@@ -105,6 +105,8 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [x] K10a (10.11.) Nachbesserung: FA91 (Lärm), FA92 (Sicherheit von Radwegen), Zeit-Hinweis nicht bei Öffnungszeiten, Regel „Standort nutzen, nie danach fragen“
 - [x] K10b (10.11.) Gesamtlauf 4: 251 erfüllt, 24 teils, 2 nicht erfüllt, 2 falsch, 8 nicht prüfbar; 145 Fragen vom Server selbst beantwortet, davon 137 erfüllt
 - [x] K10c (10.11.) Nachbesserung: FA93 (mehrere Einschränkungen), FA94 (Nachtverbindung), FA95 (Aufzug im Parkhaus)
-- [ ] K10d Server aktualisieren, Gesamtlauf wiederholen. Zeilen mit Fakten (FA04, FA10, FA11, FA70 bis FA77) gegenlesen. Danach weiter mit den Werkzeugen (K11) und Quellen (K12) statt mit weiteren Texten
+- [x] K10d (10.11.) Gesamtlauf 5: 252 erfüllt, 25 teils, 0 nicht erfüllt, 2 falsch, 8 nicht prüfbar. Fehler 400 bei mehr als drei Werkzeugaufrufen gefunden und behoben (K118)
+- [ ] K10e Server aktualisieren (Fix für den Fehler 400). Zeilen mit Fakten gegenlesen, danach mit den Werkzeugen (K11) und Quellen (K12) weitermachen.
+- [ ] (alt) K10d Server aktualisieren, Gesamtlauf wiederholen. Zeilen mit Fakten (FA04, FA10, FA11, FA70 bis FA77) gegenlesen. Danach weiter mit den Werkzeugen (K11) und Quellen (K12) statt mit weiteren Texten
 - [ ] K11 Neue Werkzeug-Aufgaben aus dem Lösungsplan: E11 Pünktlichkeit direkt, E12 rueckweg mit Richtung, E13 Gehtempo je Profil, E14 unbekannte Linie, E15 Rangfolge nach Profil in vergleich und weg (kein Auto vor Bahn bei Rollstuhl), E16 Mehrfachprofil in der App
 - [ ] K12 Quellen einbinden (Reihenfolge nach Nutzen): E2 moBiel-Aufzugsstatus, E1 Fahrplan mit Zeitpunkt, E10 Radweganteil, E8 Orte aus OpenStreetMap (Bänke, Trinkwasser, Apotheken, Ärzte, Geldautomaten, Ladesäulen, Fahrradständer), E3 Wetter, E4 Höhenprofil
