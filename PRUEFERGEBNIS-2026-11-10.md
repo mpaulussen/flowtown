@@ -225,6 +225,28 @@ Gegenüber dem vorigen Gesamtlauf sind 55 Fragen besser, 11 schlechter und 221 g
 
 **Einordnung:** Die KI-Antworten (Wege, Vergleiche, Abfahrten) bleiben der Teil, der schwankt. Dort liegt der Rest: 30 mal „teils“, vor allem Rückfragen statt Hilfe, Fußweg statt Bahn, Auto vor Bahn bei Rollstuhl und Rollator, kühle Absagen bei Orten (Arzt, Apotheke, Werkstatt). Diese Fälle lösen die Werkzeug-Änderungen E8, E11 bis E16 und neue Quellen, nicht weitere Texte.
 
+## Sechster Lauf: vierter Gesamtlauf (mit den Nachbesserungen FA91 und FA92)
+
+| Ergebnis | Lauf 1 | Gesamtlauf 3 (Lauf 5) | Gesamtlauf 4 (Lauf 6) |
+| --- | ---: | ---: | ---: |
+| erfüllt | 163 | 244 | **251** |
+| teils | 53 | 30 | 24 |
+| nicht erfüllt | 26 | 2 | 2 |
+| falsch | 37 | 3 | **2** |
+| nicht prüfbar | 8 | 8 | 8 |
+
+Gegenüber dem letzten Gesamtlauf sind 9 Fragen besser und 3 schlechter, der Rest ist gleich geblieben. Die Zahl der falschen Antworten ist von 37 im ersten Lauf auf 2 gesunken, die der erfüllten von 163 auf 251.
+
+**Behoben seit dem letzten Lauf:** K109 („Zu Lärm habe ich keine Angabe“), K146 (kein „sicher“ mehr), K156 („Die Toilette am Theater am alten Markt hat durchgehend geöffnet“), K093 („Bahnhof“ wird zum Hauptbahnhof), K127 (Linie 61 als Alternative bei Bahnausfall), K038, K069, K159, K184.
+
+**Die 2 falschen Antworten:**
+- **K032** „nach Brackwede“, aber Linie 2 Richtung Sieker. Die KI mischt die Richtungen. Jetzt Festantwort FA94, die ehrlich sagt, dass Nachtverbindungen von A nach B nicht zuverlässig bekannt sind.
+- **K138** „die Park + Ride-Anlagen haben keine Aufzüge“. Die Daten sagen dazu nichts. Jetzt Festantwort FA95.
+
+**Die 2 nicht erfüllten:** K116 („Ist die Linie 4 pünktlich?“ → „keine Abfahrten gefunden“, E11) und K317 (jetzt Festantwort FA93). Dazu **K086** („Wird eine Störung auch angezeigt?“), die vorher gut beantwortet war und jetzt schwach ist.
+
+**Einordnung:** Die Festantworten FA93 bis FA95 sind neu und noch nicht im Lauf geprüft, nur gegen den Katalog und die 28 Gegenfragen. Von den 145 Fragen, die der Server selbst beantwortet, sind 137 erfüllt. Die verbleibenden 24 „teils“-Antworten liegen bei den Fragen, die die KI formuliert (Wege, Orte, Vergleiche). Sie brauchen Werkzeug-Änderungen (E8, E11 bis E16), nicht weitere Festantworten.
+
 ## So prüfen wir, ob es besser geworden ist
 
 Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):

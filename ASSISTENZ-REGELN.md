@@ -104,8 +104,8 @@ Alle Vorschläge sind noch nicht geprüft (Lizenz, Aktualität, Aufwand). Bei je
 
 ## 6. Prüfen und messen
 
-- **Abdeckung:** `node flowtown-server.mjs festantworten pruefkatalog.csv` zeigt je Katalogfrage die Festantwort und am Ende, wie viele von 287 eine haben (aktuell 130, dazu die Direktantworten). Das lässt sich ohne Mistral und ohne Internet prüfen und läuft in Sekunden.
-- **Falsche Treffer:** dieselbe Prüfung mit einer Liste von Fragen, die keine Festantwort bekommen dürfen. Aktuell 28 Fragen ohne Fehltreffer. Im dritten Gesamtlauf beantwortete der Server 142 der 287 Fragen selbst, davon 135 mit Ergebnis „erfüllt“.
+- **Abdeckung:** `node flowtown-server.mjs festantworten pruefkatalog.csv` zeigt je Katalogfrage die Festantwort und am Ende, wie viele von 287 eine haben (aktuell 133, dazu die Direktantworten). Das lässt sich ohne Mistral und ohne Internet prüfen und läuft in Sekunden.
+- **Falsche Treffer:** dieselbe Prüfung mit einer Liste von Fragen, die keine Festantwort bekommen dürfen. Aktuell 28 Fragen ohne Fehltreffer. Im vierten Gesamtlauf beantwortete der Server 145 der 287 Fragen selbst, davon 137 mit Ergebnis „erfüllt“.
 - **Gesamtlauf:** `testlauf pruefkatalog.csv` auf dem Server. Die Festantworten erscheinen darin mit Werkzeug `festantwort FAxx`, Direktantworten mit `direkt`.
 - **Kritische Fälle mehrfach:** Jahnplatz-Aufzug, Notruf, Telefonnummern, Zeitfragen: je mindestens fünf Läufe, weil die KI schwankt.
 
