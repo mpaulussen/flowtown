@@ -2672,14 +2672,22 @@ const AUSSEN_HINWEIS = 'Der Ort liegt außerhalb von Bielefeld. Dazu hat Flowtow
 const AUSSEN_HINWEIS_OSM = 'Der Ort liegt außerhalb von Bielefeld. Hier hat Flowtown keine Daten der Stadt und keine Angaben zur Barrierefreiheit von Gebäuden. Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal stammen aus OpenStreetMap und sind nur so vollständig, wie Mitwirkende sie eingetragen haben. Sag das offen; fehlt etwas, heißt das nicht, dass es nichts gibt.';
 // Orte außerhalb von Bielefeld: Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal aus OpenStreetMap, in festen Rechtecken
 // von 0,01° (etwa 1,1 × 0,7 km, mit Rand), so erfährt Overpass nie das genaue Ziel; die Auswahl nach Entfernung passiert auf dem Server.
-const aussenCells = new Map();
+const aussenCells = new Map(), aussenFlight = new Map();
 const AUSSEN_CELL = 0.01;
-async function aussenCell(a, b) {
+// läuft im Hintergrund weiter, auch wenn der Aufrufer nicht so lange wartet; die nächste Frage findet das Ergebnis im Speicher
+function aussenCell(a, b) {
   const k = a + '_' + b, c = aussenCells.get(k);
-  if (c && Date.now() - c.t < 3 * 864e5) return c.list;
+  if (c && Date.now() - c.t < 3 * 864e5) return Promise.resolve(c.list);
+  if (aussenFlight.has(k)) return aussenFlight.get(k);
+  const p = aussenLoad(a, b, k).finally(() => aussenFlight.delete(k));
+  p.catch(() => {});
+  aussenFlight.set(k, p);
+  return p;
+}
+async function aussenLoad(a, b, k) {
   const bb = `${(a * AUSSEN_CELL - 0.005).toFixed(5)},${(b * AUSSEN_CELL - 0.007).toFixed(5)},${((a + 1) * AUSSEN_CELL + 0.005).toFixed(5)},${((b + 1) * AUSSEN_CELL + 0.007).toFixed(5)}`;
   const q = `[out:json][timeout:25];(node["amenity"="toilets"](${bb});way["amenity"="toilets"](${bb});node["parking_space"="disabled"](${bb});way["parking_space"="disabled"](${bb});node["amenity"="parking"]["capacity:disabled"](${bb});way["amenity"="parking"]["capacity:disabled"](${bb});node["highway"="traffic_signals"]["traffic_signals:sound"](${bb}););out center tags;`;
-  const j = await Promise.race([overpass(q, 20000), new Promise((_, rej) => setTimeout(() => rej(new Error('zu langsam')), 22000))]);
+  const j = await overpass(q, 25000);
   const list = [];
   for (const e of j.elements || []) {
     const t = e.tags || {}, lat = isFinite(e.lat) ? e.lat : e.center && e.center.lat, lon = isFinite(e.lon) ? e.lon : e.center && e.center.lon;
@@ -2699,10 +2707,11 @@ async function aussenCell(a, b) {
   if (aussenCells.size > 300) aussenCells.delete(aussenCells.keys().next().value);
   return list;
 }
-async function osmAussen(pos, typ) {
+async function osmAussen(pos, typ, ms) {
   if (!pos || !isFinite(pos[0]) || !ausserhalb(pos)) return null;
   let all;
-  try { all = await aussenCell(Math.floor(pos[0] / AUSSEN_CELL), Math.floor(pos[1] / AUSSEN_CELL)); } catch (e) { return null; }
+  try { all = await Promise.race([aussenCell(Math.floor(pos[0] / AUSSEN_CELL), Math.floor(pos[1] / AUSSEN_CELL)), new Promise((resolve) => setTimeout(() => resolve(null), ms || 7000))]); } catch (e) { return null; }
+  if (!all) return null;
   const near = (list, max) => list.map((x) => Object.assign({ entfernung_m: mAbs(pos, x.pos) }, x)).filter((x) => x.entfernung_m <= max).sort((a, b) => a.entfernung_m - b.entfernung_m)[0];
   const strip = (x) => { if (!x) return undefined; const o = Object.assign({}, x); delete o.pos; delete o.k; o.entfernung_m = Math.round(o.entfernung_m / 10) * 10; o.quelle = 'OpenStreetMap'; return o; };
   const wcs = all.filter((x) => x.k === 'wc'), out = {};
@@ -3224,7 +3233,7 @@ const server = http.createServer(async (req, res) => {
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       const from = coord(url.searchParams.get('from'), 3), to = coord(url.searchParams.get('to'), 4);
       const typ = profilTyp({ profil_typ: url.searchParams.get('profil') });
-      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ, url.searchParams.get('vorrang') === 'schnell' ? 'schnell' : ''), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ, await osmAussen(to, typ)) }), origin);
+      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ, url.searchParams.get('vorrang') === 'schnell' ? 'schnell' : ''), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ, await osmAussen(to, typ, 4000)) }), origin);
     }
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);

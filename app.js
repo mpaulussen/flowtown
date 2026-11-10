@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.97.0';
+  const VERSION = '0.97.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4485,7 +4485,7 @@
   // ---------- Flowtown-Server: Ebene „Wir“, KI-Einschätzung, Meldungen ----------
   const apiBase = () => (settings.server.url || '').trim().replace(/\/+$/, '');
   async function api(pathPart, opts) {
-    const res = await fetchWithTimeout(apiBase() + pathPart, opts || {}, pathPart === '/api/ki' ? 45000 : 15000);
+    const res = await fetchWithTimeout(apiBase() + pathPart, opts || {}, pathPart === '/api/ki' ? 45000 : pathPart.startsWith('/api/vergleich') ? 30000 : 15000);
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.fehler || 'HTTP ' + res.status);
     return j;
