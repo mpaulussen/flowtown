@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.97.1';
+  const VERSION = '0.97.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -130,8 +130,15 @@
   // ---------- Formatierung ----------
   function fmtDur(ms) {
     const s = Math.max(0, Math.round(ms / 1000));
-    if (s >= 3600) return Math.floor(s / 3600) + ':' + String(Math.floor(s / 60) % 60).padStart(2, '0') + ' h';
+    if (s >= 3600) return minText(Math.floor(s / 60));
     return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+  // Minuten bis 59 als „45 min“, ab einer Stunde als „5 h 24 min“
+  function minText(m) {
+    m = Math.max(0, Math.round(m));
+    if (m < 60) return m + ' min';
+    const h = Math.floor(m / 60), r = m % 60;
+    return r ? `${h} h ${r} min` : `${h} h`;
   }
   const fmtS = (ms) => Math.round(ms / 1000) + ' s';
   const fmtPct = (x) => Math.round(x * 100) + ' %';
@@ -1538,6 +1545,7 @@
   const sayText = (x) => String(x || '').replace(/\s+/g, ' ')
     .replace(/(\d+):(\d{2})\s?h\b/g, (m, h, mi) => `${h} Stunde${h === '1' ? '' : 'n'} ${+mi} Minute${+mi === 1 ? '' : 'n'}`)
     .replace(/(\d+):(\d{2})\s?min\b/g, (m, mi, sec) => (+mi ? `${+mi} Minute${+mi === 1 ? '' : 'n'}${+sec ? ` ${+sec} Sekunde${+sec === 1 ? '' : 'n'}` : ''}` : `${+sec} Sekunde${+sec === 1 ? '' : 'n'}`))
+    .replace(/(\d+)\s?h\s(\d+)\s?min\b/g, (m, h, mi) => `${h} Stunde${h === '1' ? '' : 'n'} ${mi} Minute${mi === '1' ? '' : 'n'}`).replace(/(\d+)\s?h\b(?!\.)/g, (m, h) => `${h} Stunde${h === '1' ? '' : 'n'}`)
     .replace(/(\d)\s?min\b/g, '$1 Minuten').replace(/(\d)\s?km\/h/g, '$1 Kilometer pro Stunde').replace(/(\d),(\d)\s?km\b/g, '$1 Komma $2 Kilometer').replace(/(\d)\s?km\b/g, '$1 Kilometer')
     .replace(/(\d)\s?m\b/g, '$1 Meter').replace(/\bggü\.?\s?/g, 'gegenüber ').replace(/\bz\.\s?B\.\s?/g, 'zum Beispiel ').replace(/\bu\.\s?a\.\s?/g, 'unter anderem ').replace(/\bbzw\.\s?/g, 'beziehungsweise ').replace(/\bHbf\b/g, 'Hauptbahnhof').replace(/\bvsl\.\s?/g, 'voraussichtlich ').replace(/\bca\.\s?/g, 'etwa ').replace(/\bNr\.\s?/g, 'Nummer ').replace(/\bStr\.\s*$/, 'Straße.').replace(/\bStr\.(\s+)(?=[A-ZÄÖÜ])/g, 'Straße.$1').replace(/\bStr\./g, 'Straße').replace(/\bStr\b/g, 'Straße').replace(/-v-/g, ' von ').replace(/\bØ\s?/g, 'im Schnitt ')
     .replace(/\s?[·|]\s?/g, ', ').replace(/→/g, ' bis ').replace(/[✓✗]/g, '').replace(/\+(\d)/g, 'plus $1').replace(/−(\d)/g, 'minus $1').replace(/\s+([.,])/g, '$1').replace(/([.,]){2,}/g, '$1').trim();
@@ -1735,7 +1743,7 @@
   const cmdNorm = (x) => String(x || '').toLowerCase().replace(/[.,!?;:„“"']/g, ' ').replace(/\s+/g, ' ').trim();
   const MODE_WORDS = [['fuss', /\bzu ?fu(ß|ss)|\blaufen\b|\bgehen\b|\bausgestiegen\b/], ['bahn', /stadtbahn|straßenbahn|strassenbahn|\btram\b|\bbahn\b|\blinie \d/], ['bus', /\bbus\b/], ['zug', /\bzug\b|regionalbahn|\bre ?\d/], ['rad', /\brad\b|fahrrad/], ['auto', /\bauto\b|\bwagen\b/]];
   const modeIn = (c) => { for (const [m, re] of MODE_WORDS) if (re.test(c)) return m; return null; };
-  const sayMin = (m) => `${m} Minute${m === 1 ? '' : 'n'}`;
+  const sayMin = (m) => (m >= 60 ? `${Math.floor(m / 60)} Stunde${Math.floor(m / 60) === 1 ? '' : 'n'}${m % 60 ? ` ${m % 60} Minute${m % 60 === 1 ? '' : 'n'}` : ''}` : `${m} Minute${m === 1 ? '' : 'n'}`);
   function sayDepartures(name, kind) {
     const now = new Date(), nowMin = now.getHours() * 60 + now.getMinutes();
     const list = departures(name, now, 90).filter((d) => kind == null || d.kind === kind).slice(0, 5);
@@ -2637,7 +2645,7 @@
       <div class="pl-bar"><span class="pl-seg plan" style="width:${pc(plan)}"></span></div>
       <div class="pl-row"><span>Gebraucht</span><b>${hm(ist / 1000)}</b></div>
       <div class="pl-bar" role="img" aria-label="${esc(`Gebraucht ${hmSay(ist / 1000)}, davon ${stop ? `${hmSay(stop / 1000)} an Haltestellen, ` : ''}etwa ${hmSay(slow / 1000)} langsam oder im Stau und ${hmSay(amp / 1000)} an Ampeln`)}"><span class="pl-seg" style="width:${pc(flow)}"></span>${stop ? `<span class="pl-seg stop" style="width:${pc(stop)}"></span>` : ''}<span class="pl-seg slow" style="width:${pc(slow)}"></span><span class="pl-seg amp" style="width:${pc(amp)}"></span></div>
-      <ul class="pl-legend">${stop ? `<li><span class="lg-dot stop"></span>${durText(stop)} an Haltestellen</li>` : ''}<li><span class="lg-dot red"></span>etwa ${Math.round(slow / 60000)} min langsam oder im Stau</li><li><span class="lg-dot"></span>${Math.round(amp / 60000)} min an Ampeln</li></ul>
+      <ul class="pl-legend">${stop ? `<li><span class="lg-dot stop"></span>${durText(stop)} an Haltestellen</li>` : ''}<li><span class="lg-dot red"></span>etwa ${minText(Math.round(slow / 60000))} langsam oder im Stau</li><li><span class="lg-dot"></span>${Math.round(amp / 60000)} min an Ampeln</li></ul>
       <p class="pl-verdict">${verdict}</p>
       ${reported.length ? `<p class="small muted">Vorher gemeldet: ${esc(reported.join(', '))}</p>` : ''}
       ${p.rest > 2 ? `<p class="note">${ic('info')}<span>Die Aufzeichnung endete etwa ${fmtNum(p.rest, 0)} km vor dem Ziel, der Vergleich ist nur grob.</span></p>` : ''}
@@ -4160,17 +4168,17 @@
   // Je Verkehrsmittel: Name und Zeit groß, höchstens ein Hinweis; Einzelheiten stehen beim Antippen und für Screenreader im Namen
   function bestInfo(o) {
     const all = [];
-    if (o.verkehrsmittel === 'auto') { all.push(`${o.dauer_min} min${o.verzoegerung_min >= 3 ? `, ${o.verzoegerung_min} min Stau` : ''} mit Parken`); if (o.ausweichroute) all.push(`Ausweichroute ${o.ausweichroute.dauer_min} min`); if (o.behindertenparkplatz) all.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
+    if (o.verkehrsmittel === 'auto') { all.push(`${minText(o.dauer_min)}${o.verzoegerung_min >= 3 ? `, ${minText(o.verzoegerung_min)} Stau` : ''} mit Parken`); if (o.ausweichroute) all.push(`Ausweichroute ${minText(o.ausweichroute.dauer_min)}`); if (o.behindertenparkplatz) all.push('Behindertenparkplatz ' + o.behindertenparkplatz); }
     if (o.verkehrsmittel === 'oepnv') { all.push(`ab ${o.ab}${o.linien && o.linien[0] ? ', Linie ' + o.linien[0] : ''}${o.umstiege ? `, ${o.umstiege}× umsteigen` : ''}`); if (o.stufenlos) all.push('stufenlos: ' + o.stufenlos); }
-    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') all.push(`${o.dauer_min} min, ${fmtNum(o.km, 1)} km`);
+    if (o.verkehrsmittel === 'rad' || o.verkehrsmittel === 'fuss') all.push(`${minText(o.dauer_min)}, ${fmtNum(o.km, 1)} km`);
     if (o.hindernisse && o.hindernisse.length) all.push(o.hindernisse.slice(0, 2).join(', '));
     if (o.gemeldet && o.gemeldet.length) all.push('gemeldet: ' + o.gemeldet.map((x) => x.art).slice(0, 2).join(', '));
     if (o.meldungen && o.meldungen.length) all.push(o.meldungen[0]);
     if (o.co2) all.push(o.co2_g ? `CO₂ ${o.co2}` : 'ohne CO₂');
     const flag = !o.geeignet ? (settings.access.on ? 'nicht für dein Profil' : 'eher nicht')
-      : o.verkehrsmittel === 'auto' && o.ausweichroute ? `Ausweichroute ${o.ausweichroute.dauer_min} min`
+      : o.verkehrsmittel === 'auto' && o.ausweichroute ? `Ausweichroute ${minText(o.ausweichroute.dauer_min)}`
       : (o.hindernisse && o.hindernisse[0]) || (o.gemeldet && o.gemeldet.length ? 'gemeldet: ' + o.gemeldet[0].art : '') || (o.meldungen && o.meldungen[0]) || '';
-    const time = o.dauer_min ? `${o.dauer_min} min` : `an ${o.ankunft}`;
+    const time = o.dauer_min ? minText(o.dauer_min) : `an ${o.ankunft}`;
     if (!o.geeignet) all.unshift(flag);
     return { all, flag, time, label: `${BEST_NAME[o.verkehrsmittel]}, an ${o.ankunft}. ${all.join(', ')}` };
   }
@@ -4294,7 +4302,7 @@
   const MODE_GROUP = { auto: 'auto', rad: 'rad', bus: 'oepnv', bahn: 'oepnv', zug: 'oepnv', fuss: 'fuss' };
   const GROUP_WITH = { auto: 'mit dem Auto', rad: 'mit dem Rad', oepnv: 'mit Bus und Bahn', fuss: 'zu Fuß' };
   const cap = (x) => x.charAt(0).toUpperCase() + x.slice(1);
-  const durText = (ms) => (ms >= 3600000 ? fmtDur(ms) : fmtDur(ms) + ' min');
+  const durText = (ms) => (ms >= 3600000 ? minText(ms / 60000) : fmtDur(ms) + ' min');
   const avgOf = (xs) => xs.reduce((a, x) => a + x, 0) / xs.length;
   const tripWait = (t) => t.events.reduce((a, e) => a + (e.type === 'halt' && e.signal ? e.wait : 0), 0);
   function selectedMode() {
@@ -4900,7 +4908,7 @@
   const zielFor = (group) => (group === 'auto' || group === 'rad' || group === 'oepnv' || group === 'fuss');
   let zielAb = null, conOpen = 0;   // Bus und Bahn: Start an einer eigenen Haltestelle (sonst Standort), aufgeklappte Verbindung
   const zKey = (z, group) => z.id + '|' + group + (group === 'oepnv' ? '|' + (zielAb || '') : '');
-  const hm = (s) => { const m = Math.round(s / 60); return m >= 60 ? `${Math.floor(m / 60)}:${String(m % 60).padStart(2, '0')} h` : `${m} min`; };
+  const hm = (s) => minText(s / 60);
   const hmSay = (s) => { const m = Math.round(s / 60), h = Math.floor(m / 60); return (h ? `${h} Stunde${h === 1 ? '' : 'n'} ` : '') + `${m % 60} Minute${m % 60 === 1 ? '' : 'n'}`; };
 
   function renderVorfahrt() {
@@ -5601,7 +5609,7 @@
       const act = zEnd ? `<button type="button" class="btn quiet tip-go" data-tipgo="plan" data-z="${zEnd.id}">${ic('route')}${prio === 1 ? 'Mit dem Rad prüfen' : 'Weg zu ' + esc(zEnd.name) + ' prüfen'}</button>`
         : `<button type="button" class="btn quiet tip-go" data-peek="r" data-name="${esc(labelFor(g.first))} → ${esc(labelFor(g.last))}" data-pts="${routeMapPts(g)}">${ic('map')}Auf der Karte</button>`;
       return { prio, act, icon: prio === 1 ? 'bike' : 'route', title: routeName(g), meta: `Dein Weg · ${g.trips.length}× unterwegs`, short: short || `${g.trips.length}× unterwegs auf diesem Weg.`,
-        head: prio === 1 ? 'Rad ist gleich schnell' : bh.text ? 'Beste Abfahrtszeit' : 'Dein Weg', cat: prio === 1 ? 'Rad' : 'Weg', num: prio === 1 ? `${Math.max(1, Math.round(bikeMs / 60000))} min` : bh.text ? `${bh.best}–${bh.best + 1} Uhr` : `${g.trips.length}×`,
+        head: prio === 1 ? 'Rad ist gleich schnell' : bh.text ? 'Beste Abfahrtszeit' : 'Dein Weg', cat: prio === 1 ? 'Rad' : 'Weg', num: prio === 1 ? minText(Math.max(1, Math.round(bikeMs / 60000))) : bh.text ? `${bh.best}–${bh.best + 1} Uhr` : `${g.trips.length}×`,
         html: `${bh.text ? `<p class="tip">${ic('bulb')}<span>${bh.text}</span></p>` : ''}${prio === 1 ? `<p class="tip">${ic('bike')}<span>${short}</span></p>` : ''}<div class="alt">${rows.join('')}</div>` };
     });
   }
@@ -6093,7 +6101,7 @@
     return `<li><button type="button" class="trow" data-review="${t.id}">
       <span class="t-time">${time}</span>
       <span class="chip sm">${ic(MODE_ICON[t.mode] || 'route')}</span>
-      <span class="t-main"><b>${legChain(t)}${t.demo ? ' <span class="badge">Demo</span>' : ''}</b>${t.plan ? `<span class="t-dest">${esc(t.plan.name)}</span>` : ''}<span class="t-sub">${Math.max(1, Math.round(((t.end || t.start) - t.start) / 60000))} min · ${fmtNum(t.distance / 1000, 1)} km${trs ? ` · ${trs} Umstieg${trs === 1 ? '' : 'e'}` : ''}</span></span>
+      <span class="t-main"><b>${legChain(t)}${t.demo ? ' <span class="badge">Demo</span>' : ''}</b>${t.plan ? `<span class="t-dest">${esc(t.plan.name)}</span>` : ''}<span class="t-sub">${minText(Math.max(1, Math.round(((t.end || t.start) - t.start) / 60000)))} · ${fmtNum(t.distance / 1000, 1)} km${trs ? ` · ${trs} Umstieg${trs === 1 ? '' : 'e'}` : ''}</span></span>
       <span class="t-pills">${pill}</span>
       ${ic('chevron', 't-go')}
     </button></li>`;
