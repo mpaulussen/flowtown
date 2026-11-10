@@ -1579,3 +1579,9 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 /* 0.99.4 Ampel-Marke auf allen Kopfkacheln einheitlich */
 .hero-page .page-mark,.hero-compact .page-mark{width:132px;margin:2px 0 10px}
 @media (max-height:740px){.hero-page .page-mark,.hero-compact .page-mark{width:96px;margin:0 0 4px}}
+
+/* 0.99.7 Ampel als Orientierung: je Bereich leuchtet eine Phase, die übrigen sind ausgegraut */
+.claim-mark circle{transition:fill .2s}
+#view-start .claim-mark circle:nth-child(-n+2),#view-best .claim-mark circle:nth-child(-n+2),#view-plan .claim-mark circle:nth-child(-n+2),#view-map .claim-mark circle:nth-child(-n+2){fill:#bfc7c2}
+#view-tips .claim-mark circle:nth-child(n+2),#view-more .claim-mark circle:nth-child(n+2){fill:#bfc7c2}
+#view-stats .claim-mark circle:nth-child(3){fill:#bfc7c2}
