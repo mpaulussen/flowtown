@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.99.4';
+  const VERSION = '0.99.5';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6851,7 +6851,14 @@
   if ('serviceWorker' in navigator && location.protocol === 'https:') {
     navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).catch(() => {});
     // neue Version übernommen: einmal neu laden, damit sie sofort sichtbar ist (nie während einer Aufzeichnung)
-    if (navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => { if (!rec) location.reload(); });
+    if (navigator.serviceWorker.controller) navigator.serviceWorker.addEventListener('controllerchange', () => { if (!rec && $('#assist').hidden) location.reload(); });
+    // Homescreen-Apps bleiben im Hintergrund oft tagelang geöffnet und laden dann nie neu: beim Zurückkehren nach neuer Version fragen
+    let lastUpd = Date.now();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible' || Date.now() - lastUpd < 30000) return;
+      lastUpd = Date.now();
+      navigator.serviceWorker.getRegistration().then((reg) => { if (reg) reg.update().catch(() => {}); }).catch(() => {});
+    });
   }
 
   // Aktualisieren oben rechts: neue Version holen und alles neu laden (in den Homescreen-Apps fehlt das Herunterziehen)
