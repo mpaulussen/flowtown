@@ -163,7 +163,7 @@ const HERE_KEY = process.env.HERE_API_KEY || '';
 const HERE_URL = process.env.HERE_URL || 'https://data.traffic.hereapi.com/v7';
 const AUTOBAHN_URL = process.env.AUTOBAHN_URL || 'https://verkehr.autobahn.de/o/autobahn';
 const LAGE_BBOX = (process.env.LAGE_BBOX || '8.38,51.90,8.70,52.12').split(',').map(Number);   // West, Süd, Ost, Nord: Bielefeld
-const LAGE_ROADS = (process.env.LAGE_ROADS || 'A2,A33').split(',').map((s) => s.trim()).filter((s) => /^[A-Z]\d{1,4}$/.test(s));
+const LAGE_ROADS = (process.env.LAGE_ROADS || 'A2,A33,A44').split(',').map((s) => s.trim()).filter((s) => /^[A-Z]\d{1,4}$/.test(s));
 const LAGE_MIN = Number(process.env.LAGE_MIN || 5);
 
 async function getJson(url, ms) {
@@ -400,10 +400,11 @@ const FAHRPLAN_FILE = path.join(DATA_DIR, 'fahrplan.json');
 // Weitere Städte aus demselben DELFI-Datensatz: alle Busse und Bahnen, die dort halten (Muster „*“), Stadt- und Regionsrahmen Süd,Nord,West,Ost.
 // Abschalten oder wählen mit FAHRPLAN_STAEDTE in /etc/flowtown.env (kommagetrennt, leer = nur Bielefeld).
 const STADT_FP = {
-  moenchengladbach: { name: 'Mönchengladbach', muster: '*', stadt: '51.10,51.26,6.30,6.58', region: '50.95,51.45,6.00,6.95' }
+  moenchengladbach: { name: 'Mönchengladbach', muster: '*', stadt: '51.10,51.26,6.30,6.58', region: '50.95,51.45,6.00,6.95' },
+  paderborn: { name: 'Paderborn', muster: '*', stadt: '51.68,51.80,8.66,8.86', region: '51.45,52.10,8.10,9.30' }
 };
 const FP_STAEDTE = [{ id: 'bielefeld', name: 'Bielefeld', file: FAHRPLAN_FILE, muster: FAHRPLAN_AGENCY, stadt: '', region: '', box: [51.90, 52.12, 8.38, 8.70] }]
-  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach' : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
+  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach,paderborn' : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
     .map((id) => Object.assign({ id, file: path.join(DATA_DIR, `fahrplan-${id}.json`), box: STADT_FP[id].stadt.split(',').map(Number) }, STADT_FP[id])));
 let fahrplan = null, fahrplanRun = null, fahrplanTry = 0;   // Bielefeld: { stand, gilt, json (gzip), etag }
 const fahrplaene = {};   // je Stadt dasselbe
@@ -2668,6 +2669,51 @@ async function ampelnNahe(pos) {
 const ZIEL_THEMA = { rollstuhl: ['zugang', 'aufzug', 'wc'], rollator: ['zugang', 'aufzug', 'wc'], sehen: ['sehen', 'zugang'], hoeren: ['hoeren'], lernen: ['einfach'], ruhe: ['service', 'wc'] };
 const ausserhalb = (pos) => !!pos && !inBox(pos[0], pos[1], 0.05);
 const AUSSEN_HINWEIS = 'Der Ort liegt außerhalb von Bielefeld. Dazu hat Flowtown keine Angaben zu Barrierefreiheit, Toiletten, Behindertenparkplätzen, Haltestellen, Fahrplan und Ampeln mit Tonsignal. Sag das offen; behaupte nicht, dass es dort nichts gibt.';
+const AUSSEN_HINWEIS_OSM = 'Der Ort liegt außerhalb von Bielefeld. Hier hat Flowtown keine Daten der Stadt und keine Angaben zur Barrierefreiheit von Gebäuden. Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal stammen aus OpenStreetMap und sind nur so vollständig, wie Mitwirkende sie eingetragen haben. Sag das offen; fehlt etwas, heißt das nicht, dass es nichts gibt.';
+// Orte außerhalb von Bielefeld: Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal aus OpenStreetMap, in festen Rechtecken
+// von 0,01° (etwa 1,1 × 0,7 km, mit Rand), so erfährt Overpass nie das genaue Ziel; die Auswahl nach Entfernung passiert auf dem Server.
+const aussenCells = new Map();
+const AUSSEN_CELL = 0.01;
+async function aussenCell(a, b) {
+  const k = a + '_' + b, c = aussenCells.get(k);
+  if (c && Date.now() - c.t < 3 * 864e5) return c.list;
+  const bb = `${(a * AUSSEN_CELL - 0.005).toFixed(5)},${(b * AUSSEN_CELL - 0.007).toFixed(5)},${((a + 1) * AUSSEN_CELL + 0.005).toFixed(5)},${((b + 1) * AUSSEN_CELL + 0.007).toFixed(5)}`;
+  const q = `[out:json][timeout:25];(node["amenity"="toilets"](${bb});way["amenity"="toilets"](${bb});node["parking_space"="disabled"](${bb});way["parking_space"="disabled"](${bb});node["amenity"="parking"]["capacity:disabled"](${bb});way["amenity"="parking"]["capacity:disabled"](${bb});node["highway"="traffic_signals"]["traffic_signals:sound"](${bb}););out center tags;`;
+  const j = await Promise.race([overpass(q, 20000), new Promise((_, rej) => setTimeout(() => rej(new Error('zu langsam')), 22000))]);
+  const list = [];
+  for (const e of j.elements || []) {
+    const t = e.tags || {}, lat = isFinite(e.lat) ? e.lat : e.center && e.center.lat, lon = isFinite(e.lon) ? e.lon : e.center && e.center.lon;
+    if (!isFinite(lat) || !isFinite(lon)) continue;
+    const pos = [r5(lat), r5(lon)];
+    if (t.amenity === 'toilets') {
+      if (/^(private|no)$/.test(t.access || '')) continue;
+      list.push({ k: 'wc', pos, name: t.name || undefined, rollstuhlgerecht: t.wheelchair === 'yes' ? 'ja' : t.wheelchair === 'limited' ? 'eingeschränkt' : t.wheelchair === 'no' ? 'nein' : 'keine Angabe', kosten: t.fee === 'yes' ? 'ja' : t.fee === 'no' ? 'nein' : undefined, oeffnungszeiten: t.opening_hours || undefined });
+    } else if (t.highway === 'traffic_signals') {
+      if (t['traffic_signals:sound'] === 'yes') list.push({ k: 'ton', pos });
+    } else {
+      const n = parseInt(t['capacity:disabled'], 10);
+      list.push({ k: 'bpp', pos, name: t.name || 'Behindertenparkplatz', plaetze: n > 0 ? n : undefined });
+    }
+  }
+  aussenCells.set(k, { t: Date.now(), list });
+  if (aussenCells.size > 300) aussenCells.delete(aussenCells.keys().next().value);
+  return list;
+}
+async function osmAussen(pos, typ) {
+  if (!pos || !isFinite(pos[0]) || !ausserhalb(pos)) return null;
+  let all;
+  try { all = await aussenCell(Math.floor(pos[0] / AUSSEN_CELL), Math.floor(pos[1] / AUSSEN_CELL)); } catch (e) { return null; }
+  const near = (list, max) => list.map((x) => Object.assign({ entfernung_m: mAbs(pos, x.pos) }, x)).filter((x) => x.entfernung_m <= max).sort((a, b) => a.entfernung_m - b.entfernung_m)[0];
+  const strip = (x) => { if (!x) return undefined; const o = Object.assign({}, x); delete o.pos; delete o.k; o.entfernung_m = Math.round(o.entfernung_m / 10) * 10; o.quelle = 'OpenStreetMap'; return o; };
+  const wcs = all.filter((x) => x.k === 'wc'), out = {};
+  const mob = ['rollstuhl', 'rollator'].includes(typ);
+  out.rollstuhl_wc = strip(near(wcs.filter((w) => w.rollstuhlgerecht === 'ja'), 450)) || 'keines bis 450 m in OpenStreetMap eingetragen';
+  if (!mob) out.toilette = strip(near(wcs, 350)) || 'keine bis 350 m in OpenStreetMap eingetragen';
+  if (!typ || mob) out.behindertenparkplatz = strip(near(all.filter((x) => x.k === 'bpp'), 400)) || 'keiner bis 400 m in OpenStreetMap eingetragen';
+  const ton = all.filter((x) => x.k === 'ton' && mAbs(pos, x.pos) <= 300);
+  if (ton.length) out.ampeln_mit_tonsignal = { anzahl_bis_300_m: ton.length, quelle: 'OpenStreetMap' };
+  return out;
+}
 // Welche Angaben zum Gebäude für ein Profil fehlen? Die KI nennt sie offen („Dazu habe ich keine Angabe.“).
 const LUECKEN = {
   rollstuhl: [['Türbreite', (t) => /breit/i.test(t) && /\d/.test(t)], ['Größe des Aufzugs', (t) => /aufzug|lift/i.test(t) && /\d/.test(t)], ['stufenloser Eingang', (t) => /stufenlos|rampe|eingang/i.test(t)], ['rollstuhlgerechtes WC', (t) => /wc|toilett/i.test(t)]],
@@ -2704,9 +2750,9 @@ function planB(art, d) {
   if (art === 'stoerung' && d.items && d.items.length) out.push('Bei Umleitungen: Ersatzverkehr oder eine Nachbarhaltestelle nutzen, die Abfahrten dort zeigt das Werkzeug abfahrten_in_der_naehe.');
   return out.length ? out : undefined;
 }
-function zielInfo(pos, name, typ) {
+function zielInfo(pos, name, typ, aussen) {
   const dbAm = dbaAt(pos, 600);
-  if (ausserhalb(pos)) return dbAm ? { hinweis: AUSSEN_HINWEIS + ' Nur die Aufzüge und Rolltreppen am Bahnhof (bahnhof_aufzuege) sind bekannt.', bahnhof_aufzuege: dbAm } : { hinweis: AUSSEN_HINWEIS };
+  if (ausserhalb(pos)) return Object.assign({ hinweis: aussen ? AUSSEN_HINWEIS_OSM : AUSSEN_HINWEIS + (dbAm ? ' Nur die Aufzüge und Rolltreppen am Bahnhof (bahnhof_aufzuege) sind bekannt.' : '') }, dbAm ? { bahnhof_aufzuege: dbAm } : {}, aussen || {});
   const near = (list, max) => list.map((x) => Object.assign(x, { entfernung_m: mAbs(pos, x.pos) })).filter((x) => x.entfernung_m <= max).sort((a, b) => a.entfernung_m - b.entfernung_m)[0];
   const strip = (x) => { if (!x) return undefined; const o = Object.assign({}, x); delete o.pos; o.entfernung_m = Math.round(o.entfernung_m / 10) * 10; return o; };
   const out = {};
@@ -2777,7 +2823,7 @@ async function assistTool(name, a, ctx, act) {
     const nach = a.zurueck_nach ? await assistOrt(a.zurueck_nach, ctx) : (ctx.pos ? { name: 'Standort', pos: ctx.pos } : null);
     const out = { von: von.name, nach: nach ? nach.name : 'unbekannt', hinweis: 'Fahrplan, ohne Verspätungen und Ausfälle von später; 15 Minuten Reserve einplanen und vor Ort prüfen.' };
     out.letzte_abfahrten_heute = letzteAbfahrten(von.pos, 500) || 'keine Haltestelle mit Fahrplan bis 500 m bekannt';
-    const am = zielInfo(von.pos, von.name, ctx.typ);
+    const am = zielInfo(von.pos, von.name, ctx.typ, await osmAussen(von.pos, ctx.typ));
     if (am.bahnhof_aufzuege) out.bahnhof_aufzuege = am.bahnhof_aufzuege;
     out.plan_b = planB('ort', { typ: ctx.typ, am });
     if (nach && HERE_KEY) {
@@ -2804,14 +2850,14 @@ async function assistTool(name, a, ctx, act) {
     if (name === 'vergleich') {
       const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang);
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
-      const am = zielInfo(to.pos, to.name, ctx.typ), eg = ausserhalb(to.pos) ? null : await eingangNahe(to.pos, ctx.typ).catch(() => null);
+      const am = zielInfo(to.pos, to.name, ctx.typ, await osmAussen(to.pos, ctx.typ)), eg = await eingangNahe(to.pos, ctx.typ).catch(() => null);
       return Object.assign({ ziel: to.name, plan_b: planB('vergleich', { v, typ: ctx.typ, am }), eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer } : undefined }, v, { am_ziel: am });
     }
-    const eg = ausserhalb(to.pos) ? null : await eingangNahe(to.pos, ctx.typ).catch(() => null);
+    const eg = await eingangNahe(to.pos, ctx.typ).catch(() => null);
     const r = await checkZiel(f, eg ? eg.pos.map((x) => Math.round(x * 1e4) / 1e4) : t, 'fuss', true);
     const ck = await wegCheck(r.pts, 6000);
     act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: 'fuss' };
-    const amZ = zielInfo(to.pos, to.name, ctx.typ);
+    const amZ = zielInfo(to.pos, to.name, ctx.typ, await osmAussen(to.pos, ctx.typ));
     return { ziel: to.name, dauer_min: Math.round(r.dauer / 60), km: r.km, profil: ctx.typ || 'kein Profil', wichtig_fuer_profil: wichtigFuer(ctx.typ, ck) || undefined,
       plan_b: planB('weg', { ck, r, typ: ctx.typ, am: amZ }),
       eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer, stufen: eg.stufen, hinweis: 'Der Weg endet an diesem Eingang, nicht in der Gebäudemitte.' } : undefined,
@@ -2860,7 +2906,7 @@ async function assistTool(name, a, ctx, act) {
     if (!o) return { fehler: 'Diesen Ort habe ich nicht gefunden. Bitte genauer nennen, zum Beispiel mit Straße.' };
     // mehrdeutig: keine Entfernungen von einem geratenen Punkt, sondern nachfragen
     if (o.auswahl) return { gesucht: a.ort, mehrdeutig: true, auswahl: o.auswahl, hinweis: 'Mehrere Orte passen. Frag, welcher gemeint ist, und nenne zwei oder drei davon.' };
-    const am = zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ), eg = ausserhalb(o.pos) ? null : await eingangNahe(o.pos, ctx.typ).catch(() => null);
+    const am = zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ, await osmAussen(o.pos, ctx.typ)), eg = await eingangNahe(o.pos, ctx.typ).catch(() => null);
     return Object.assign({ ort: o.name, adresse: o.adresse, gefunden_ueber: o.gefunden_ueber, profil: ctx.typ || 'kein Profil', plan_b: planB('ort', { typ: ctx.typ, am }),
       eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer, stufen: eg.stufen, quelle: 'OpenStreetMap' } : undefined,
       angaben_fehlen: (am.gebaeude && am.gebaeude.angaben_fehlen) || am.angaben_fehlen }, am);
@@ -3178,7 +3224,7 @@ const server = http.createServer(async (req, res) => {
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       const from = coord(url.searchParams.get('from'), 3), to = coord(url.searchParams.get('to'), 4);
       const typ = profilTyp({ profil_typ: url.searchParams.get('profil') });
-      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ, url.searchParams.get('vorrang') === 'schnell' ? 'schnell' : ''), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ) }), origin);
+      return send(res, 200, Object.assign(await vergleichZiel(from, to, typ, url.searchParams.get('vorrang') === 'schnell' ? 'schnell' : ''), { am_ziel: zielInfo(to, url.searchParams.get('name') || '', typ, await osmAussen(to, typ)) }), origin);
     }
     if (req.method === 'GET' && (p === '/api/ort' || p === '/api/ziel')) {
       if (!HERE_KEY) return send(res, 503, { fehler: 'Ziel-Prüfung braucht einen HERE-Schlüssel auf dem Server.' }, origin);

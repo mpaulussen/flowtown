@@ -50,7 +50,7 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [x] F1a Ausweichroute bei Stau (0.92.0): bis zu drei Alternativen, Vorschlag, wenn eine kaum langsamer ist und den Stau umfährt; „Ausweichroute fahren“, Navigation bleibt beim Neuberechnen darauf
 - [x] F1b Stau aus dem fließenden Verkehr (HERE, Geschwindigkeit je Abschnitt); Halte ohne Ampel in der Fahrt als „Stau oder Halt ohne Ampel“ mit Dauer
 - [ ] F1c Nach weiteren Fahrten prüfen: Verzögerung im Stau eher unterschätzt; Grenzen für Stau und zäh anpassen
-- [ ] F2 Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal aus OpenStreetMap auch außerhalb von Bielefeld (am Ziel)
+- [x] F2 (0.97.0) Toiletten, Behindertenparkplätze und Ampeln mit Tonsignal aus OpenStreetMap auch außerhalb von Bielefeld (am Ziel); Eingänge überall aus OpenStreetMap
 - [x] F3 Fahrplan für Mönchengladbach aus dem DELFI-Datensatz (0.92.2): alle Busse und Bahnen dort, Züge mit Halten in der Region; App lädt den Fahrplan der Stadt, in der man ist; Assistenz nennt Abfahrten. Weitere Städte: Eintrag in STADT_FP (Server) und FP_STAEDTE (App)
 - [ ] F4 Quellen je Stadt sammeln (Open Data der Stadt, Barrierefrei-Datenbanken wie Wheelmap)
 - [x] F5 Öffentliche Toiletten der Stadt Bielefeld (48, davon 23 barrierefrei, mit Öffnungszeiten und Entgelt) in Karte, am Ziel und in der KI (0.92.1). Offen: Lizenz bei der Stadt klären (Open.NRW nennt „andere geschlossene Lizenz“)
@@ -68,3 +68,4 @@ Erledigt in 0.91.0: kein Ampel-Nachladen über etwa 80 km/h, Fahrten haben im Sp
 - [x] H3 (0.96.0) Abfahrten mit Echtzeit stehen auf Heute statt unter „Wohin?“
 - [x] H4 (0.96.1) „Mehr“ in vier Bereiche geordnet (Für dich, Daten und Datenschutz, Mitmachen und Testen, Hilfe); Profil und „Ansagen und Sprache“ getrennt
 - [ ] H5 Englisches Konzept auf den Stand 0.96 bringen
+- [x] F8 (0.97.0) Paderborn: Fahrplan aus DELFI (Eintrag in STADT_FP und FP_STAEDTE), A44 in LAGE_ROADS. Gefunden wurde keine offene Datenquelle der Stadt mit Toiletten oder Behindertenparkplätzen; offen: opendata-paderborn.de prüfen, Echtzeit der PaderSprinter
