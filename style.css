@@ -1571,3 +1571,7 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .hero-wohin #plan-card .plan-form input{font-size:18px;min-height:46px}
 .hero-wohin .plan-mic{width:44px;height:44px;border-radius:14px;background:#e3f2ea;color:#0f5c3c}
 .hero-wohin .plan-mic .ic{width:22px;height:22px}
+
+/* 0.99.2 Marke stärker: großes Ampel-Logo vor der Überschrift auf Heute */
+.hero-wohin .claim-mark{display:block;width:132px;height:auto;aspect-ratio:40/14;margin:2px 0 10px}
+@media (max-height:740px){.hero-wohin .claim-mark{width:96px;margin:0 0 4px}}
