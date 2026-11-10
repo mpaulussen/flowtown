@@ -2325,7 +2325,8 @@ Regeln:
 - Gibt es keine gemeldeten Aufzugsausfälle, heißt das nicht, dass alle Aufzüge gehen. Sag: „Dazu liegt keine Meldung vor, einen Live-Status gibt es für die Stadtbahn nicht.“ Sag nie „laut moBiel“ zu Aufzügen.
 - Die App sucht nicht nach Restaurants, Fahrdiensten, Taxis, Apotheken, Ärzten, Werkstätten oder Ladestationen. Verweise dafür nie auf „Wohin?“ oder „Mehr“. Standort teilen gibt es in Flowtown nicht; das macht das Handy zum Beispiel in der Nachrichten-App.
 - Angst vor dem Umsteigen, vor Menschenmengen oder vor dem Fahren, ohne Bedrohung: ein beruhigender Satz, dann Hilfe nennen (Umsteigezeit, Personal am Bahnhof). Dann kein 110 und kein „belebter Ort“.
-- „Letzte Bahn von A nach B“: nenne die Richtung genau so wie gefragt. Passt die Richtung der Abfahrten nicht, sag, dass du nur die letzten Abfahrten an der Haltestelle kennst.`;
+- „Letzte Bahn von A nach B“: nenne die Richtung genau so wie gefragt. Passt die Richtung der Abfahrten nicht, sag, dass du nur die letzten Abfahrten an der Haltestelle kennst.
+- Liefert ein Werkzeug nichts, sag „dazu habe ich nichts gefunden“, nie „es gibt keine“ (zum Beispiel keine barrierefreien Restaurants). Nenne einen Ort nur mit dem Typ, der zu seinem Namen passt: eine Staatsanwaltschaft oder ein Gericht ist keine Polizeiwache.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -2973,10 +2974,13 @@ async function assistTool(name, a, ctx, act) {
     return { bei: o.name, treffer: near(list) };
   }
   if (name === 'haltestelle') {
-    const stops = tramStops(), k = hstNorm(a.name);
+    const stops = tramStops(), k0 = hstNorm(a.name), k = k0 === 'hauptbahnhof' ? 'hbf' : k0;   // „Hauptbahnhof“ heißt im Fahrplan „Bielefeld Hbf“
     const fs1 = ctx.pos ? fpStadtAt(ctx.pos) : null;
     const d = fs1 ? fpData(fs1.id) : fpData();
-    const real = d && (d.stops.find((st) => hstNorm(st[1]) === k) || d.stops.find((st) => hstNorm(st[1]).startsWith(k)) || d.stops.find((st) => hstNorm(st[1]).includes(k)));
+    // Treffer der eigenen Stadt zuerst: sonst findet „Hauptbahnhof“ den Hauptbahnhof von Paderborn im Bielefelder Fahrplan
+    const stadtRe = new RegExp('^(' + ((d && d.stadtName) || 'Bielefeld') + '|Bi-)', 'i');
+    const finde = (list) => list.find((st) => hstNorm(st[1]) === k) || list.find((st) => hstNorm(st[1]).startsWith(k)) || list.find((st) => hstNorm(st[1]).includes(k));
+    const real = d && (finde(d.stops.filter((st) => stadtRe.test(st[1]))) || finde(d.stops));
     if (!real) return { fehler: 'Haltestelle nicht im Fahrplan' };
     const nm = real[1].replace(/^Bielefeld,\s*/, ''), kk = hstNorm(real[1]);
     const e = hst && hst.liste.find((x) => x.k === kk);
@@ -3162,9 +3166,11 @@ async function assist(body) {
   const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
   const gn = (frage.match(/\b(\d{1,3})\s*(kinder|personen|leute|schüler|menschen|rollstuhl)/i) || [])[1];
   const gruppe = (gn && Number(gn) >= 5) || /schulklasse|reisegruppe/i.test(frage) ? '\n\n(Gruppe ab fünf Personen: empfiehl nicht das Auto, sondern Bahn oder Bus mit stufenlosem Zugang.)' : '';
+  const zeitFrage = /\b(um|gegen|bis|ab)\s+(\d{1,2}(:\d{2})?\s*uhr|halb\s+\w+|\d{1,2}:\d{2})|\bmorgen\b|übermorgen|sonntag|samstag|montag|dienstag|mittwoch|donnerstag|freitag|wochenende|feiertag|neujahr|weihnacht|ostern/i.test(frage) && !/letzte|nachts|zurück|rückweg/i.test(frage);
+  const zeit = zeitFrage ? '\n\n(Die Werkzeuge kennen nur Zeiten ab jetzt. Sag das offen. Nenne keine Uhrzeit zum Losgehen und keinen Fahrplan für einen anderen Tag oder Feiertag.)' : '';
   const bsp = beispieleFuer(frage, ctx.typ);
   const vorbild = bsp.length ? '\nGeprüfte Beispiele der Redaktion zu ähnlichen Fragen. Übernimm daraus Aufbau, Ton, Länge und was wichtig ist; die Fakten (Zeiten, Entfernungen, Angaben) aber nur aus den Werkzeugen von jetzt, nie aus den Beispielen:\n' + bsp.map((b) => `Frage${b.profil ? ' (Profil ' + b.profil + ')' : ''}: ${b.frage}\nGute Antwort: ${b.antwort}`).join('\n') : '';
-  const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage + gruppe }];
+  const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage + gruppe + zeit }];
   const act = {}, used = [];
   ctx.used = used;
   // Nennt die Frage ein Ziel oder ein Thema mit Werkzeug, muss die erste Runde nachschlagen (sonst fragt Mistral oft unnötig nach)

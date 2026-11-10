@@ -159,6 +159,41 @@ Gesamtbild des Katalogs, wenn man die Wiederholung einrechnet (die übrigen 224 
 - Neue Regeln: günstigster Weg ohne Preise, Pünktlichkeit nur aus Abfahrten, keine Suche nach Restaurants, Fahrdiensten, Apotheken, Ärzten, Werkstätten oder Ladestationen in der App, Standort teilen macht das Handy, Angst vor dem Umsteigen ohne Bedrohung bekommt keine Sicherheitsregel, „letzte Bahn von A nach B“ in der gefragten Richtung.
 - Bei Fehler 400 von Mistral antwortet der Server einmal ohne Werkzeuge und schreibt den Grund ins Log (K157).
 
+## Vierter Lauf: zweiter Gesamtlauf nach der dritten Korrekturrunde
+
+| Ergebnis | Lauf 1 | Gesamtlauf 1 (Lauf 3) | Gesamtlauf 2 (Lauf 4) |
+| --- | ---: | ---: | ---: |
+| erfüllt | 163 | 190 | **199** |
+| teils | 53 | 73 | 65 |
+| nicht erfüllt | 26 | 7 | 8 |
+| falsch | 37 | 9 | **7** |
+| nicht prüfbar | 8 | 8 | 8 |
+
+Gegenüber dem letzten Gesamtlauf sind 24 Fragen besser, 16 schlechter und 247 gleich. Gegenüber dem ersten Lauf sind 36 Fragen mehr erfüllt und 30 weniger falsch.
+
+**Behoben:** K046 war noch Paderborn (jetzt Ursache gefunden, siehe unten), K117 („Dazu liegt keine Meldung vor, einen Live-Status gibt es für die Stadtbahn nicht“), K210 und K292 (keine erfundenen Funktionen mehr, „Standort teilen“ heißt jetzt „in der Nachrichten-App“, K209 ebenso), K018 („Zu Preisen habe ich keine Angabe“), K284 („Dazu habe ich keine Angabe“), K157 (kein Fehler 400 mehr), K186 („Hindernis melden“ auf der Karte), K216 („Geh zu einem belebten Ort, zum Beispiel der Haltestelle Rathaus. Ruf die 110.“), Ukrainisch (K252 jetzt auf Ukrainisch).
+
+**Die sieben falschen Antworten:**
+- **K008** erfindet „dein Startort ist nur 1 Minute entfernt“.
+- **K022** „geh um 21:28 los“ bei einem Termin um halb zehn.
+- **K034** „am Neujahrstag fährt der Bus nach Sonntagsfahrplan“, ohne Quelle.
+- **K032** „nach Brackwede“, aber Linie 2 Richtung Sieker.
+- **K046** Paderborn. **Ursache gefunden:** Im Fahrplan heißt der Bielefelder Hauptbahnhof „Bielefeld Hbf“. Die Suche nach „Hauptbahnhof“ fand deshalb den Hauptbahnhof von Paderborn, der ebenfalls im Fahrplan steht.
+- **K162** „es gibt keine barrierefreien Restaurants“ statt „ich habe nichts gefunden“.
+- **K215** nennt die Staatsanwaltschaft als Polizeiwache (die Ortssuche lieferte sie).
+
+**Wichtige Beobachtung: Die Antworten schwanken von Lauf zu Lauf.** K022 war im Lauf davor ehrlich („nur ab jetzt“), jetzt wieder falsch. K116 und K129 wechseln zwischen gut und ungenau. Ein einzelner Lauf zeigt also nicht, ob etwas dauerhaft gelöst ist. Was die KI nur nach einer Regel im Text tut, ist unzuverlässig. Zuverlässig wird es nur, wenn der Server es erzwingt.
+
+**Vierte Korrekturrunde (im Code, noch nicht auf dem Server geprüft):**
+- **K046:** „Hauptbahnhof“ wird als „Hbf“ gesucht, und Haltestellen der eigenen Stadt gehen vor.
+- **K022, K034, K021 und alle Zeitfragen:** Bei einer Uhrzeit, einem Wochentag, „morgen“ oder einem Feiertag hängt der Server der Frage einen Hinweis an („Die Werkzeuge kennen nur Zeiten ab jetzt …“). Das ist verlässlicher als die Regel im Text, weil es direkt an der Frage steht. Ausgenommen sind Fragen nach der letzten Bahn, nachts oder dem Rückweg.
+- **K162, K215:** neue Regel „dazu habe ich nichts gefunden“ statt „es gibt keine“ und Ortstypen nur nach Namen.
+
+**Was ich nicht verbessern kann, ohne die App zu ändern:**
+- K001, K004, K009, K317: die 100-m-Rundung des Standorts (Entscheidung offen).
+- K146, K147: Radwege und Radweganteil (E10).
+- Zeitfragen (E1): die Assistenz bleibt bei „nur ab jetzt“.
+
 ## So prüfen wir, ob es besser geworden ist
 
 Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):

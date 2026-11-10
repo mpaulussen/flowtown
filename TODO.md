@@ -90,7 +90,9 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [x] K1c (10.11.) Zweite Korrekturrunde im Code (Aufzug am Ort, Fährt-noch, Steigung, Anschluss, Verfolgung, Startbildschirm, Gruppen-Hinweis), noch nicht auf dem Server
 - [x] K1d (10.11.) Gesamtlauf mit 287 Fragen: 190 erfüllt, 73 teils, 7 nicht erfüllt, 9 falsch, 8 nicht prüfbar; Rückschritte bei K018, K032, K046, K102, K116, K117, K157, K173, K210, K292 u. a.
 - [x] K1e (10.11.) Dritte Korrekturrunde im Code (Haltestelle der richtigen Stadt, leere Aufzugsmeldungen, sieben neue Regeln, Fehler 400)
-- [ ] K1f Server aktualisieren, Gesamtlauf wiederholen; Ziel: höchstens 3 falsch, keine Rückschritte
+- [x] K1f (10.11.) Zweiter Gesamtlauf: 199 erfüllt, 65 teils, 8 nicht erfüllt, 7 falsch, 8 nicht prüfbar; 24 besser, 16 schlechter, 247 gleich
+- [x] K1g (10.11.) Vierte Korrekturrunde im Code: „Hauptbahnhof“ = Hbf der eigenen Stadt (K046), Zeit-Hinweis an der Frage bei Uhrzeit, Wochentag, Feiertag, Regel „nichts gefunden“ statt „gibt es nicht"
+- [ ] K1h Server aktualisieren, Gesamtlauf wiederholen; Ziel: höchstens 3 falsch. Wichtig: Läufe schwanken, wichtige Fälle (Jahnplatz-Aufzug, Notruf, Telefonnummern, Zeitfragen) mehrfach stellen und Prüfregeln im Server (E9)
 - [ ] K2 App-Zeilen (Prüfweg App) am Handy durchgehen, Ergebnis in die Spalten Status und Ergebnis
 - [ ] K3 Lücken auswerten: erst `falsch` (erfundene Auskünfte), dann `nicht erfüllt` nach Zahl der betroffenen Profile; daraus die nächsten Entwicklungsschritte
 - [ ] K4 Beobachtungs-Zeilen mit echten Personen und Geräten (VoiceOver, TalkBack, Dialekt, Display aus)
