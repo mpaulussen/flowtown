@@ -81,3 +81,11 @@ Konzept: Abschnitt „Telefon-Assistenz“ im Gesamtkonzept. Eine Rufnummer, unt
 - [ ] J5 Datenschutz: Hinweis am Anfang, keine Aufnahme, keine Speicherung der Nummer, Datenschutzseite ergänzen
 - [ ] J6 Test mit älteren Menschen und Menschen mit Hörbehinderung (Telefonklang, Dialekt, Hörgerät), Messgrößen wie bei der Assistenz
 
+## K. Prüfkatalog: Fragen und Erwartungen der Nutzenden
+Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gruppen, 287 davon als Fragen an die Assistenz).
+- [x] K0 (10.11.) Katalog angelegt, mit Erwartung, Prüfweg und Vermutung je Eintrag; `testlauf` reicht Gruppe und Erwartung in der Ergebnistabelle durch
+- [ ] K1 Testlauf auf dem Server: `node flowtown-server.mjs testlauf pruefkatalog.csv`, Antworten bewerten (gut, teils, falsch)
+- [ ] K2 App-Zeilen (Prüfweg App) am Handy durchgehen, Ergebnis in die Spalten Status und Ergebnis
+- [ ] K3 Lücken auswerten: erst `falsch` (erfundene Auskünfte), dann `nicht erfüllt` nach Zahl der betroffenen Profile; daraus die nächsten Entwicklungsschritte
+- [ ] K4 Beobachtungs-Zeilen mit echten Personen und Geräten (VoiceOver, TalkBack, Dialekt, Display aus)
+- [ ] K5 Nach den ersten Pilot-Wochen echte Fragen aus der Nutzung (ohne personenbezogene Daten) in den Katalog aufnehmen

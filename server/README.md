@@ -230,7 +230,7 @@ Die Assistenz lernt aus geprüften Beispielen: Zu jeder neuen Frage bekommt Mist
    ```bash
    cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs testlauf'
    ```
-   Ergebnis: `/var/lib/flowtown/testlauf/testlauf-<Datum>.csv` mit Frage, Profil, Antwort, benutzten Werkzeugen und leeren Spalten zum Ausfüllen. Eigene Fragen: eine eigene CSV mit denselben Spalten (`Nr;Thema;Profil;Frage;Breite;Länge`) als zusätzlichen Pfad angeben.
+   Ergebnis: `/var/lib/flowtown/testlauf/testlauf-<Datum>.csv` mit Frage, Profil, Antwort, benutzten Werkzeugen und leeren Spalten zum Ausfüllen. Eigene Fragen: eine eigene CSV mit denselben Spalten (`Nr;Thema;Profil;Frage;Breite;Länge`) als zusätzlichen Pfad angeben. Den großen Prüfkatalog (`pruefkatalog.csv`, 328 Einträge, siehe `PRUEFKATALOG.md`) startet man so: `node flowtown-server.mjs testlauf pruefkatalog.csv`; dessen Spalten „Gruppe“ und „Erwartung“ stehen dann in der Ergebnistabelle.
 2. **Korrigieren** in Google Tabellen oder Excel (Datei importieren, Trennzeichen Semikolon):
    - Spalte **Bewertung**: `gut`, `teils` oder `falsch`.
    - Spalte **Korrigierte Antwort**: so, wie Flowtown hätte antworten sollen (höchstens drei Sätze, gut zum Vorlesen). Leer lassen, wenn die Antwort gut war.

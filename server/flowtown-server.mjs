@@ -3424,7 +3424,8 @@ if (cli === 'faq') {
     const rows = parseCsv(fs.readFileSync(src, 'utf8'));
     const head = rows[0].map((h) => h.trim().toLowerCase()), ci = (n) => head.indexOf(n);
     const q = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
-    const out = ['Nr;Thema;Profil;Frage;Antwort;Werkzeuge;Beispiele genutzt;Sekunden;Bewertung;Korrigierte Antwort;Notiz'];
+    // Spalten „Gruppe“ und „Erwartung“ (aus pruefkatalog.csv) laufen mit, damit sich die Antworten gleich gegen die Erwartung prüfen lassen
+    const out = ['Nr;Thema;Profil;Frage;Antwort;Werkzeuge;Beispiele genutzt;Sekunden;Bewertung;Korrigierte Antwort;Notiz;Gruppe;Erwartung'];
     for (const r of rows.slice(1)) {
       const nr = r[ci('nr')], thema = r[ci('thema')] || '', prof = (r[ci('profil')] || '').trim(), frage = (r[ci('frage')] || '').trim();
       const la = Number(r[ci('breite')]), lo = Number(r[ci('länge')] != null ? r[ci('länge')] : r[ci('laenge')]);
@@ -3435,7 +3436,7 @@ if (cli === 'faq') {
       catch (e) { antwort = 'FEHLER: ' + e.message; }
       const sek = Math.round((Date.now() - t0) / 100) / 10;
       console.log(`${nr} ${thema}: ${antwort.slice(0, 100)}${antwort.length > 100 ? ' …' : ''}  [${werkzeuge || 'ohne Werkzeug'}]`);
-      out.push([nr, thema, prof, frage, antwort, werkzeuge, nb, String(sek).replace('.', ','), '', '', ''].map(q).join(';'));
+      out.push([nr, thema, prof, frage, antwort, werkzeuge, nb, String(sek).replace('.', ','), '', '', '', r[ci('gruppe')] || '', r[ci('erwartung')] || ''].map(q).join(';'));
       await new Promise((res) => setTimeout(res, 1200));   // Mistral und HERE nicht drängeln
     }
     const dir = path.join(DATA_DIR, 'testlauf');
