@@ -86,9 +86,11 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [x] K0 (10.11.) Katalog angelegt, mit Erwartung, Prüfweg und Vermutung je Eintrag; `testlauf` reicht Gruppe und Erwartung in der Ergebnistabelle durch
 - [x] K1 (10.11.) Erster Testlauf mit 287 Fragen, nach Konsolenausgabe bewertet: 163 erfüllt, 53 teils, 26 nicht erfüllt, 37 falsch, 8 nicht prüfbar (`PRUEFERGEBNIS-2026-11-10.md`)
 - [x] K1a (10.11.) Server: Texte als Liste, unbekannte Werkzeugnamen, Wiederholungen, Telefonnummern, Aufzug-Hinweis, elf neue Regeln im Systemtext (noch nicht auf dem Server geprüft)
-- [ ] K1b Server aktualisieren, Testlauf nur mit `ergebnis:falsch,nicht erfüllt` wiederholen, danach den ganzen Katalog
+- [x] K1b (10.11.) Wiederholung der 63 Fehler: 16 falsch und 11 nicht erfüllt sind jetzt erfüllt, 3 bleiben falsch (K124, K284, K313), 8 nicht erfüllt
+- [x] K1c (10.11.) Zweite Korrekturrunde im Code (Aufzug am Ort, Fährt-noch, Steigung, Anschluss, Verfolgung, Startbildschirm, Gruppen-Hinweis), noch nicht auf dem Server
+- [ ] K1d Server aktualisieren und den ganzen Katalog laufen lassen (287 Fragen), danach Ergebnisse neu eintragen
 - [ ] K2 App-Zeilen (Prüfweg App) am Handy durchgehen, Ergebnis in die Spalten Status und Ergebnis
 - [ ] K3 Lücken auswerten: erst `falsch` (erfundene Auskünfte), dann `nicht erfüllt` nach Zahl der betroffenen Profile; daraus die nächsten Entwicklungsschritte
 - [ ] K4 Beobachtungs-Zeilen mit echten Personen und Geräten (VoiceOver, TalkBack, Dialekt, Display aus)
 - [ ] K5 Nach den ersten Pilot-Wochen echte Fragen aus der Nutzung (ohne personenbezogene Daten) in den Katalog aufnehmen
-- [ ] K6 Entwicklungsliste aus dem ersten Testlauf: E1 Fahrplan mit Zeitpunkt, E2 Aufzugsstatus der Stadtbahn (moBiel), E3 Wetter, E4 Höhenprofil, E5 Testlauf mit Auswertung und Verlauf, E6 Standort als Straße (Datenschutz klären), E7 Sprachen prüfen, E8 fehlende Datenquellen (Bänke, Trinkwasser, Apotheken, Ärzte, Stellplätze, Ladeorte), E9 zweite Prüfung der Antworten
+- [ ] K6 Entwicklungsliste aus dem ersten Testlauf: E1 Fahrplan mit Zeitpunkt, E2 Aufzugsstatus der Stadtbahn (moBiel), E3 Wetter, E4 Höhenprofil, E5 Testlauf mit Auswertung und Verlauf, E6 Standort als Straße (Datenschutz klären), E7 Sprachen prüfen, E8 fehlende Datenquellen (Bänke, Trinkwasser, Apotheken, Ärzte, Stellplätze, Ladeorte), E9 zweite Prüfung der Antworten, E10 Radweganteil für die Assistenz (K147)

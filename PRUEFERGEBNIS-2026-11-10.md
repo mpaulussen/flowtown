@@ -84,6 +84,41 @@ Alle Änderungen stehen in `server/flowtown-server.mjs`. Ich habe sie mit einem 
 
 **Offene Entscheidung:** Die App rundet den Standort auf 100 m, bevor er an den Server geht. Deshalb kann die Assistenz nicht sagen „du stehst in der Obernstraße“. Möglich wäre, die Straße auf dem Handy zu bestimmen und nur den Straßennamen mitzuschicken. Das ist ein Datenschutzthema und gehört in die Datenschutzerklärung. Ich habe das nicht geändert.
 
+## Zweiter Lauf: nur die 63 Fehler vom ersten Lauf (nach den ersten Korrekturen)
+
+Von den 37 `falsch` und 26 `nicht erfüllt` sind nach den Änderungen vom Vormittag:
+
+| vorher → nachher | Fragen |
+| --- | ---: |
+| falsch → erfüllt | 16 |
+| falsch → teils | 18 |
+| falsch → falsch | 3 (K124, K284, K313) |
+| nicht erfüllt → erfüllt | 11 |
+| nicht erfüllt → teils | 7 |
+| nicht erfüllt → nicht erfüllt | 8 (K004, K009, K126, K139, K147, K216, K241, K327) |
+
+Gesamtbild des Katalogs, wenn man die Wiederholung einrechnet (die übrigen 224 Fragen sind noch vom ersten Lauf): **190 erfüllt, 78 teils, 8 nicht erfüllt, 3 falsch, 8 nicht prüfbar.** Ob die übrigen Fragen nach den neuen Regeln noch genauso gut sind, zeigt nur ein vollständiger Lauf.
+
+**Behoben (sichtbar im Lauf):** der Fehler „[object Object]“ (K181), alle Fließtext-als-Werkzeugname-Fälle, die erfundenen Telefonnummern, die erfundenen Menüpunkte (stattdessen „Hindernis melden“ auf der Karte, K186, K187), Notruftext bei „Hol mich ab“ und Beschwerde, Türkisch (K250), die Zeitfragen (jetzt ehrlich „kenne nur jetzt“), die Aufzug-Antwort bei K117 (kein „laut moBiel alle in Betrieb“ mehr).
+
+**Noch nicht gut:**
+- **K284** erfindet weiter den „Ostbahnhof Bielefeld“ mit DB-Status. Der Fehler kommt vom Werkzeug `oepnv_stoerungen`, das keinen Ort prüft.
+- **K124** „Fährt der Bus 25 noch?“ → „fährt laut Fahrplan“, geprüft wurde nur, ob eine Störung gemeldet ist.
+- **K313** empfiehlt weiter das Auto für 20 Kinder mit zwei Rollstühlen.
+- **K046** widerspricht sich am Hauptbahnhof („kein Live-Status“ und „laut DB in Betrieb“).
+- **K149** sagt „keine steilen Stücke“. Die Steigungsdaten aus OpenStreetMap sind lückenhaft, „keine steilen Stücke“ heißt dort „keine Angabe“.
+- **K251, K252** (Arabisch, Ukrainisch) werden verstanden, aber auf Deutsch beantwortet.
+
+**Danach geändert (zweite Runde, noch nicht auf dem Server geprüft):**
+- Fragen zu einem bestimmten Aufzug gehen an das Werkzeug `haltestelle` und den DB-Status. Unbekannte Orte heißen „den Ort kenne ich nicht“. Am Hauptbahnhof gibt es beides.
+- „Fährt die Linie noch?“ geht an `abfahrten_in_der_naehe`, nicht an `oepnv_stoerungen`.
+- Steigung nur, wenn `weg_check` sie liefert, sonst „keine Angabe“.
+- Verpasster Anschluss: nächste Abfahrten nennen. Verfolgung oder Bedrohung: belebter Ort und 110 statt 112. „Gefahr“ steht nicht mehr in der 112-Regel.
+- Startbildschirm für iPhone und Android, Antwort auf Fehlermeldungen, Maße ohne Werkzeugangabe ohne Rückfrage.
+- Gruppen ab fünf Personen: Der Server hängt der Frage einen Hinweis an, nicht das Auto zu empfehlen.
+
+**Neu in der Entwicklungsliste:** E10 Radweganteil für die Assistenz (die App rechnet ihn nur lokal, K147).
+
 ## So prüfen wir, ob es besser geworden ist
 
 Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):

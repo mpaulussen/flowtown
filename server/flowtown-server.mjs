@@ -2278,7 +2278,7 @@ Regeln:
 - Ampeln mit Tonsignal in der Nähe eines Orts: Werkzeug ampeln_mit_ton. Sag nie, ob eine Ampel gerade grün ist.
 - Fragen mit „in einfacher Sprache“: sehr kurze Sätze, ein Gedanke je Satz, keine Fremdwörter.
 - Duze immer, auch im Notfall.
-- Notfall, Sturz, Gefahr: zuerst „Ruf sofort den Notruf 112 an“, dazu, dass das rote Plus oben in Flowtown den Notruf öffnet und die App nora hilft, wenn Sprechen nicht geht. Keine medizinischen Ratschläge.
+- Notfall, Sturz, Verletzung: zuerst „Ruf sofort den Notruf 112 an“, dazu, dass das rote Plus oben in Flowtown den Notruf öffnet und die App nora hilft, wenn Sprechen nicht geht. Keine medizinischen Ratschläge.
 - „Wann fährt die nächste Bahn oder der nächste Bus?“ ohne Haltestelle: Werkzeug abfahrten_in_der_naehe, nicht nachfragen.
 - Universität, Hauptbahnhof, Rathaus, Jahnplatz, Kunsthalle, Stadttheater und alle Haltestellennamen sind eindeutige Ziele. Frag nur nach, wenn ein Werkzeug „mehrdeutig“ oder „auswahl“ meldet oder kein Ziel genannt ist.
 - Fehlt der Standort (Werkzeug meldet „Kein Standort“), frag nach dem Start: Haltestelle, Straße oder Adresse.
@@ -2311,7 +2311,15 @@ Regeln:
 - Gruppen ab fünf Personen empfiehlst du nicht das Auto.
 - Wird die Frage auf Englisch, Türkisch, Arabisch, Ukrainisch oder in einer anderen Sprache gestellt, antworte in kurzen Sätzen in dieser Sprache; Orts- und Liniennamen bleiben unverändert.
 - Über Flowtown: Prototyp von barrierefrAI (Dr. Markus Paulußen), kostenlos, keine offizielle App von moBiel. Zur Beantwortung gehen Fragen an die KI von Mistral, ohne Training mit den Daten. Quellen: Fahrplan von DELFI (Sollfahrplan mit Verspätungen), moBiel (Umleitungen), DB (Aufzüge an Bahnhöfen), Bielefeld barrierefrei erleben (Bethel), Stadt Bielefeld (Toiletten, Parkplätze, Baustellen), OpenStreetMap, HERE (Wege und Verkehr). Sag nie, dass alles „in Echtzeit“ ist: nur Verspätungen und Baustellen sind nahe an Echtzeit.
-- Bei Angst, Unruhe oder Unsicherheit zuerst ein ruhiger Satz, dann eine Hilfe. Keine kühlen Absagen: statt „Dazu kann ich nichts sagen“ sag, was die Person stattdessen tun kann.`;
+- Bei Angst, Unruhe oder Unsicherheit zuerst ein ruhiger Satz, dann eine Hilfe. Keine kühlen Absagen: statt „Dazu kann ich nichts sagen“ sag, was die Person stattdessen tun kann.
+- Fragen zum Aufzug an einem bestimmten Bahnhof oder einer Haltestelle: Werkzeug haltestelle (Aufzug vorhanden) und bei Bahnhöfen der DB db_aufzuege_ausser_betrieb. Bestätige nur Orte, die ein Werkzeug findet; ein Ort, den kein Werkzeug kennt, heißt „den Ort kenne ich nicht“. Am Hauptbahnhof gibt es beides: den Status der DB und die Haltestelle der Stadtbahn ohne Live-Status.
+- „Fährt der Bus oder die Bahn noch?“, „Fährt die Linie X?“: Werkzeug abfahrten_in_der_naehe, nicht oepnv_stoerungen. Gibt es die Linie dort nicht, sag, dass du sie nicht findest. Sag „laut Fahrplan“ nur, wenn ein Werkzeug Abfahrten geliefert hat.
+- Steigung nennst du nur, wenn weg_check sie ausdrücklich liefert. Fehlt sie, sag „zur Steigung habe ich keine Angabe“, nie „keine steilen Stücke“ oder „flach“.
+- Hat jemand den Anschluss verpasst oder fällt eine Bahn aus: Werkzeug abfahrten_in_der_naehe und die nächsten Abfahrten nennen, nicht nur auf Personal verweisen.
+- Wird jemand verfolgt oder bedroht, oder fragt nach einer sicheren Stelle: zuerst „Geh zu einem belebten Ort, zum Beispiel einer Haltestelle oder einem Geschäft, und ruf die 110“, nenne mit haltestellen_in_der_naehe einen Ort in der Nähe. Nicht mit 112 anfangen.
+- Startbildschirm: iPhone: in Safari auf das Teilen-Symbol tippen, dann „Zum Home-Bildschirm“. Android: in Chrome im Menü „Zum Startbildschirm hinzufügen“.
+- Meldet die Person einen Fehler in deiner Antwort: kurz entschuldigen, danken und raten, wichtige Angaben vor Ort zu prüfen. Keine Rückfrage nach einem Ziel.
+- Maße, Breiten, Dauer oder Regeln zu Parkplätzen, Rampen oder Türen ohne Werkzeugangabe: „dazu habe ich keine Angabe“, keine Rückfrage nach dem Ziel.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -2906,7 +2914,7 @@ async function assistTool(name, a, ctx, act) {
     const bahn = alle.some((it) => it.bahn) || linien.some((l) => /^[1-4]$/.test(l));
     const dbAus = dba ? dba.anlagen.filter((x) => inBox(x[5], x[6], 0.05) && /^(notAvailable|partiallyAvailable)$/.test(dbaState(x[0]) || '')).map((x) => `${x[2]}: ${x[1] === 'aufzug' ? 'Aufzug' : 'Rolltreppe'} ${x[4]} ${DBA_TEXT[dbaState(x[0])]}`) : null;
     const planb = planB('stoerung', { items: lin ? items : [], typ: ctx.typ });
-    return { plan_b: planb, stadtbahn_aufzuege: 'Für aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status von moBiel; nur gemeldete Ausfälle aus Flowtown (aufzuege_gemeldet). Nie „alle in Betrieb“ sagen.', db_hinweis: 'db_aufzuege_ausser_betrieb gilt nur für Aufzüge der DB an Bahnhöfen, nicht für die Stadtbahn.', anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
+    return { plan_b: planb, stadtbahn_aufzuege: 'Für Aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status von moBiel; nur gemeldete Ausfälle aus Flowtown (aufzuege_gemeldet). Nie „alle in Betrieb“ sagen. Am Hauptbahnhof kommt der Status der DB-Aufzüge dazu (db_aufzuege_ausser_betrieb).', db_hinweis: 'db_aufzuege_ausser_betrieb gilt nur für Aufzüge der DB an Bahnhöfen, nicht für die Stadtbahn.', anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
       meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug, quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
@@ -3139,9 +3147,11 @@ async function assist(body) {
   const verlauf = (Array.isArray(body.verlauf) ? body.verlauf : []).slice(-6).filter((m) => m && (m.role === 'user' || m.role === 'assistant')).map((m) => ({ role: m.role, content: clip(m.content, 400) }));
   // bei Rückfragen ein kurzer Hinweis direkt an der Frage: daran halten sich Sprachmodelle zuverlässiger als an den Auftrag allein
   const nachfrage = verlauf.some((m) => m.role === 'assistant') ? '\n\n(Rückfrage im Gespräch: nur das Neue beantworten, nichts aus deinen früheren Antworten wiederholen.)' : '';
+  const gn = (frage.match(/\b(\d{1,3})\s*(kinder|personen|leute|schüler|menschen|rollstuhl)/i) || [])[1];
+  const gruppe = (gn && Number(gn) >= 5) || /schulklasse|reisegruppe/i.test(frage) ? '\n\n(Gruppe ab fünf Personen: empfiehl nicht das Auto, sondern Bahn oder Bus mit stufenlosem Zugang.)' : '';
   const bsp = beispieleFuer(frage, ctx.typ);
   const vorbild = bsp.length ? '\nGeprüfte Beispiele der Redaktion zu ähnlichen Fragen. Übernimm daraus Aufbau, Ton, Länge und was wichtig ist; die Fakten (Zeiten, Entfernungen, Angaben) aber nur aus den Werkzeugen von jetzt, nie aus den Beispielen:\n' + bsp.map((b) => `Frage${b.profil ? ' (Profil ' + b.profil + ')' : ''}: ${b.frage}\nGute Antwort: ${b.antwort}`).join('\n') : '';
-  const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage }];
+  const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage + gruppe }];
   const act = {}, used = [];
   ctx.used = used;
   // Nennt die Frage ein Ziel oder ein Thema mit Werkzeug, muss die erste Runde nachschlagen (sonst fragt Mistral oft unnötig nach)
