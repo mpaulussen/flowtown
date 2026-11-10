@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.98.0';
+  const VERSION = '0.98.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1993,7 +1993,7 @@
       assistLast = r.antwort;
       say(r.antwort, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : null);
     } catch (e) {
-      const msg = /eingerichtet/.test(e.message) ? 'Die Assistenz ist auf dem Server noch nicht eingerichtet.' : /keine weiteren/.test(e.message) ? e.message : 'Die Assistenz ist gerade nicht erreichbar.';
+      const msg = /eingerichtet/.test(e.message) ? 'Die Assistenz ist auf dem Server noch nicht eingerichtet.' : /keine weiteren/.test(e.message) ? e.message : (e.name === 'AbortError' ? 'Das dauert gerade länger als gewöhnlich. Versuch es bitte noch einmal.' : 'Die Assistenz ist gerade nicht erreichbar.');
       assistAct = null;
       showAssist(shown, msg);
       assistLast = msg;
@@ -2034,19 +2034,36 @@
       tipps: computeTips().slice(0, 5).map((t) => `${plain(t.head || t.title)}: ${plain(t.short)}`.replace(/(Ampel bei )?-?\d{1,3}[.,]\d{3,},?\s*-?\d{1,3}[.,]\d{3,}/g, 'Ampel ohne Namen').slice(0, 200))
     };
   }
-  let assistBig = false;
+  let assistBig = false, assistTick = null, assistT0 = 0;
+  // Großer Sprachmodus wie ein Anruf: Zustand (zuhören, nachdenken, sprechen), Gesprächszeit, roter Hörer zum Auflegen
+  function assistLoop() {
+    const el = $('#assist');
+    if (el.hidden || !assistBig) { clearInterval(assistTick); assistTick = null; delete el.dataset.state; return; }
+    const st = recog ? 'listen' : assistBusy ? 'think' : (canSpeak && speechSynthesis.speaking) ? 'speak' : 'idle';
+    el.dataset.state = st;
+    const t = { listen: 'Ich höre zu …', think: 'Ich denke nach …', speak: 'Ich spreche …', idle: SR ? 'Tippe auf den grünen Knopf und sprich.' : '' }[st];
+    const cs = $('#call-state'); if (cs && cs.textContent !== t) cs.textContent = t;
+    const ct = $('#call-time'); if (ct) { ct.hidden = false; const x = Math.floor((Date.now() - assistT0) / 1000); ct.textContent = Math.floor(x / 60) + ':' + String(x % 60).padStart(2, '0'); }
+  }
+  function assistLoopStart(fresh) {
+    if (fresh || !assistT0) assistT0 = Date.now();
+    clearInterval(assistTick); assistTick = setInterval(assistLoop, 400); assistLoop();
+  }
   const sprechIcon = () => (settings.sprechIcon === 'phone' ? 'handset' : 'mic');
   function showAssist(frage, antwort) {
     const el = $('#assist');
     el.classList.toggle('big', assistBig);
     el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
-    el.innerHTML = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
+    el.innerHTML = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
+      ${assistBig ? '<p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>' : ''}
       ${frage ? `<p class="assist-q">${esc(frage)}</p>` : ''}
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
       <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>
+      ${assistBig ? `<button type="button" class="hangup" data-assist="close" aria-label="Auflegen und Gespräch beenden">${ic('handset')}<span>Auflegen</span></button>` : ''}
       <p class="small muted">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>`;
     el.hidden = false;
+    if (assistBig && !assistTick) assistLoopStart();
     micStatus('');
   }
   const TIPS_RE = /(lies|lese|sag|nenn)\b.*\btipps?\b|\btipps? vor(lesen)?\b/;
@@ -4090,9 +4107,10 @@
   function openAssistEmpty(opts) {
     unlockSpeech(); pendingIntent = null; assistAct = null;
     assistBig = !!(opts && opts.big) || !!settings.sprechGross;
-    showAssist('', assistBig && SR ? 'Tippe auf den großen Knopf und sprich. Ich höre zu.' : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
+    showAssist('', assistBig && SR ? 'Hallo! Wobei kann ich helfen?' : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
     const ex = askExamples('start').ex, form = $('#assist .assist-form');
     if (form && ex.length) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Beispielfragen">${ex.map((x) => `<button type="button" class="vf-chip" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('')}</div>`);
+    if (assistBig) assistLoopStart(true);
     if (SR && settings.voiceIn && !(opts && opts.launch)) listen();
   }
   function askBar(name) {
@@ -4499,7 +4517,7 @@
   // ---------- Flowtown-Server: Ebene „Wir“, KI-Einschätzung, Meldungen ----------
   const apiBase = () => (settings.server.url || '').trim().replace(/\/+$/, '');
   async function api(pathPart, opts) {
-    const res = await fetchWithTimeout(apiBase() + pathPart, opts || {}, pathPart === '/api/ki' ? 45000 : pathPart.startsWith('/api/vergleich') ? 30000 : 15000);
+    const res = await fetchWithTimeout(apiBase() + pathPart, opts || {}, pathPart === '/api/ki' || pathPart === '/api/assist' ? 45000 : pathPart.startsWith('/api/vergleich') ? 30000 : 15000);
     const j = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(j.fehler || 'HTTP ' + res.status);
     return j;
@@ -6617,7 +6635,7 @@
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;
     const a = b.dataset.assist;
-    if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog && recog.auto) recog.abort(); micStatus(''); }
+    if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog) recog.abort(); micStatus(''); }
     else if (a === 'mic') { unlockSpeech(); listen(); }
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (a === 'ziel' && assistAct) {

@@ -2376,6 +2376,8 @@ async function eingCell(a, b) {
   if (eingCells.size > 300) eingCells.delete(eingCells.keys().next().value);
   return list;
 }
+// Antwort höchstens ms abwarten, sonst der Ersatzwert; die Abfrage läuft im Hintergrund weiter und landet im Speicher
+const zuerst = (p, ms, ersatz = null) => Promise.race([Promise.resolve(p).catch(() => ersatz), new Promise((r) => setTimeout(() => r(ersatz), ms))]);
 async function eingangNahe(pos, typ) {
   if (!pos || !isFinite(pos[0])) return null;
   const mob = ['rollstuhl', 'rollator'].includes(typ);
@@ -2858,16 +2860,18 @@ async function assistTool(name, a, ctx, act) {
     if (!from) return { fehler: 'Kein Standort; bitte einen Startort nennen' };
     const f = from.pos.map((x) => Math.round(x * 1000) / 1000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
     if (name === 'vergleich') {
+      const pOsm = osmAussen(to.pos, ctx.typ, 5000), pEg = zuerst(eingangNahe(to.pos, ctx.typ), 5000);   // gleichzeitig mit dem Vergleich, nicht danach
       const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang);
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
-      const am = zielInfo(to.pos, to.name, ctx.typ, await osmAussen(to.pos, ctx.typ)), eg = await eingangNahe(to.pos, ctx.typ).catch(() => null);
+      const am = zielInfo(to.pos, to.name, ctx.typ, await pOsm), eg = await pEg;
       return Object.assign({ ziel: to.name, plan_b: planB('vergleich', { v, typ: ctx.typ, am }), eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer } : undefined }, v, { am_ziel: am });
     }
-    const eg = await eingangNahe(to.pos, ctx.typ).catch(() => null);
+    const pOsm = osmAussen(to.pos, ctx.typ, 5000);
+    const eg = await zuerst(eingangNahe(to.pos, ctx.typ), 5000);
     const r = await checkZiel(f, eg ? eg.pos.map((x) => Math.round(x * 1e4) / 1e4) : t, 'fuss', true);
     const ck = await wegCheck(r.pts, 6000);
     act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: 'fuss' };
-    const amZ = zielInfo(to.pos, to.name, ctx.typ, await osmAussen(to.pos, ctx.typ));
+    const amZ = zielInfo(to.pos, to.name, ctx.typ, await pOsm);
     return { ziel: to.name, dauer_min: Math.round(r.dauer / 60), km: r.km, profil: ctx.typ || 'kein Profil', wichtig_fuer_profil: wichtigFuer(ctx.typ, ck) || undefined,
       plan_b: planB('weg', { ck, r, typ: ctx.typ, am: amZ }),
       eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer, stufen: eg.stufen, hinweis: 'Der Weg endet an diesem Eingang, nicht in der Gebäudemitte.' } : undefined,
@@ -2916,7 +2920,8 @@ async function assistTool(name, a, ctx, act) {
     if (!o) return { fehler: 'Diesen Ort habe ich nicht gefunden. Bitte genauer nennen, zum Beispiel mit Straße.' };
     // mehrdeutig: keine Entfernungen von einem geratenen Punkt, sondern nachfragen
     if (o.auswahl) return { gesucht: a.ort, mehrdeutig: true, auswahl: o.auswahl, hinweis: 'Mehrere Orte passen. Frag, welcher gemeint ist, und nenne zwei oder drei davon.' };
-    const am = zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ, await osmAussen(o.pos, ctx.typ)), eg = await eingangNahe(o.pos, ctx.typ).catch(() => null);
+    const [osm, eg] = await Promise.all([osmAussen(o.pos, ctx.typ, 5000), zuerst(eingangNahe(o.pos, ctx.typ), 5000)]);
+    const am = zielInfo(o.pos, /^Haltestelle /.test(o.name) ? a.ort : o.name, ctx.typ, osm);
     return Object.assign({ ort: o.name, adresse: o.adresse, gefunden_ueber: o.gefunden_ueber, profil: ctx.typ || 'kein Profil', plan_b: planB('ort', { typ: ctx.typ, am }),
       eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer, stufen: eg.stufen, quelle: 'OpenStreetMap' } : undefined,
       angaben_fehlen: (am.gebaeude && am.gebaeude.angaben_fehlen) || am.angaben_fehlen }, am);
@@ -3252,7 +3257,7 @@ const server = http.createServer(async (req, res) => {
       const nav = url.searchParams.get('nav') === '1' && mode !== 'oepnv';
       const from = coord(url.searchParams.get('from'), nav || (mode === 'oepnv' && url.searchParams.get('ab') === 'halt') ? 4 : mode === 'fuss' ? 3 : 2), to = coord(url.searchParams.get('to'), 4);
       // zu Fuß: Strecke bis zum Eingang statt bis zur Gebäudemitte
-      const eing = mode === 'fuss' && HERE_KEY ? await eingangNahe(to, profilTyp({ profil_typ: url.searchParams.get('profil') })).catch(() => null) : null;
+      const eing = mode === 'fuss' && HERE_KEY ? await zuerst(eingangNahe(to, profilTyp({ profil_typ: url.searchParams.get('profil') })), 5000) : null;
       if (!zielAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Prüfungen möglich.' }, origin);
       const via = mode === 'auto' && url.searchParams.get('via') ? coord(url.searchParams.get('via'), 4) : null;   // Ausweichroute in der Navigation halten
       if (mode === 'oepnv') return send(res, 200, await checkZielOepnv(from, to), origin);
