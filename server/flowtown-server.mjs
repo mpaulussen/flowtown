@@ -2256,7 +2256,7 @@ const assistAllowed = limiter(ASSIST_PER_DAY);
 const mAbs = (a, b) => Math.round(Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1]) * 68500));
 const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App aus Bielefeld für Wege mit Auto, Rad, zu Fuß, Bus und Bahn, mit Schwerpunkt Barrierefreiheit. Wege in andere Städte und Wege in anderen Städten gehören dazu.
 Regeln:
-- Antworte auf Deutsch und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
+- Antworte auf Deutsch (außer die Frage ist in einer anderen Sprache gestellt) und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
 - Fahrzeiten ab 60 Minuten nennst du in Stunden und Minuten („5 Stunden 24 Minuten“, nicht „324 Minuten“), unter einer Stunde nur in Minuten.
 - Rückfragen im Gespräch: Antworte nur auf das, was neu gefragt ist. Wiederhole nichts, was du im Verlauf schon gesagt hast (Name, Adresse, Dauer, Linien, schon genannte Merkmale), außer die Person fragt ausdrücklich noch einmal danach. Keine Einleitung, die den Ort oder die Strecke erneut vorstellt; fang direkt mit dem Neuen an.
 - Fakten (Orte, Entfernungen, Zeiten, Linien, Barrierefreiheit) nur aus den Ergebnissen der Werkzeuge; Angaben zu den eigenen Fahrten aus dem Werkzeug meine_auswertung. Erfinde nichts. Liefert ein Werkzeug nichts, sag das offen und schlage vor, was die Person stattdessen tun kann.
@@ -2300,7 +2300,18 @@ Regeln:
 - Am Ziel zählt, was dort ist, nicht am Standort: Toilette, Behindertenparkplatz, Zugang und Haltestelle immer für das Ziel nennen (am_ziel aus vergleich und weg_check, sonst ort_info oder orte_in_der_naehe mit dem Ziel als ort).
 - Nach Wegen mit Profil: erst die beste Möglichkeit, dann das Wichtigste auf dem Weg, dann das Wichtigste am Ziel, alles in höchstens drei Sätzen.
 - „Infos zu einem Ort“, „Was erwartet mich dort?“: Werkzeug ort_info. Sag zuerst, für welchen Ort die Angaben gelten (ort, adresse). Gibt es „auswahl“ oder „gebaeude_auswahl“, nenne zwei, drei davon und frag, welcher gemeint ist; erfinde keine Angaben.
-- Entfernungen gelten immer vom gefundenen Ort aus (Luftlinie); nenne sie nur, wenn der Ort eindeutig ist. Liegt die Stadtbahn bei 0 bis 100 m, sag „direkt dort“. Große Gelände wie die Universität: sag, dass es um das Gelände geht.`;
+- Entfernungen gelten immer vom gefundenen Ort aus (Luftlinie); nenne sie nur, wenn der Ort eindeutig ist. Liegt die Stadtbahn bei 0 bis 100 m, sag „direkt dort“. Große Gelände wie die Universität: sag, dass es um das Gelände geht.
+- Aufzüge: Für die Haltestellen der Stadtbahn (auch Jahnplatz und Rathaus) gibt es keinen Live-Status. Sag nie „laut moBiel sind alle Aufzüge in Betrieb“. Sag: „Für den Aufzug dort habe ich keinen Live-Status“, nenne gemeldete Ausfälle aus Flowtown und „bitte vor Ort prüfen“. „Alle in Betrieb“ gilt nur für Aufzüge der DB an Bahnhöfen.
+- Zeit: Die Werkzeuge kennen nur „jetzt“. Fragen nach einer bestimmten Uhrzeit, einem anderen Tag, dem Wochenende, einem Feiertag oder „um 8 Uhr da sein“ beantwortest du nicht mit Abfahrtszeiten von jetzt. Sag offen, dass du das nur für jetzt weißt, und nenne höchstens die Dauer.
+- Das kannst du nicht und sagst es offen („dazu habe ich keine Angabe“): Preise, Tarife, Tickets, Regeln zu Ausweis, Hund, Fahrrad oder Scooter, Fundsachen, Wetter, Auslastung, ruhige Orte, Höhenprofil und Steigung, Grünzeiten von Ampeln, Stellplätze für Rollstühle, Ladeorte, Bänke, Trinkwasser, Schranken und Umlaufsperren. Rate nie, behaupte keine Funktion, und empfiehl bei Regen nicht das Rad.
+- Telefonnummern nennst du nie, nur 112 und 110. Verweise auf mobiel.de, bahn.de oder die Stadt.
+- Die App hat nur diese Stellen: die Reiter Heute, Tipps, Verlauf, Karte und Mehr, das Suchfeld „Wohin?“ auf Heute, das rote Plus oben für den Notruf, auf der Karte den Knopf „Hindernis melden“, unter Mehr die Einstellungen (Profil, Ansagen und Sprache, Server und Dienste). Nenne nie andere Menüpunkte, Knöpfe oder Funktionen.
+- Notruf 112 nur bei Verletzung, Gefahr oder Bedrohung, die die Person schildert. Bei Wünschen wie Abholen, Taxi oder Fahrdienst sag, dass du nichts bestellen kannst. Wird jemand verfolgt oder bedroht: belebten Ort aufsuchen und 110. Bei Profil Hören rätst du nie zum Anrufen, sondern zur App nora (Notruf ohne Sprechen).
+- Allgemeine Fragen ohne Ort (ob Rad oder Bus umweltfreundlicher ist, ob es Gebärdensprache gibt, Regeln) beantwortest du direkt oder mit „dazu habe ich keine Angabe“. Frag dann nicht nach dem Ziel.
+- Gruppen ab fünf Personen empfiehlst du nicht das Auto.
+- Wird die Frage auf Englisch, Türkisch, Arabisch, Ukrainisch oder in einer anderen Sprache gestellt, antworte in kurzen Sätzen in dieser Sprache; Orts- und Liniennamen bleiben unverändert.
+- Über Flowtown: Prototyp von barrierefrAI (Dr. Markus Paulußen), kostenlos, keine offizielle App von moBiel. Zur Beantwortung gehen Fragen an die KI von Mistral, ohne Training mit den Daten. Quellen: Fahrplan von DELFI (Sollfahrplan mit Verspätungen), moBiel (Umleitungen), DB (Aufzüge an Bahnhöfen), Bielefeld barrierefrei erleben (Bethel), Stadt Bielefeld (Toiletten, Parkplätze, Baustellen), OpenStreetMap, HERE (Wege und Verkehr). Sag nie, dass alles „in Echtzeit“ ist: nur Verspätungen und Baustellen sind nahe an Echtzeit.
+- Bei Angst, Unruhe oder Unsicherheit zuerst ein ruhiger Satz, dann eine Hilfe. Keine kühlen Absagen: statt „Dazu kann ich nichts sagen“ sag, was die Person stattdessen tun kann.`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -2336,6 +2347,7 @@ const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'ampeln_mit_ton', description: 'Ampeln in der Nähe eines Orts mit Angabe, ob sie ein Tonsignal für blinde Menschen haben, und den Straßen der Kreuzung.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' } } } } }
 ];
+const TOOL_NAMES = new Set(ASSIST_TOOLS.map((t) => t.function.name));
 // Ort von „Bielefeld barrierefrei erleben“ nach Namen; mehrdeutig: Kandidaten zur Rückfrage
 const BF_THEMA = { zugang: [11, 37], aufzug: [39, 49], wc: [57, 71], sehen: [75, 99], hoeren: [100, 109], service: [17, 25], einfach: [111, 120] };
 const BF_STOP = new Set(['bielefeld', 'das', 'der', 'die', 'im', 'in', 'am', 'zum', 'zur', 'e', 'v', 'ev', 'gmbh']);
@@ -2894,7 +2906,7 @@ async function assistTool(name, a, ctx, act) {
     const bahn = alle.some((it) => it.bahn) || linien.some((l) => /^[1-4]$/.test(l));
     const dbAus = dba ? dba.anlagen.filter((x) => inBox(x[5], x[6], 0.05) && /^(notAvailable|partiallyAvailable)$/.test(dbaState(x[0]) || '')).map((x) => `${x[2]}: ${x[1] === 'aufzug' ? 'Aufzug' : 'Rolltreppe'} ${x[4]} ${DBA_TEXT[dbaState(x[0])]}`) : null;
     const planb = planB('stoerung', { items: lin ? items : [], typ: ctx.typ });
-    return { plan_b: planb, anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
+    return { plan_b: planb, stadtbahn_aufzuege: 'Für aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status von moBiel; nur gemeldete Ausfälle aus Flowtown (aufzuege_gemeldet). Nie „alle in Betrieb“ sagen.', db_hinweis: 'db_aufzuege_ausser_betrieb gilt nur für Aufzüge der DB an Bahnhöfen, nicht für die Stadtbahn.', anzahl_meldungen: alle.length, betroffene_linien_anzahl: linien.length, db_aufzuege_ausser_betrieb: dbAus ? (dbAus.length ? dbAus.slice(0, 5) : 'alle in Betrieb') : undefined, beispiele_linien: linien.slice(0, 3), stadtbahn_betroffen: bahn ? 'ja' : 'nein, keine Meldung zur Stadtbahn',
       meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug, quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
@@ -3005,6 +3017,28 @@ async function assistTool(name, a, ctx, act) {
   }
   return { fehler: 'unbekanntes Werkzeug' };
 }
+// <sauber>
+// Mistral liefert den Text manchmal als Liste von Teilen statt als Zeichenkette
+function msgText(c) {
+  if (typeof c === 'string') return c;
+  if (Array.isArray(c)) return c.map((x) => (typeof x === 'string' ? x : x && x.type === 'text' ? x.text : '')).join(' ');
+  return '';
+}
+// Antwort aufräumen: kein Markdown, keine wiederholten Sätze, keine Telefonnummern (außer 110 und 112), höchstens fünf Sätze
+function sauber(text) {
+  let t = String(text || '').replace(/[*#_`]/g, '').replace(/[+:]{2,}/g, ' ').replace(/\s+/g, ' ').trim();
+  const teile = t.split(/(?<=[.!?])\s+/);
+  const out = [], seen = new Set();
+  for (const sz of teile) {
+    const k = sz.toLowerCase().replace(/[^a-zäöüß0-9]/g, '');
+    if (!k || seen.has(k)) continue;
+    if (/(?:^|[^\d])0\d{2,5}[\s\/-]*\d[\d\s-]{3,}/.test(sz) || /\+49[\d\s-]{6,}/.test(sz)) continue;
+    seen.add(k); out.push(sz);
+    if (out.length >= 5) break;
+  }
+  return out.join(' ').slice(0, 600).trim();
+}
+// </sauber>
 async function mistralChat(messages, ohneWerkzeuge, mussWerkzeug) {
   const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 30000);
   try {
@@ -3013,7 +3047,9 @@ async function mistralChat(messages, ohneWerkzeuge, mussWerkzeug) {
     // lehnt Mistral den Zwang zum Werkzeug ab, einmal ohne ihn
     if (!res.ok && mussWerkzeug && res.status >= 400 && res.status < 500) { clearTimeout(timer); return mistralChat(messages, ohneWerkzeuge, false); }
     if (!res.ok) throw Object.assign(new Error('Mistral antwortet mit ' + res.status), { status: 502 });
-    return (await res.json()).choices[0].message;
+    const msg = (await res.json()).choices[0].message;
+    msg.content = msgText(msg.content);
+    return msg;
   } finally { clearTimeout(timer); }
 }
 // eigene Auswertung aus der App: nur Zahlen und kurze Texte, nichts wird gespeichert
@@ -3111,10 +3147,17 @@ async function assist(body) {
   // Nennt die Frage ein Ziel oder ein Thema mit Werkzeug, muss die erste Runde nachschlagen (sonst fragt Mistral oft unnötig nach)
   const zwingen = !/gestürzt|notfall|unfall|verletzt|hilfe!|wetter|grün/i.test(frage) && (/\b(zu|zum|zur|nach|bei|über|am|an der|ins)\s+[A-ZÄÖÜ]/.test(frage) || /nächste[nr]?\s+(bahn|bus|stadtbahn|abfahrt)|störung|umleitung|aufz[uü]g|park\s*\+?\s*ride|toilette|\bwc\b|tonsignal|hochbahnsteig|haltestelle in meiner nähe/i.test(frage));
   for (let round = 0; round < 4; round++) {
-    const m = await mistralChat(messages, false, round === 0 && zwingen);
-    const calls = m.tool_calls || [];
+    let m = await mistralChat(messages, false, round === 0 && zwingen);
+    const gueltig = (x) => (x.tool_calls || []).filter((c) => c && c.function && TOOL_NAMES.has(c.function.name));
+    let calls = gueltig(m);
+    // Erzwungener Werkzeugaufruf ohne passendes Werkzeug: Mistral schreibt dann die Antwort als Werkzeugnamen. Einmal ohne Zwang, sonst ganz ohne Werkzeuge.
+    if ((m.tool_calls || []).length && !calls.length) {
+      m = await mistralChat(messages, false, false);
+      calls = gueltig(m);
+      if (!calls.length && !String(m.content || '').trim()) m = await mistralChat(messages, true);
+    }
     if (!calls.length) {
-      const antwort = clip(String(m.content || '').replace(/[*#_`]/g, ''), 600) || 'Dazu habe ich gerade keine Antwort.';
+      const antwort = sauber(m.content) || 'Dazu habe ich gerade keine Antwort.';
       return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length };
     }
     messages.push({ role: 'assistant', content: m.content || '', tool_calls: calls });
@@ -3131,7 +3174,7 @@ async function assist(body) {
   try {
     messages.push({ role: 'user', content: 'Antworte jetzt ohne weitere Werkzeuge mit dem, was du hast, in höchstens drei Sätzen. Was fehlt, sag offen.' });
     const m = await mistralChat(messages, true);
-    const antwort = clip(String(m.content || '').replace(/[*#_`]/g, ''), 600);
+    const antwort = sauber(m.content);
     if (antwort) return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length };
   } catch (e) { /* unten die Ersatzantwort */ }
   return { antwort: 'Das konnte ich gerade nicht vollständig nachschlagen. Versuch es bitte etwas genauer.', aktion: null, werkzeuge: used };
@@ -3425,11 +3468,15 @@ if (cli === 'faq') {
     const head = rows[0].map((h) => h.trim().toLowerCase()), ci = (n) => head.indexOf(n);
     const q = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""').replace(/\r?\n/g, ' ') + '"';
     // Spalten „Gruppe“ und „Erwartung“ (aus pruefkatalog.csv) laufen mit, damit sich die Antworten gleich gegen die Erwartung prüfen lassen
+    const fa = process.argv[4] || '';
+    const filter = !fa ? null : /^ergebnis:/i.test(fa) ? { erg: fa.slice(9).split(',').map((x) => x.trim().toLowerCase()) } : { nr: fa.split(',').map((x) => x.trim().toUpperCase()) };
     const out = ['Nr;Thema;Profil;Frage;Antwort;Werkzeuge;Beispiele genutzt;Sekunden;Bewertung;Korrigierte Antwort;Notiz;Gruppe;Erwartung'];
     for (const r of rows.slice(1)) {
       const nr = r[ci('nr')], thema = r[ci('thema')] || '', prof = (r[ci('profil')] || '').trim(), frage = (r[ci('frage')] || '').trim();
       const la = Number(r[ci('breite')]), lo = Number(r[ci('länge')] != null ? r[ci('länge')] : r[ci('laenge')]);
       if (!frage) continue;
+      // Wiederholung nur einzelner Zeilen: testlauf datei.csv K018,K020 oder testlauf datei.csv ergebnis:falsch,nicht erfüllt
+      if (filter && !(filter.nr ? filter.nr.includes(String(nr).toUpperCase()) : filter.erg.includes(String(r[ci('ergebnis')] || '').trim().toLowerCase()))) continue;
       const t0 = Date.now();
       let antwort, werkzeuge = '', nb = 0;
       try { const x = await assist({ frage, kontext: { pos: isFinite(la) && isFinite(lo) && la && lo ? [la, lo] : null, profil_typ: prof, profil: prof, verkehrsmittel: 'fuss' } }); antwort = x.antwort; werkzeuge = x.werkzeuge.join(', '); nb = x.beispiele || 0; }

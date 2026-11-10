@@ -1,0 +1,99 @@
+# Prüfergebnis vom 10. November 2026: erster Testlauf mit dem Prüfkatalog
+
+Grundlage: Testlauf auf dem Server (`testlauf pruefkatalog.csv`, 287 Fragen, Profil und Standort wie im Katalog, ohne Verlauf und ohne Auswertung). Bewertet nach der Konsolenausgabe, die jede Antwort nach etwa 100 Zeichen abschneidet. Einzelne Bewertungen können sich beim Lesen des vollen Textes in der Tabelle ändern. Die Bewertung steht in `server/pruefkatalog.csv` (Spalten Status, Ergebnis, Notiz).
+
+## Ergebnis auf einen Blick
+
+| Ergebnis | Fragen | Bedeutung |
+| --- | ---: | --- |
+| erfüllt | 163 | Antwort passt zur Erwartung. Dazu zählen 47 ehrliche „dazu habe ich keine Angabe“ bei Dingen, die wir gar nicht wissen |
+| teils | 53 | richtig, aber unvollständig, kühl oder am Ziel vorbei |
+| nicht erfüllt | 26 | keine brauchbare Antwort, obwohl möglich oder nötig |
+| falsch | 37 | erfundene oder irreführende Auskunft, oder technischer Fehler |
+| nicht prüfbar | 8 | im Testlauf nicht prüfbar (Auswertung ausgeschaltet) |
+
+Das Wichtigste vorweg: **Bei 37 von 287 Fragen sagt die Assistenz etwas, das nicht stimmt oder nicht belegt ist.** Das ist gefährlicher als eine fehlende Antwort. Die häufigste Ursache ist, dass die KI eine Lücke nicht zugibt, sondern füllt.
+
+Meine Vermutung vor der Prüfung lag oft daneben. Von 79 Fragen mit Vermutung „fehlt“ hat die Assistenz 47 ehrlich als Lücke beantwortet (gut), aber 19 mit erfundenen Angaben (schlecht). Bei 59 Fragen mit Vermutung „teils“ war das Ergebnis „erfüllt“. Die Assistenz kann also mehr, als ich dachte.
+
+## Befunde nach Dringlichkeit
+
+### 1. Falsche Auskünfte (dringend)
+
+**Aufzüge der Stadtbahn (das Jahnplatz-Problem).** K117 „Ist heute irgendwo ein Aufzug ausgefallen?“ → „Laut moBiel sind alle Aufzüge an Haltestellen in Betrieb.“ K046 sagt dasselbe für den Hauptbahnhof („laut moBiel“). Beides ist falsch: Es gibt keinen Live-Status der Stadtbahn-Aufzüge, und der Hauptbahnhof ist Sache der DB. Genau das darf nach dem Artikel nicht passieren. K047 (Jahnplatz) sagt wenigstens „vor Ort prüfen“, aber nicht, dass kein Status vorliegt. K284 erfindet sogar einen „Ostbahnhof Bielefeld“ mit DB-Status.
+
+**Erfundene Telefonnummern.** K134 (Fundsache) nennt „030 29743333“ und den Fundservice der Bahn statt moBiel, K194 und K295 nennen Nummern, die nicht aus unseren Daten stammen. Die Regel „keine Telefonnummern“ steht im Systemtext, wird aber umgangen.
+
+**Falsche Fakten ohne Quelle.** K020 erfindet „Linie 95“ und ein Einzelticket, K018 gleicht „günstigster“ mit „wenig CO₂“ gleich, K132 sagt „Assistenzhunde ohne Maulkorb oder Leine“, K135 tut so, als gäbe es Linie 9, K313 empfiehlt das Auto für 20 Kinder mit Rollstühlen, K320 behauptet, alles sei „in Echtzeit“.
+
+**Zeitfragen werden mit „jetzt“ beantwortet.** K021 „Ich muss um 8 Uhr an der Uni sein“ → „Geh spätestens um 19:02 los“, K022 „halb zehn“ → „21:35“, K033 „am Sonntag“ und K034 „Neujahr“ → Abfahrten von jetzt als Sonntagsfahrplan. Die Werkzeuge kennen nur den Zeitpunkt „jetzt“.
+
+**Erfundene Funktionen und Menüpunkte.** „Melden“, „Entdecken“, „Laden“, „Meine Meldungen“, „Meldungen“, „Hilfe“, eine Zeitauswahl unter „Wohin?“ (K105, K140, K151, K172, K187, K192, K193). K186 kennt „Hindernis melden“ auf der Karte nicht. K080 erfindet „Liniennummer in die moBiel-App sagen“, K107 und K112 behaupten, ruhige Orte und die Auslastung nennen zu können.
+
+**Behauptungen ohne Daten.** K149 „keine steilen Stücke“, K153 „keine Schranken oder Umlaufsperren“, K158 Trinkwasserspender im Rathaus, K026 Rad bei Regen empfohlen.
+
+### 2. Technische Fehler
+
+- **K181 „[object Object],[object Object],[object Object]“**: Mistral liefert den Text manchmal als Liste von Teilen, der Server hat daraus „[object Object]“ gemacht.
+- **11 Antworten mit Fließtext als Werkzeugname** (K059, K073, K078, K111, K118, K170, K274, K275, K280, K299, K317). Ursache: Bei Fragen mit „zum/am/nach + Großbuchstabe“ erzwingt der Server einen Werkzeugaufruf. Passt kein Werkzeug, schreibt Mistral die Antwort als Werkzeugnamen und danach teilweise endlose Wiederholungen („Ich bin Flowtown. Ich helfe dir. …“, bei K280 und K299 unleserlich).
+
+### 3. Falscher Notruf-Ton
+
+K090 und K091 raten Gehörlosen zu „ruf an“ und „sag laut“. K302 („Hol mich ab“) und K299 (Beschwerde) bekommen den Notruftext. K213 und K216 („ein Mann folgt mir“, „bring mich zu einer sicheren Stelle“) bekommen nur 112, ohne belebten Ort oder 110.
+
+### 4. Nicht erfüllt, obwohl Daten oder Antwort da wären
+
+- **Falsches Werkzeug:** K064, K311 („Gibt es am Jahnplatz einen Aufzug?“ → „keine Angabe“, obwohl er in den Fahrplandaten steht), K314 (Liste der Hochbahnsteige), K147 (Radweganteil).
+- **Unnötige Rückfrage „Wohin möchtest du?“:** K009, K027 (Bus oder Rad CO₂), K079, K089 (Gebärdensprache), K137, K139, K148. Dort wäre „dazu habe ich keine Angabe“ richtig.
+- **Sprachen:** Türkisch, Arabisch und Ukrainisch (K250, K251, K252) werden nicht beantwortet, Englisch (K249) deutsch. Plattdeutsch (K253) und Tippfehler gehen gut.
+- **Über Flowtown:** K321, K323, K326, K327 sind abweisend („Dazu kann ich nichts sagen“), obwohl die Antworten bekannt sind.
+- **Standort:** K001, K004, K009: Der Standort ist auf 100 m gerundet, deshalb nennt die App weder Straße noch Ort. Das ist eine Entscheidung zwischen Datenschutz und Nutzen (siehe Offene Entscheidung).
+
+### 5. Ton
+
+Kühle Absagen („Dazu kann ich nichts sagen“) statt „Das kannst du stattdessen tun“ und keine Beruhigung bei Angst und Unruhe (K099, K102, K108, K190, K279).
+
+### 6. Ehrliche Lücken (kein Fehler, aber nichts für die Nutzenden)
+
+Die Assistenz hat bei diesen Fragen richtig „dazu habe ich keine Angabe“ gesagt, und wir haben die Daten nicht: Preise und Tarife, Auslastung der Bahnen, Stellplätze für Rollstühle und Rollatoren, Türbreiten und Aufzuggrößen, Gehwegbreite, Steigungen, Grünzeiten von Ampeln, Ladeorte, Sanitätshäuser, Bänke, Trinkwasser, Apotheken und Ärzte, Veranstaltungen, Zustand bei Eis und Laub. Das sind die Datenwünsche für die nächsten Schritte.
+
+## Was ich daraufhin geändert habe (Server, noch nicht auf deinem Server)
+
+Alle Änderungen stehen in `server/flowtown-server.mjs`. Ich habe sie mit einem lokalen Ersatz für Mistral getestet, der die beobachteten Fehler nachstellt. Echte Antworten von Mistral habe ich nicht, das zeigt erst ein neuer Testlauf.
+
+1. **Texte als Liste** werden richtig zusammengesetzt (K181).
+2. **Unbekannte Werkzeugnamen** werden verworfen. Nach einem erzwungenen Aufruf ohne passendes Werkzeug fragt der Server noch einmal ohne Zwang, sonst ganz ohne Werkzeuge. Der Fließtext landet nicht mehr in der Werkzeugliste.
+3. **Antworten werden aufgeräumt:** wiederholte Sätze fallen weg, höchstens fünf Sätze, kein Markdown, und **Sätze mit Telefonnummern werden gestrichen** (außer 110 und 112).
+4. **Werkzeug oepnv_stoerungen** meldet jetzt ausdrücklich: „Für Aufzüge an Stadtbahn-Haltestellen gibt es keinen Live-Status von moBiel“, und dass „alle in Betrieb“ nur für DB-Bahnhöfe gilt.
+5. **Systemtext, elf neue Regeln:** Aufzüge der Stadtbahn, Zeitfragen nur für „jetzt“, Liste dessen, was die App nicht kann, keine Telefonnummern, die wahren Stellen der App (Reiter, „Wohin?“, rotes Plus, „Hindernis melden“, Mehr), Notruf nur bei Gefahr und Gehörlose nie zum Anrufen, allgemeine Fragen ohne Rückfrage, kein Auto für Gruppen, andere Sprachen, was Flowtown ist und woher die Daten kommen, Ton bei Angst.
+6. **Testlauf:** `testlauf datei.csv K018,K020` oder `testlauf datei.csv ergebnis:falsch,nicht erfüllt` wiederholt nur einzelne Zeilen.
+
+## Noch nicht umgesetzt (Entwicklungsliste)
+
+| Nr. | Thema | Warum nicht per Text lösbar |
+| --- | --- | --- |
+| E1 | Fahrplan mit Zeitpunkt (morgen, Sonntag, „um 8 Uhr da sein“) | die Werkzeuge kennen nur „jetzt“ |
+| E2 | Aufzugsstatus der Stadtbahn von moBiel | braucht die Daten (Fallbeispiel Jahnplatz) |
+| E3 | Wetter in die Empfehlung (Regen, Glätte) | braucht eine Wetterquelle |
+| E4 | Höhenprofil für Steigungen | braucht Höhendaten |
+| E5 | Testlauf mit Auswertung und Verlauf, damit 8 Fragen prüfbar werden | Testlauf-Kontext erweitern |
+| E6 | Standort als Adresse nennen (K001, K004) | Entscheidung, siehe unten |
+| E7 | Sprachen: prüfen, ob Mistral in Türkisch, Arabisch, Ukrainisch ausreichend antwortet | nach neuem Testlauf |
+| E8 | Daten, die wir nicht haben: Bänke, Trinkwasser, Apotheken, Ärzte, Stellplätze für Rollstühle, Ladeorte | Datenquellen suchen (OSM, Stadt) |
+| E9 | Prüfung der Antworten mit einem zweiten Modell oder festen Regeln, bevor sie an die Person gehen | größere Änderung |
+
+**Offene Entscheidung:** Die App rundet den Standort auf 100 m, bevor er an den Server geht. Deshalb kann die Assistenz nicht sagen „du stehst in der Obernstraße“. Möglich wäre, die Straße auf dem Handy zu bestimmen und nur den Straßennamen mitzuschicken. Das ist ein Datenschutzthema und gehört in die Datenschutzerklärung. Ich habe das nicht geändert.
+
+## So prüfen wir, ob es besser geworden ist
+
+Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs testlauf pruefkatalog.csv'
+```
+
+Nur die bisherigen Fehler, in wenigen Minuten:
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs testlauf pruefkatalog.csv ergebnis:falsch,nicht\ erfüllt'
+```

@@ -1,6 +1,6 @@
 # Prüfkatalog: Was Nutzende erwarten und was Flowtown darauf antwortet
 
-Stand 10.11.2026 · 328 Einträge in 25 Gruppen · Datei: `server/pruefkatalog.csv`
+Stand 10.11.2026 (erster Testlauf: siehe `PRUEFERGEBNIS-2026-11-10.md`) · 328 Einträge in 25 Gruppen · Datei: `server/pruefkatalog.csv`
 
 Der Katalog sammelt Fragen, Aufgaben und Service-Erwartungen, die Menschen mit sehr verschiedenen Behinderungen und Mobilitätsbedürfnissen an Flowtown stellen können. Zu jedem Eintrag steht, was eine gute Reaktion sein müsste. So lässt sich nachprüfen, was die App kann, und was nicht, und daraus ergibt sich die Liste für die nächsten Entwicklungsschritte.
 
@@ -38,6 +38,7 @@ Jede Antwort der Assistenz wird gegen dieselben acht Kriterien gelesen, zusätzl
    ```
    Die Tabelle liegt dann in `/var/lib/flowtown/testlauf/`. Spalten „Gruppe“ und „Erwartung“ laufen mit.
 2. **Bewerten.** In Google Tabellen oder Excel bei jeder Antwort `Bewertung` (`gut`, `teils`, `falsch`) und, wo nötig, eine korrigierte Antwort eintragen. So geht es in die Beispiele der Assistenz ein (siehe `server/README.md`, Teststrecke).
+   Nur einzelne Zeilen wiederholen: `testlauf pruefkatalog.csv K018,K020` oder `testlauf pruefkatalog.csv ergebnis:falsch,nicht\ erfüllt`.
 3. **App-Zeilen prüfen.** Zeilen mit Prüfweg `App` am Handy oder mit Playwright durchgehen, Zeilen mit `Beobachtung` mit echten Personen.
 4. **Lücken sammeln.** Alles mit Ergebnis `nicht erfüllt` oder `falsch` kommt in `TODO.md`, geordnet nach Zahl der betroffenen Profile und Schwere. `falsch` ist dringender als `fehlt`, weil eine falsche Auskunft schaden kann.
 5. **Wiederholen** nach jeder Entwicklungsstufe, damit sich zeigt, was sich verbessert hat.
