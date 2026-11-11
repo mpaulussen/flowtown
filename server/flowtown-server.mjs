@@ -3698,14 +3698,28 @@ if (cli === 'faq') {
     for (const r of cl.slice(1)) { const a = r[cc('objektart')]; if (a) (frag[a] = frag[a] || []).push({ m: r[cc('merkmal')], osm: (r[cc('osm-tag')] || '').trim() }); }
     const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'pilotgebiet.json'), 'utf8'));
     const nur = (process.argv[3] || '').toLowerCase();
-    const run = async (q) => (process.env.OVERPASS_FILE ? JSON.parse(fs.readFileSync(process.env.OVERPASS_FILE, 'utf8')) : overpass(q, 120000));
+    console.log(`Objektkatalog: ${cfg.gebiete.length} Gebiete, ${Object.keys(frag).length} Objektarten mit Checklisten.`);
+    // mit Fortschrittsmeldung: ein Durchgang über alle Overpass-Server, bei Fehlern bis zu drei Versuche mit kurzer Pause
+    const run = async (q, was) => {
+      if (process.env.OVERPASS_FILE) return JSON.parse(fs.readFileSync(process.env.OVERPASS_FILE, 'utf8'));
+      let last;
+      for (let i = 1; i <= 3; i++) {
+        const t0 = Date.now();
+        console.log(`${was}: Anfrage an OpenStreetMap (Versuch ${i} von 3, kann bis zu zwei Minuten dauern) …`);
+        const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 130000);
+        try { const j = await overpassOnce(q, ctrl.signal); console.log(`${was}: fertig nach ${Math.round((Date.now() - t0) / 1000)} s, ${(j.elements || []).length} Treffer.`); return j; }
+        catch (e) { last = e; console.log(`${was}: ${ctrl.signal.aborted ? 'keine Antwort nach 130 s' : e.message}`); if (i < 3) await new Promise((r) => setTimeout(r, 15000)); }
+        finally { clearTimeout(timer); }
+      }
+      throw last;
+    };
     const mid = (e) => (e.lat != null ? [e.lat, e.lon] : e.center ? [e.center.lat, e.center.lon] : null);
     const gebiete = [];
     for (const g of cfg.gebiete) {
       if (nur && g.name.toLowerCase() !== nur) continue;
       let pos = g.lat != null ? [g.lat, g.lon] : null;
       if (!pos && g.suche) {
-        const j = await run(`[out:json][timeout:60];nwr["name"="${g.suche}"](51.95,8.40,52.10,8.70);out center 5;`);
+        const j = await run(`[out:json][timeout:60];nwr["name"="${g.suche}"](51.95,8.40,52.10,8.70);out center 5;`, `Gebiet ${g.name} suchen`);
         const e = (j.elements || []).find((x) => x.tags && x.tags.place) || (j.elements || [])[0];
         pos = e && mid(e);
         if (!pos) { console.error(`Gebiet ${g.name}: „${g.suche}“ in OpenStreetMap nicht gefunden. Bitte lat und lon in pilotgebiet.json eintragen.`); continue; }
@@ -3730,7 +3744,7 @@ if (cli === 'faq') {
       const a = `(around:${g.r},${g.pos[0]},${g.pos[1]})`;
       const j = await run(`[out:json][timeout:120];(node["railway"="tram_stop"]${a};node["highway"="bus_stop"]${a};node["highway"="elevator"]${a};nwr["amenity"="toilets"]${a};node["highway"="traffic_signals"]${a};node["highway"="crossing"]["crossing"~"traffic_signals"]${a};`
         + `nwr["amenity"~"^(townhall|library|post_office|police|courthouse|community_centre|hospital|clinic|doctors|social_facility|public_building|theatre|cinema|arts_centre|bank|pharmacy|college|university)$"]${a};nwr["tourism"~"^(museum|gallery)$"]${a};nwr["office"="government"]${a};`
-        + `nwr["amenity"="parking"]["capacity:disabled"]${a};nwr["parking_space"="disabled"]${a};);out center tags;`);
+        + `nwr["amenity"="parking"]["capacity:disabled"]${a};nwr["parking_space"="disabled"]${a};);out center tags;`, `Gebiet ${g.name} laden`);
       for (const e of j.elements || []) {
         const key = e.type + e.id, t = e.tags || {}, typ = typOf(t), p = mid(e);
         if (!typ || !p || gesehen.has(key) || mAbs(p, g.pos) > g.r) continue;
