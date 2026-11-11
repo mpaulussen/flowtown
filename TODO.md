@@ -145,4 +145,6 @@ Konzept: `FAKTEN.md` und der Abschnitt „Datenqualität und Redaktion“ im Ges
 - [ ] M5 Bericht für Stadt und moBiel aus dem Qualitätsbericht
 - [x] M6 (11.11.) Übersicht `WAS-FLOWTOWN-KANN.md` (drei Karten für alle, Profil, tägliche Routine in drei Schritten, Schreibregeln), Tageszettel (`tagesbericht`, „Heute zu tun“ im Bericht), Klick-Dummy mit Seite „Überblick“ (Mehr, „Was kann Flowtown?“) und Rückmelde-Zeile unter Antworten
 - [x] M6a (11.11., App 0.102.0) Seite „Besser ankommen“ in der Nutzer-App: Einstellungen, ganz oben „Was kann Flowtown?“, drei Karten mit je zwei Beispielfragen zum Antippen (ohne Server ausgeblendet).
-- [ ] M6b Die drei Karten in den Flyer übernehmen; prüfen, ob die Seite auch im Willkommen-Ablauf angeboten werden soll
+- [x] M6b (11.11., App 0.102.1) Zusammengeführt: Die alte Einführung („So funktioniert Flowtown“, Vor der Fahrt / Unterwegs / Danach) ist weg. Der erste Start zeigt direkt unter Vorlesen und Schrift die drei Karten, Einstellungen führt mit „Was kann Flowtown?“ zur Seite mit Beispielfragen. Ein Text, zwei Stellen.
+- [x] M6c (11.11.) Zwei Folien „Drei Dinge für alle“ und „Zu jeder Antwort: woher sie kommt“ in der Präsentation „Barrierefreiheit mit KI – neue Wege gehen“ (Folien 13 und 15, nach „Flowtown – Mobilität für alle“ und „Eine App, die die Wege kennt“)
+- [ ] M6d Die drei Karten in den Flyer übernehmen

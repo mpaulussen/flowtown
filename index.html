@@ -83,12 +83,17 @@
     <header class="claim">
       <p class="eyebrow">Willkommen bei Flowtown</p>
       <h2 id="h-welcome" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
-      <p class="claim-sub">Weniger warten, besser ankommen. Mit Auto, Öffis, Rad oder zu Fuß. Optimal ans Ziel.</p>
+      <p class="claim-sub">Besser ankommen in Bielefeld. Für alle, mit und ohne Behinderung.</p>
     </header>
     <div class="w-first">
       <button id="w-voice" class="btn big w-voice" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Vorlesen und Ansagen einschalten</span></button>
       <label class="check"><input type="checkbox" id="w-big"><span>Große Schrift</span></label>
     </div>
+    <ul class="tip-list intro-list" id="w-intro" aria-label="Das bekommst du">
+      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg></span><span class="tip-main"><b>Dein Weg</b><span>Sag, wohin du willst. Flowtown zeigt, womit du am besten ankommst.</span></span></div></li>
+      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span><span class="tip-main"><b>Gerade jetzt</b><span>Abfahrten, Störungen, Staus, Aufzüge. Und ein anderer Weg, wenn etwas ausfällt.</span></span></div></li>
+      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-wave"/></svg></span><span class="tip-main"><b>Dein Flow</b><span>Flowtown misst, wo du an Ampeln wartest. Das bleibt auf deinem Handy.</span></span></div></li>
+    </ul>
     <section class="w-goals" aria-labelledby="w-goal-h">
       <h3 id="w-goal-h">Was ist dir wichtig?</h3>
       <p class="small muted">Mehrere möglich. Flowtown zeigt dir das zuerst.</p>
@@ -101,12 +106,7 @@
       <p class="small muted">Ändern kannst du das jederzeit unter Mehr → Barrierefrei unterwegs.</p>
       </div>
     </section>
-    <ul class="tip-list intro-list" id="w-intro" hidden>
-      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg></span><span class="tip-main"><b>Vor der Fahrt</b><span>Stau und Baustellen auf deinen Wegen, die beste Abfahrt, Bus und Bahn zu jedem Ziel.</span></span></div></li>
-      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></span><span class="tip-main"><b>Unterwegs</b><span>Ein Knopf: Losfahren. Flowtown erkennt jeden Ampelhalt selbst, du tippst nichts an.</span></span></div></li>
-      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg></span><span class="tip-main"><b>Danach</b><span>Wo die Zeit geblieben ist, ob Bus und Bahn pünktlich waren, und Tipps für deine Wege.</span></span></div></li>
-    </ul>
-    <p class="intro-note" id="w-intro-note" hidden><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Deine Fahrten bleiben auf deinem Handy. Keine Anmeldung, keine Werbung. Mit Auto, Rad, Bus, Bahn oder zu Fuß.</span></p>
+    <p class="intro-note" id="w-intro-note"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Deine Fahrten bleiben auf deinem Handy. Keine Anmeldung, keine Werbung. Und ehrlich: Zu jeder Antwort sagt Flowtown, woher sie kommt.</span></p>
     <button id="btn-intro-next" class="btn primary big go" type="button">Weiter</button>
     <p class="small muted w-steps" id="w-steps1">Schritt 1 von 2</p>
     </div>
@@ -577,7 +577,6 @@
       </div>
     </details>
     </section>
-    <button type="button" class="world-link" id="btn-intro"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg><span><b>So funktioniert Flowtown</b><span>Kurz erklärt, für dich oder zum Zeigen</span></span><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg></button>
     <p class="small muted more-foot"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> · <a href="nutzung.html" target="_blank" rel="noopener">Nutzungsbedingungen</a> · Ampelstandorte: © OpenStreetMap-Mitwirkende · Prototyp, Version <span id="app-version"></span></p>
   </section>
 </main>
