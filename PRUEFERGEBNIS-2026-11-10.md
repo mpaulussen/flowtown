@@ -307,3 +307,21 @@ Nur die bisherigen Fehler, in wenigen Minuten:
 ```bash
 cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs testlauf pruefkatalog.csv ergebnis:falsch,nicht\ erfüllt'
 ```
+
+## Neunter Lauf (11. November): Gruppe 26, sechs neue Fragen aus Sicht der Nutzenden
+
+K329 bis K334, nach Konsolenausgabe bewertet (nur die ersten 100 Zeichen jeder Antwort sichtbar): 2 erfüllt, 4 teils, 0 nicht erfüllt, 0 falsch.
+
+| Nr | Frage | Ergebnis | Befund |
+| --- | --- | --- | --- |
+| K329 | Umsteigezeit am Hbf, langsam | teils | Ehrlich („kenne deine genaue Umsteigezeit nicht“), aber keine Rechnung mit dem Gehtempo des Profils |
+| K330 | Rampe im nächsten Bus | erfüllt | „Dazu habe ich keine Angabe. Frag den Fahrer oder die Fahrerin.“ |
+| K331 | Nächste Notrufsäule | erfüllt | Ehrlich, 110 und 112 (FA06) |
+| K332 | „Sag es mir ohne Ton“ | teils | „Ich kann nur mit Text antworten“ ist falsch, der Wunsch wird nicht bestätigt |
+| K333 | „Erkläre mir das in einfacher Sprache“ | teils | Wunsch nicht bestätigt; Testlauf ohne Verlauf (E5) |
+| K334 | „Wer kann mir jetzt helfen?“ | teils | Beginnt mit Be My Eyes (Sehprofil) trotz leerem Profil, Notruf und Leitstelle nicht an erster Stelle |
+
+**Lösungsvorschläge:**
+1. **K332 und K333 sind Einstellungen, keine Fragen.** Der Wunsch muss ankommen: die App erkennt „ohne Ton“ und „einfache Sprache“, schaltet Vorlesen aus beziehungsweise setzt das Profil „Einfache Sprache“ für die Sitzung, und die Assistenz bestätigt in einem Satz. Bis dahin Festantwort, die nichts Falsches verspricht.
+2. **K334:** Festantwort mit fester Reihenfolge: Gefahr → 112; Verletzung → 112; Verloren oder festgesteckt → Leitstelle, Servicestelle moBiel, Begleitung ansprechen; Be My Eyes nur bei Sehprofil.
+3. **K329:** Gehtempo des Profils auch in `abfahrten_in_der_naehe` und beim Umsteigen nennen (E13 ausweiten).
