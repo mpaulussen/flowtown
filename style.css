@@ -1613,3 +1613,16 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .assist-fb .btn{min-height:44px;padding:0 14px}
 .assist-fb .btn{border:1.5px solid #4f8f6e;border-radius:999px;background:var(--surface,#fff)}
 .assist-fb{gap:8px 8px}
+
+/* 0.102.0 Was kann Flowtown? */
+#view-kann{display:flex;flex-direction:column;gap:12px}
+#view-kann[hidden]{display:none}
+#view-kann .claim-mark circle:nth-child(n+2){fill:#bfc7c2}
+.kann-lead{font-size:1.1rem;line-height:1.4;margin:2px 0 0}
+.kcard{position:relative;background:var(--surface,#fff);border:1.5px solid var(--line,#d5dad6);border-radius:18px;padding:14px 16px 14px 60px}
+.kcard h3{margin:0 0 4px;font-size:1.15rem}
+.kcard p{margin:0 0 8px}
+.knum{position:absolute;left:14px;top:14px;width:34px;height:34px;border-radius:50%;background:#e3f2ea;color:#0f5c3c;display:grid;place-items:center;font-weight:800}
+.kex{display:flex;flex-wrap:wrap;gap:8px}
+.kex .ask-ex-chip{min-height:44px;text-align:left}
+.kex .ask-ex-chip{white-space:normal;max-width:100%;line-height:1.3;padding-top:8px;padding-bottom:8px}

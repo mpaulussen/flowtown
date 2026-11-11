@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.101.1';
+  const VERSION = '0.102.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4212,7 +4212,7 @@
     document.body.dataset.view = name;   // Farbe und Ruhe je Ansicht (Aufzeichnung ohne Menü)
     // Frag Flowtown oben auf den Hauptseiten, mit einem Beispiel, das zur Seite passt
     askBar(name);
-    const tabFor = { drive: 'start', review: 'stats', plan: 'start', best: 'start', tag: 'start' };
+    const tabFor = { drive: 'start', review: 'stats', plan: 'start', best: 'start', tag: 'start', kann: 'more' };
     // Womit? und das Profil gehören zu beiden Seiten: Heute (Losfahren) und Planen
     if (name === 'start' || name === 'plan') { const slot = $('#mode-slot-' + name), box = $('#mode-box'); if (box.parentNode !== slot) slot.appendChild(box); }
     $$('.tabs button').forEach((b) => {
@@ -4225,12 +4225,13 @@
     if (name === 'start') { planFromBest = false; renderToday(); renderLastTrip(); }
     if (name === 'best') renderBest();
     if (name === 'tag') { renderToday(); renderLastTrip(); }
+    if (name === 'kann') { const ok = !!apiBase(); document.querySelectorAll('#view-kann [data-kex]').forEach((d) => { d.hidden = !ok; }); $('#kann-note').hidden = ok; }
     if (name === 'plan') { $('#plan-off').hidden = !!apiBase(); renderToday(); }
     if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
     if (name === 'start') renderA2hs();
     const h = $('#view-' + name + ' h2');
     // Seitentitel nennt die Ansicht, damit Screenreader und App-Umschalter wissen, wo man ist
-    const titles = { welcome: 'Willkommen', start: 'Heute', tag: 'Dein Weg heute', plan: 'Wohin?', best: 'Weg zum Ziel', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
+    const titles = { welcome: 'Willkommen', start: 'Heute', tag: 'Dein Weg heute', kann: 'Besser ankommen', plan: 'Wohin?', best: 'Weg zum Ziel', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
     document.title = (titles[name] ? titles[name] + ' – ' : '') + 'Flowtown';
     if (h && name !== 'drive') { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
@@ -4601,6 +4602,10 @@
     $('#tip-strip').innerHTML = top ? `<button type="button" class="tip-strip" data-goto="tips">${ic('bulb')}<span>${top.num ? `<b>${top.num}</b> · ` : ''}${plain(top.short)}</span>${ic('chevron')}</button>` : '';
   }
   $('#tag-link').addEventListener('click', () => showView('tag'));
+  $('#kann-link').addEventListener('click', () => showView('kann'));
+  $('#kann-back').addEventListener('click', () => showView('more'));
+  // Beispielfragen auf „Was kann Flowtown?“: ein Tipp stellt die Frage, die Antwort erscheint über der Leiste
+  $('#view-kann').addEventListener('click', (ev) => { const b = ev.target.closest('[data-kask]'); if (b) { unlockSpeech(); askAssist(b.dataset.kask, false); } });
   $('#tag-back').addEventListener('click', () => showView('start'));
   ['#weg', '#tip-strip'].forEach((id) => $(id).addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-weg],[data-goto]');

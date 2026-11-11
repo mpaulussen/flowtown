@@ -144,4 +144,5 @@ Konzept: `FAKTEN.md` und der Abschnitt „Datenqualität und Redaktion“ im Ges
 - [ ] M4 Lernen aus Fahrten: Gehtempo je Profil, Umwege und Abbrüche, nur anonym und ab Mindestzahl (K13a)
 - [ ] M5 Bericht für Stadt und moBiel aus dem Qualitätsbericht
 - [x] M6 (11.11.) Übersicht `WAS-FLOWTOWN-KANN.md` (drei Karten für alle, Profil, tägliche Routine in drei Schritten, Schreibregeln), Tageszettel (`tagesbericht`, „Heute zu tun“ im Bericht), Klick-Dummy mit Seite „Überblick“ (Mehr, „Was kann Flowtown?“) und Rückmelde-Zeile unter Antworten
-- [ ] M6a Die drei Karten („Dein Weg“, „Gerade jetzt“, „Dein Flow“) in die Nutzer-App übernehmen (Willkommen oder Mehr, „Was kann Flowtown?“) und in den Flyer
+- [x] M6a (11.11., App 0.102.0) Seite „Besser ankommen“ in der Nutzer-App: Einstellungen, ganz oben „Was kann Flowtown?“, drei Karten mit je zwei Beispielfragen zum Antippen (ohne Server ausgeblendet).
+- [ ] M6b Die drei Karten in den Flyer übernehmen; prüfen, ob die Seite auch im Willkommen-Ablauf angeboten werden soll
