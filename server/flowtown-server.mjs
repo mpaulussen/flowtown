@@ -3143,6 +3143,14 @@ function rObjekteZu(name, art) {
   if (!art || art === 'aufzug') for (const h of halte) for (const o of kat) if (o.typ === 'aufzug' && distM(h.lat, h.lon, o.lat, o.lon) <= 200) out.set(o.id, o);
   return [...out.values()];
 }
+// Anzeigename: Name, sonst Beschreibung aus OSM („Aufzug zum Gleis 8“), sonst Art und nächstes benanntes Objekt
+function rBez(o) {
+  if (o.name && o.name !== '(ohne Namen)') return o.name;
+  const teile = String(o.lage || '').split('; ');   // nicht an „;“ trennen: Ebenen heißen in OSM „0;1;2“
+  const beschr = teile.find((x) => x && !/^(Ebene|Betreiber|Kennung|nahe)\b/.test(x));
+  const nahe = teile.find((x) => /^nahe\b/.test(x));
+  return beschr || (o.art || 'Objekt') + (nahe ? ' ' + nahe.replace(/, \d+ m$/, '') : '');
+}
 const distM = (a, b, c, d) => Math.round(Math.hypot((a - c) * 111320, (b - d) * 68500));
 function rFaktenVon(o, cl) {
   const fk = rFakt[o.id] || {}, angaben = [];
@@ -3158,7 +3166,7 @@ function redaktionFakten(name, art) {
   const liste = rObjekteZu(name, art).map((o) => ({ o, angaben: rFaktenVon(o, cl) })).filter((x) => x.angaben.length);
   if (!liste.length) return { keine_angaben_der_redaktion: true, hinweis: 'Die Redaktion hat diesen Ort noch nicht erfasst. Das offen sagen, nichts erfinden.' };
   return { quelle: 'Redaktion von Flowtown, vor Ort geprüft', hinweis: 'Nenne die Angabe mit „laut Redaktion“ und wann geprüft. Ist aktuell falsch, sag, dass die Angabe nicht mehr aktuell ist, und bitte um Prüfung vor Ort.',
-    objekte: liste.slice(0, 6).map(({ o, angaben }) => ({ name: o.name || '(ohne Namen)', art: o.art, lage: o.lage || undefined, angaben })) };
+    objekte: liste.slice(0, 6).map(({ o, angaben }) => ({ name: rBez(o), art: o.art, lage: o.lage || undefined, angaben })) };
 }
 // ein Satz zum Aufzugsstatus für die Direktantwort an Haltestellen und Bahnhöfen (nur Angaben zu „in Betrieb“)
 function redaktionAufzugSatz(name) {
@@ -3166,10 +3174,8 @@ function redaktionAufzugSatz(name) {
     const cl = rChecklisten(), teile = [];
     for (const o of rObjekteZu(name, 'aufzug')) {
       const x = (rFakt[o.id] || {}).status, f = (cl.aufzug || []).find((y) => y.merkmal === 'status'); if (!x || !f) continue;
-      const bez = (o.lage || '').split(';')[0].replace(/^Ebene.*$/, '').trim() || o.name || 'ein Aufzug';
-      const wo = /^(Aufzug|Zugang)/i.test(bez) ? bez.charAt(0).toLowerCase() + bez.slice(1) : o.name && o.name !== '(ohne Namen)' ? o.name : bez;
       const st = x.wert === 'ja' ? 'in Betrieb' : x.wert === 'nein' ? 'außer Betrieb' : 'unklar';
-      teile.push({ txt: `${wo}: ${st}`, frisch: rFrisch(x, f.klasse), t: x.geprueft, nein: x.wert === 'nein' });
+      teile.push({ txt: `${rBez(o)} ist ${st}`, frisch: rFrisch(x, f.klasse), t: x.geprueft, nein: x.wert === 'nein' });
     }
     if (!teile.length) return '';
     const frisch = teile.filter((x) => x.frisch), alt = teile.filter((x) => !x.frisch);
@@ -3525,6 +3531,7 @@ function rApply(ev) {
     if (ev.status === 'entwurf') rEntwurf[ev.eid] = ev;
     else cur[ev.merkmal] = { wert: ev.wert, notiz: ev.notiz || '', t: ev.t, geprueft: ev.t, von: ev.von, stufe: 2, gilt_bis: ev.gilt_bis || null, eid: ev.eid };
   } else if (ev.art === 'bestaetigung' && cur[ev.merkmal]) { cur[ev.merkmal].geprueft = ev.t; cur[ev.merkmal].von = ev.von; if (ev.gilt_bis) cur[ev.merkmal].gilt_bis = ev.gilt_bis; }
+  else if (ev.art === 'zurueck') { if (ev.merkmal === '*') rFakt[ev.objekt] = {}; else delete cur[ev.merkmal]; }
   else if (ev.art === 'freigabe' && rEntwurf[ev.ziel]) {
     const e = rEntwurf[ev.ziel]; delete rEntwurf[ev.ziel];
     if (ev.ok) (rFakt[e.objekt] = rFakt[e.objekt] || {})[e.merkmal] = { wert: e.wert, notiz: e.notiz || '', t: ev.t, geprueft: ev.t, von: `${e.von}, geprüft ${ev.von}`, stufe: 2, gilt_bis: e.gilt_bis || null, eid: e.eid };
@@ -3591,6 +3598,13 @@ async function rRoute(req, res, p, url, origin, ip) {
     const eid = 'E' + t.toString(36) + crypto.randomBytes(2).toString('hex');
     rSchreibe({ t, art: 'erfassung', eid, objekt: o.id, merkmal: f.merkmal, wert, notiz: clip(b.notiz, 300), von: me.name, status: redakteur ? 'gueltig' : 'entwurf', gilt_bis: gilt || undefined });
     return send(res, 200, { ok: true, eid, status: redakteur ? 'gueltig' : 'entwurf' }, origin);
+  }
+  if (req.method === 'POST' && p === '/api/redaktion/zurueck') {
+    if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
+    const b = await readBody(req, 512);
+    if (!(rFakt[b.objekt] || {})[b.merkmal]) return send(res, 404, { fehler: 'Dazu gibt es keine Angabe.' }, origin);
+    rSchreibe({ t: Date.now(), art: 'zurueck', objekt: b.objekt, merkmal: b.merkmal, von: me.name });
+    return send(res, 200, { ok: true }, origin);
   }
   if (req.method === 'GET' && p === '/api/redaktion/entwuerfe') {
     if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
@@ -3791,6 +3805,15 @@ if (cli === 'redaktion-satz') {
   const ort = process.argv.slice(3).join(' ');
   console.log('Direktantwort (Aufzugsstatus):', redaktionAufzugSatz(ort) || '(nichts)');
   console.log('Werkzeug redaktion_fakten:', JSON.stringify(redaktionFakten(ort, ''), null, 1));
+  process.exit(0);
+}
+if (cli === 'redaktion-zuruecksetzen') {
+  // Alle Angaben zu einem Objekt (oder zu allen) zurückziehen, zum Beispiel nach Testeingaben. Das Protokoll bleibt erhalten, die Angaben gelten nicht mehr.
+  const ziel = process.argv[3];
+  if (!ziel) { console.error('Aufruf: node flowtown-server.mjs redaktion-zuruecksetzen <Objekt-ID|alle>'); process.exit(1); }
+  const ids = ziel === 'alle' ? Object.keys(rFakt).filter((k) => Object.keys(rFakt[k]).length) : [ziel];
+  for (const id of ids) rSchreibe({ t: Date.now(), art: 'zurueck', objekt: id, merkmal: '*', von: 'Befehl' });
+  console.log(`${ids.length} Objekt${ids.length === 1 ? '' : 'e'} zurückgesetzt. Danach: sudo chown -R flowtown: /var/lib/flowtown`);
   process.exit(0);
 }
 if (cli === 'redaktion-zugang') {

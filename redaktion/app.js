@@ -188,14 +188,14 @@
       } else {
         ctl = '<div class="num"><label class="sr" for="z' + i + '" style="position:absolute;left:-999px">' + esc(f.frage) + '</label><input id="z' + i + '" autocomplete="off" maxlength="200"><button type="button" class="btn primary" data-i="' + i + '" data-z="1">Speichern</button><button type="button" class="btn" data-i="' + i + '" data-w="weiß nicht">weiß nicht</button></div>';
       }
-      var bestaet = x && S.rolle === 'redaktion' ? '<button type="button" class="btn" data-i="' + i + '" data-b="1" style="margin-top:8px">Stimmt noch</button>' : '';
+      var bestaet = x && S.rolle === 'redaktion' ? '<div class="opts"><button type="button" class="btn" data-i="' + i + '" data-b="1">Stimmt noch</button><button type="button" class="btn" data-i="' + i + '" data-r="1">Zurückziehen</button></div>' : '';
       var klasseA = f.klasse === 'A' ? '<p class="hint">Gilt 12 Stunden, danach wieder fällig.</p>' : '';
       return '<section class="q' + (x && x.frisch ? ' done' : '') + '" id="q' + i + '"><h3>' + esc(f.frage) + '</h3>' + (f.hinweis ? '<p class="hint">' + esc(f.hinweis) + '</p>' : '') + hint + klasseA + now + ctl + bestaet
         + '<details><summary>Notiz</summary><input id="n' + i + '" maxlength="300" autocomplete="off" aria-label="Notiz zu dieser Frage"></details></section>';
     }).join('');
     $('#verlauf').innerHTML = (j.verlauf || []).map(function (v) {
       var m = (j.checkliste.filter(function (c) { return c.merkmal === v.merkmal; })[0] || {}).frage || v.merkmal;
-      return '<li>' + new Date(v.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + esc(v.von) + ' · ' + (v.art === 'erfassung' ? esc(m) + ': <b>' + esc(v.wert) + '</b>' + (v.status === 'entwurf' ? ' (Entwurf)' : '') : v.art === 'bestaetigung' ? 'bestätigt: ' + esc(m) : v.art === 'freigabe' ? (v.ok ? 'Entwurf freigegeben' : 'Entwurf abgelehnt') : esc(v.art)) + (v.notiz ? ' – ' + esc(v.notiz) : '') + '</li>';
+      return '<li>' + new Date(v.t).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }) + ' · ' + esc(v.von) + ' · ' + (v.art === 'erfassung' ? esc(m) + ': <b>' + esc(v.wert) + '</b>' + (v.status === 'entwurf' ? ' (Entwurf)' : '') : v.art === 'bestaetigung' ? 'bestätigt: ' + esc(m) : v.art === 'zurueck' ? 'zurückgezogen: ' + (v.merkmal === '*' ? 'alle Angaben' : esc(m)) : v.art === 'freigabe' ? (v.ok ? 'Entwurf freigegeben' : 'Entwurf abgelehnt') : esc(v.art)) + (v.notiz ? ' – ' + esc(v.notiz) : '') + '</li>';
     }).join('') || '<li class="muted">Noch nichts erfasst.</li>';
   }
   function speichere(i, wert, bestaetigen) {
@@ -220,6 +220,11 @@
     var b = ev.target.closest('button[data-i]'); if (!b) return;
     var i = Number(b.dataset.i);
     if (b.dataset.b) return speichere(i, null, true);
+    if (b.dataset.r) {
+      if (!confirm('Diese Angabe zurückziehen? Sie gilt dann nicht mehr und wird nicht mehr genannt.')) return;
+      var jj = S.data, ff = jj.checkliste[i];
+      return api('/api/redaktion/zurueck', { method: 'POST', body: { objekt: jj.objekt.id, merkmal: ff.merkmal } }).then(function () { ff.fakt = null; jj.verlauf = [{ t: Date.now(), art: 'zurueck', objekt: jj.objekt.id, merkmal: ff.merkmal, von: S.name }].concat(jj.verlauf || []); ls.set('rd.obj.' + jj.objekt.id, jj); renderObjekt(jj); var m3 = $('#objekt-msg'); m3.className = 'msg ok'; m3.textContent = 'Angabe zurückgezogen.'; }, function (e) { var m4 = $('#objekt-msg'); m4.className = 'msg'; m4.textContent = e.message; });
+    }
     if (b.dataset.z) { var v = $('#z' + i).value.trim(); if (!v) { var m = $('#objekt-msg'); m.className = 'msg'; m.textContent = 'Bitte eine Antwort eintragen oder „weiß nicht“ wählen.'; return; } return speichere(i, v); }
     if (b.dataset.w != null) speichere(i, b.dataset.w);
   });

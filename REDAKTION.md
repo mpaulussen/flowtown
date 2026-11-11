@@ -74,6 +74,7 @@ Rollen: `redaktion` (erfasst gültig, bestätigt, gibt Entwürfe frei, exportier
 - **Erfassen:** Je Objekt die Checkliste. Ja, teilweise, nein oder weiß nicht antippen, Zahlen mit Einheit eintragen, optional eine Notiz. Jede Antwort wird sofort gespeichert. Ohne Netz landet sie in einer Warteschlange auf dem Gerät und geht später raus. OSM- und Bethel-Angaben stehen als Hinweis dabei („OSM sagt: yes, nicht geprüft“).
 - **Prüfen:** „Stimmt noch“ bestätigt eine Angabe. Nach Ablauf der Frischeklasse steht „nicht mehr geprüft“, das Objekt gilt als fällig. Klasse A (Aufzug in Betrieb) gilt 12 Stunden.
 - **Entwürfe:** Die Redaktion gibt Angaben von Mitwirkenden frei oder lehnt sie ab.
+- **Zurückziehen:** Die Redaktion kann jede Angabe zurückziehen (Knopf unter der Angabe). Sie gilt dann nicht mehr und wird nicht mehr genannt, das Protokoll bleibt. Nach Testeingaben alles auf einmal: `node flowtown-server.mjs redaktion-zuruecksetzen alle` (oder eine Objekt-ID).
 - **Verlauf** je Objekt (wer, wann, was), **Bericht** (Abdeckung und Aktualität nach Priorität, Gebiet und Objektart, Rückmeldungen der Nutzenden, was am häufigsten fehlt) und **CSV-Export**.
 
 Die Angaben liegen als Protokoll in `/var/lib/flowtown/qualitaet/fakten.jsonl`. Sicherung: diese Datei und `redaktion-zugang.json` kopieren.
