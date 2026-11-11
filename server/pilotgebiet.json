@@ -1,0 +1,9 @@
+{
+  "hinweis": "Altstadt und Hauptbahnhof: Mittelpunkte wie bei den Orten der Altstadt-FAQ. Bethel und Uni werden beim Lauf in OpenStreetMap nach dem Namen gesucht; der Mittelpunkt wird ausgegeben, bitte auf der Karte prüfen. Wer es genauer will, trägt lat und lon selbst ein (dann entfällt die Suche).",
+  "gebiete": [
+    { "name": "Hauptbahnhof", "lat": 52.0290, "lon": 8.5333, "radius": 450 },
+    { "name": "Altstadt", "lat": 52.0210, "lon": 8.5345, "radius": 600 },
+    { "name": "Bethel", "suche": "Bethel", "radius": 900 },
+    { "name": "Uni", "suche": "Universität Bielefeld", "radius": 700 }
+  ]
+}

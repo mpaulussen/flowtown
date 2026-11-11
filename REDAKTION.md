@@ -1,0 +1,45 @@
+# Redaktion: Pilotgebiet, Objektkatalog und Checklisten
+
+Stand 11.11.2026. Entwurf als Grundlage für die Redaktions-App (TODO M2). Konzept: `FAKTEN.md`.
+
+## Pilotgebiet
+
+Altstadt, Hauptbahnhof, Bethel und Uni Bielefeld. Die Gebiete stehen in `server/pilotgebiet.json`. Altstadt und Hauptbahnhof haben feste Mittelpunkte (wie bei den Orten der Altstadt-FAQ), Bethel und Uni werden beim Lauf in OpenStreetMap nach dem Namen gesucht. **Der gefundene Mittelpunkt wird mit Kartenlink ausgegeben: bitte prüfen** und bei Bedarf `lat` und `lon` in der Datei eintragen.
+
+## Objektkatalog erzeugen
+
+Der Server holt die Objekte aus OpenStreetMap, ergänzt Gebäude von Bethel („Bielefeld barrierefrei erleben“) und gemeldete Hindernisse und schreibt eine Tabelle. Er braucht dafür Netz, nicht diesen Rechner.
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs objektkatalog'
+```
+
+Nur ein Gebiet: `… objektkatalog Hauptbahnhof`. Ergebnis: `/var/lib/flowtown/qualitaet/objektkatalog-pilot.csv`. Spalten: ID, Objektart, Name, Gebiet, Breite, Länge, Priorität, Fehlt (Zahl), Fehlt, Bekannt, Quelle, Status.
+
+- **Bekannt** zeigt, was OpenStreetMap oder Bethel schon sagen, zum Beispiel `zugang_stufenlos=yes (OSM)`. Das sind Angaben der Stufe 5 (automatisch) oder 2 (Bethel), noch nicht von der Redaktion geprüft.
+- **Fehlt** nennt die Merkmale aus der Checkliste, zu denen nichts bekannt ist. Das ist die Erfassungsliste.
+- **Priorität** 1 bis 3, danach nach Gebiet und Zahl der Lücken sortiert.
+
+## Objektarten und Checklisten
+
+Die Fragen stehen in `server/checklisten.csv` (Spalten Objektart, Merkmal, Frage, Antwort, Einheit, Klasse, Profile, OSM-Tag, Messhinweis). Die Klasse ist die Frischeklasse (A Minuten bis Stunden, B Tage, C Monate, D etwa ein Jahr). Antworten sind ja, teilweise, nein oder weiß nicht, eine Zahl mit Einheit oder eine Auswahl.
+
+| Objektart | Priorität | Fragen | Beispiele |
+| --- | --- | ---: | --- |
+| Stadtbahn-Haltestelle (`stadtbahn_haltestelle`) | 1 | 10 | Ist der Einstieg in die Bahn ebenerdig (Hochbahnsteig); Kommt man stufenlos zum Bahnsteig (Rampe oder Aufzug); Gibt es einen Aufzug? Wenn ja, als eigenes Objekt anlegen. … |
+| Bushaltestelle (`bushaltestelle`) | 3 (am Hauptbahnhof 2) | 8 | Wie hoch ist die Bordkante an der Haltestelle; Ist der Einstieg stufenlos möglich; Gibt es einen taktilen Leitstreifen oder ein Einstiegsfeld … |
+| Aufzug (`aufzug`) | 1 | 10 | Ist der Aufzug jetzt in Betrieb; Passt ein Rollstuhl hinein und wieder hinaus; Wie breit ist die Tür der Kabine … |
+| Öffentliches Gebäude, Eingang (`gebaeude_eingang`) | 2 | 10 | Gibt es einen stufenlosen Eingang; Wie hoch ist die höchste Schwelle am stufenlosen Eingang; Wie breit ist die Tür … |
+| WC (`wc`) | 2 | 8 | Ist der Zugang zum WC stufenlos; Wie kommt man hinein; Wie breit ist die Tür … |
+| Ampel und Querung (`querung_ampel`) | 3 | 8 | Gibt es ein Tonsignal; Gibt es ein Vibrationssignal am Taster; Wie hoch ist die höchste Bordkante an der Querung … |
+| Behindertenparkplatz (`behindertenparkplatz`) | 2 | 6 | Wie viele Behindertenparkplätze gibt es hier; Wie breit ist ein Stellplatz; Wie weit ist es zum Eingang des Ziels … |
+| Wegabschnitt, Hindernis (`hindernis_weg`) | 1 (gemeldet von Nutzenden) | 7 | Wie ist der Belag; Wie steil ist der Weg; Wie breit ist der Weg an der schmalsten Stelle … |
+
+**Sehr wichtig:** „Weiß nicht“ ist immer erlaubt und besser als geraten.
+
+## Was ich nicht prüfen konnte
+
+- **Netz:** Der Befehl wurde hier nur mit einer selbst gebauten Beispieldatei getestet (Overpass ist in dieser Umgebung gesperrt). Auf dem Server fehlt noch der erste echte Lauf.
+- **Richtwerte** in den Messhinweisen (zum Beispiel Tür mindestens 90 cm, Rampe höchstens 6 %, Kabine 110 mal 140 cm, Taster höchstens 85 cm) stammen aus meiner Erinnerung an DIN 18040 und DIN 32984. Vor der Nutzung gegen die Normen und gegen die Vorgaben von Bethel und der Behindertenbeauftragten prüfen.
+- **OpenStreetMap-Lücken:** Was dort fehlt, steht im Katalog als „Fehlt“. Das heißt nicht, dass es das Merkmal nicht gibt. Ampeln in OpenStreetMap sind teils Kreuzungssignale ohne Fußgängerquerung.
+- **Bethel und Uni:** Die Namenssuche kann daneben liegen.

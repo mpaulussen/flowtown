@@ -3687,6 +3687,97 @@ if (cli === 'faq') {
   }
   console.log(`${all.length} Rückmeldungen: ${gut}× „stimmt“, ${bad.length}× „stimmt nicht“ oder „veraltet“.`);
   process.exit(0);
+} else if (cli === 'objektkatalog') {
+  // Objektkatalog für das Pilotgebiet (Altstadt, Hauptbahnhof, Bethel, Uni) aus OpenStreetMap, Bethel-Daten und gemeldeten Hindernissen.
+  // Je Objekt: was schon bekannt ist, was fehlt, und wie dringend. Aufruf: objektkatalog [Gebiet]   (Ergebnis: <Datenordner>/qualitaet/objektkatalog-pilot.csv, mit Gebiet …-pilot-<gebiet>.csv)
+  // Zum Testen ohne Netz: OVERPASS_FILE=<Datei mit Overpass-JSON>
+  (async () => {
+    const dir = path.dirname(new URL(import.meta.url).pathname);
+    const cl = parseCsv(fs.readFileSync(path.join(dir, 'checklisten.csv'), 'utf8')), ch = cl[0].map((h) => h.trim().toLowerCase()), cc = (n) => ch.indexOf(n);
+    const frag = {};
+    for (const r of cl.slice(1)) { const a = r[cc('objektart')]; if (a) (frag[a] = frag[a] || []).push({ m: r[cc('merkmal')], osm: (r[cc('osm-tag')] || '').trim() }); }
+    const cfg = JSON.parse(fs.readFileSync(path.join(dir, 'pilotgebiet.json'), 'utf8'));
+    const nur = (process.argv[3] || '').toLowerCase();
+    const run = async (q) => (process.env.OVERPASS_FILE ? JSON.parse(fs.readFileSync(process.env.OVERPASS_FILE, 'utf8')) : overpass(q, 120000));
+    const mid = (e) => (e.lat != null ? [e.lat, e.lon] : e.center ? [e.center.lat, e.center.lon] : null);
+    const gebiete = [];
+    for (const g of cfg.gebiete) {
+      if (nur && g.name.toLowerCase() !== nur) continue;
+      let pos = g.lat != null ? [g.lat, g.lon] : null;
+      if (!pos && g.suche) {
+        const j = await run(`[out:json][timeout:60];nwr["name"="${g.suche}"](51.95,8.40,52.10,8.70);out center 5;`);
+        const e = (j.elements || []).find((x) => x.tags && x.tags.place) || (j.elements || [])[0];
+        pos = e && mid(e);
+        if (!pos) { console.error(`Gebiet ${g.name}: „${g.suche}“ in OpenStreetMap nicht gefunden. Bitte lat und lon in pilotgebiet.json eintragen.`); continue; }
+        console.log(`Gebiet ${g.name}: Mittelpunkt ${pos[0].toFixed(5)}, ${pos[1].toFixed(5)} (gefunden als „${g.suche}“). Prüfen: https://www.openstreetmap.org/?mlat=${pos[0]}&mlon=${pos[1]}#map=16/${pos[0]}/${pos[1]}`);
+      }
+      gebiete.push({ name: g.name, pos, r: g.radius || 600 });
+    }
+    const typOf = (t) => {
+      if (t.railway === 'tram_stop') return 'stadtbahn_haltestelle';
+      if (t.highway === 'bus_stop') return 'bushaltestelle';
+      if (t.highway === 'elevator') return 'aufzug';
+      if (t.amenity === 'toilets') return 'wc';
+      if (t.highway === 'traffic_signals' || (t.highway === 'crossing' && /traffic_signals/.test(t.crossing || ''))) return 'querung_ampel';
+      if (t.amenity === 'parking' && t['capacity:disabled'] || t.parking_space === 'disabled') return 'behindertenparkplatz';
+      if (/^(townhall|library|post_office|police|courthouse|community_centre|hospital|clinic|doctors|social_facility|public_building|theatre|cinema|arts_centre|bank|pharmacy|college|university)$/.test(t.amenity || '') || /^(museum|gallery)$/.test(t.tourism || '') || t.office === 'government') return 'gebaeude_eingang';
+      return null;
+    };
+    const LABEL = { stadtbahn_haltestelle: 'Stadtbahn-Haltestelle', bushaltestelle: 'Bushaltestelle', aufzug: 'Aufzug', wc: 'WC', querung_ampel: 'Ampel', behindertenparkplatz: 'Behindertenparkplatz', gebaeude_eingang: 'Gebäude', hindernis_weg: 'Hindernis' };
+    const PRIO = { stadtbahn_haltestelle: 1, aufzug: 1, gebaeude_eingang: 2, wc: 2, behindertenparkplatz: 2, bushaltestelle: 3, querung_ampel: 3, hindernis_weg: 1 };
+    const objekte = [], gesehen = new Set();
+    for (const g of gebiete) {
+      const a = `(around:${g.r},${g.pos[0]},${g.pos[1]})`;
+      const j = await run(`[out:json][timeout:120];(node["railway"="tram_stop"]${a};node["highway"="bus_stop"]${a};node["highway"="elevator"]${a};nwr["amenity"="toilets"]${a};node["highway"="traffic_signals"]${a};node["highway"="crossing"]["crossing"~"traffic_signals"]${a};`
+        + `nwr["amenity"~"^(townhall|library|post_office|police|courthouse|community_centre|hospital|clinic|doctors|social_facility|public_building|theatre|cinema|arts_centre|bank|pharmacy|college|university)$"]${a};nwr["tourism"~"^(museum|gallery)$"]${a};nwr["office"="government"]${a};`
+        + `nwr["amenity"="parking"]["capacity:disabled"]${a};nwr["parking_space"="disabled"]${a};);out center tags;`);
+      for (const e of j.elements || []) {
+        const key = e.type + e.id, t = e.tags || {}, typ = typOf(t), p = mid(e);
+        if (!typ || !p || gesehen.has(key) || mAbs(p, g.pos) > g.r) continue;
+        gesehen.add(key);
+        objekte.push({ id: `${typ}-${e.type[0]}${e.id}`, typ, name: t.name || t['name:de'] || t.ref || '', gebiet: g.name, pos: p, tags: t, quelle: 'OpenStreetMap' });
+      }
+    }
+    // Gebäude von Bethel („Bielefeld barrierefrei erleben“): zu einem OSM-Gebäude in der Nähe dazu, sonst neu
+    const BF2 = { eingang_stufenlos: 'stufenlos', aufzug_im_haus: 'aufzug', wc_barrierefrei: 'wc', schleife: 'hoeranlage', leitsystem: 'leit' };
+    for (const x of (bf && bf.orte) || []) {
+      const g = gebiete.find((y) => mAbs([x.lat, x.lon], y.pos) <= y.r); if (!g) continue;
+      let o = objekte.find((y) => y.typ === 'gebaeude_eingang' && mAbs(y.pos, [x.lat, x.lon]) < 60);
+      if (!o) objekte.push(o = { id: `gebaeude_eingang-b${x.id}`, typ: 'gebaeude_eingang', name: x.n, gebiet: g.name, pos: [x.lat, x.lon], tags: {}, quelle: 'Bethel' });
+      else o.quelle = 'OpenStreetMap + Bethel';
+      o.bf = x.f || {}; if (!o.name) o.name = x.n;
+    }
+    // gemeldete Hindernisse im Gebiet
+    for (const h of hinweise.filter((y) => y.bis > Date.now() && y.weg < 2 && y.art !== 'gut')) {
+      const g = gebiete.find((y) => mAbs([h.lat, h.lon], y.pos) <= y.r); if (!g) continue;
+      objekte.push({ id: 'hindernis_weg-h' + h.id, typ: 'hindernis_weg', name: HINWEIS_NAME[h.art] || h.art, gebiet: g.name, pos: [h.lat, h.lon], tags: {}, quelle: `Nutzende (${h.ok}× bestätigt)` });
+    }
+    const q = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
+    const out = ['ID;Objektart;Name;Gebiet;Breite;Länge;Priorität;Fehlt (Zahl);Fehlt;Bekannt;Quelle;Status'];
+    const rows = [];
+    for (const o of objekte) {
+      const fr = frag[o.typ] || [], bekannt = [], fehlt = [];
+      for (const f of fr) {
+        const v = f.osm && o.tags[f.osm] != null ? o.tags[f.osm] : null;
+        const bk = o.bf && BF2[f.m] && o.bf[BF2[f.m]] != null ? (o.bf[BF2[f.m]] === 1 ? 'ja' : 'nein') : null;
+        if (v != null) bekannt.push(`${f.m}=${/^(width|door:width|entrance:width|kerb:height)$/.test(f.osm) && /^\d+([.,]\d+)?$/.test(String(v)) && Number(String(v).replace(',', '.')) < 10 ? Math.round(Number(String(v).replace(',', '.')) * 100) + ' cm' : v} (OSM)`); else if (bk) bekannt.push(`${f.m}=${bk} (Bethel)`); else fehlt.push(f.m);
+      }
+      const prio = o.typ === 'bushaltestelle' && o.gebiet === 'Hauptbahnhof' ? 2 : PRIO[o.typ] || 3;
+      rows.push({ o, prio, fehlt, bekannt });
+    }
+    const gOrd = gebiete.map((g) => g.name);
+    rows.sort((a, b) => a.prio - b.prio || gOrd.indexOf(a.o.gebiet) - gOrd.indexOf(b.o.gebiet) || b.fehlt.length - a.fehlt.length || String(a.o.name).localeCompare(String(b.o.name), 'de'));
+    for (const { o, prio, fehlt, bekannt } of rows) out.push([o.id, LABEL[o.typ], o.name || '(ohne Namen)', o.gebiet, o.pos[0].toFixed(5), o.pos[1].toFixed(5), prio, fehlt.length, fehlt.join(', '), bekannt.join('; '), o.quelle, 'offen'].map(q).join(';'));
+    fs.mkdirSync(Q_DIR, { recursive: true });
+    const file = path.join(Q_DIR, nur ? `objektkatalog-pilot-${nur}.csv` : 'objektkatalog-pilot.csv');
+    fs.writeFileSync(file, '﻿' + out.join('\r\n') + '\r\n');
+    const zaehl = {};
+    for (const { o } of rows) { const k = `${o.gebiet} / ${LABEL[o.typ]}`; zaehl[k] = (zaehl[k] || 0) + 1; }
+    for (const [k, n] of Object.entries(zaehl).sort()) console.log(String(n).padStart(5), k);
+    console.log(`${rows.length} Objekte, Priorität 1: ${rows.filter((r) => r.prio === 1).length}, 2: ${rows.filter((r) => r.prio === 2).length}, 3: ${rows.filter((r) => r.prio === 3).length}.`);
+    console.log('Datei: ' + file);
+    process.exit(0);
+  })().catch((e) => { console.error('Fehler: ' + e.message); process.exit(1); });
 } else if (cli === 'frage') {
   // Assistenz von der Kommandozeile testen: node flowtown-server.mjs frage "Wo ist die nächste rollstuhlgerechte Toilette?" 52.0214 8.5339 [Profil]
   loadFahrplan();
