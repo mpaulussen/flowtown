@@ -75,6 +75,7 @@ Rollen: `redaktion` (erfasst gültig, bestätigt, gibt Entwürfe frei, exportier
 - **Prüfen:** „Stimmt noch“ bestätigt eine Angabe. Nach Ablauf der Frischeklasse steht „nicht mehr geprüft“, das Objekt gilt als fällig. Klasse A (Aufzug in Betrieb) gilt 12 Stunden.
 - **Entwürfe:** Die Redaktion gibt Angaben von Mitwirkenden frei oder lehnt sie ab.
 - **Zurückziehen:** Die Redaktion kann jede Angabe zurückziehen (Knopf unter der Angabe). Sie gilt dann nicht mehr und wird nicht mehr genannt, das Protokoll bleibt. Nach Testeingaben alles auf einmal: `node flowtown-server.mjs redaktion-zuruecksetzen alle` (oder eine Objekt-ID).
+- **Heute zu tun** (oben im Bericht) und der Befehl `node flowtown-server.mjs tagesbericht [Tage]`: Rückmeldungen „stimmt nicht“ und „veraltet“ der letzten 24 Stunden mit Frage und Antwort, Entwürfe, fällige Objekte der Priorität 1, was im Monat am häufigsten fehlt. Der Tageszettel für die tägliche Routine, siehe `WAS-FLOWTOWN-KANN.md`.
 - **Verlauf** je Objekt (wer, wann, was), **Bericht** (Abdeckung und Aktualität nach Priorität, Gebiet und Objektart, Rückmeldungen der Nutzenden, was am häufigsten fehlt) und **CSV-Export**.
 
 Die Angaben liegen als Protokoll in `/var/lib/flowtown/qualitaet/fakten.jsonl`. Sicherung: diese Datei und `redaktion-zugang.json` kopieren.

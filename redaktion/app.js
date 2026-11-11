@@ -251,8 +251,11 @@
         return '<h2>' + esc(titel) + '</h2><div class="scroll"><table class="bt"><thead><tr><th>Gruppe</th><th class="n">Objekte</th><th class="n">erfasst</th><th class="n">aktuell</th><th class="n">ohne Angabe</th></tr></thead><tbody>'
           + Object.keys(g).map(function (k) { var e = g[k]; return '<tr><td>' + esc(k) + '</td><td class="n">' + e.objekte + '</td><td class="n">' + (e.fragen ? Math.round(100 * e.erfasst / e.fragen) : 0) + ' %</td><td class="n">' + (e.fragen ? Math.round(100 * e.frisch / e.fragen) : 0) + ' %</td><td class="n">' + e.ohneAngabe + '</td></tr>'; }).join('') + '</tbody></table></div>';
       }
-      var rk = j.rueckmeldungen;
-      $('#bericht').innerHTML = '<p><b>' + j.objekte + '</b> Objekte im Pilotgebiet, <b>' + j.faellig + '</b> davon fällig, <b>' + j.entwuerfe + '</b> Entwürfe warten.</p>'
+      var rk = j.rueckmeldungen, hz = j.heute || {};
+      var heute = '<div class="kopf"><h2 style="margin-top:0">Heute zu tun</h2><ul style="margin:.3em 0;padding-left:1.2em"><li><b>' + (hz.schlecht ? hz.schlecht.length : 0) + '</b> Rückmeldung' + ((hz.schlecht || []).length === 1 ? '' : 'en') + ' „stimmt nicht“ oder „veraltet“ in den letzten 24 Stunden</li><li><b>' + (hz.entwuerfe || 0) + '</b> Entwürfe zur Freigabe</li><li><b>' + (hz.faelligPrio1 || 0) + '</b> fällige Objekte der Priorität 1</li></ul>'
+        + ((hz.schlecht || []).length ? '<p class="muted">Zuletzt:</p>' + hz.schlecht.slice(0, 3).map(function (x) { return '<p><b>' + esc(x.art) + ':</b> ' + esc(x.frage || '') + '<br><span class="muted">' + esc(x.antwort || '') + '</span></p>'; }).join('') : '')
+        + ((hz.faelligListe || []).length ? '<p class="muted">Als Nächstes:</p><ul style="margin:.3em 0;padding-left:1.2em">' + hz.faelligListe.slice(0, 4).map(function (x) { return '<li>' + esc(x.name) + ' (' + esc(x.gebiet) + ')</li>'; }).join('') + '</ul>' : '') + '</div>';
+      $('#bericht').innerHTML = heute + '<p><b>' + j.objekte + '</b> Objekte im Pilotgebiet, <b>' + j.faellig + '</b> davon fällig, <b>' + j.entwuerfe + '</b> Entwürfe warten.</p>'
         + '<p class="muted">„erfasst“ und „aktuell“ sind Anteile aller Checklisten-Fragen der Gruppe. „aktuell“ heißt innerhalb der Frist der Frischeklasse geprüft.</p>'
         + tab('Nach Priorität', j.nachPrio) + tab('Nach Gebiet', j.nachGebiet) + tab('Nach Objektart', j.nachArt)
         + '<h2>Rückmeldungen der Nutzenden</h2><p>' + rk.gut + '× „Stimmt“, ' + rk.falsch + '× „Stimmt nicht“, ' + rk.veraltet + '× „Veraltet“.</p>'

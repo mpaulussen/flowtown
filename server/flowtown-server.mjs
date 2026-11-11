@@ -3564,6 +3564,16 @@ function rWertOk(f, wert) {
   if (opts.length > 1 && !/^Text|^Datum/.test(a)) { const hit = opts.find((x) => x.toLowerCase() === w.toLowerCase()); return hit || null; }
   return clip(w, 200);
 }
+// „Heute zu tun“: was die Redaktion als Nächstes ansehen sollte (für den Bericht in der App und den Befehl tagesbericht)
+function rHeute(tage) {
+  const seit = Date.now() - (tage || 1) * 864e5, cl = rChecklisten(), kat = rKatalog();
+  const rk = qRueckListe().filter((x) => x.t >= seit), schlecht = rk.filter((x) => x.art !== 'gut');
+  const faellig = kat.map((o) => Object.assign({ o }, rStand(o, cl))).filter((x) => x.faellig && x.o.prio === 1).sort((a, b) => (b.abgelaufen - a.abgelaufen) || ((a.zuletzt || 0) - (b.zuletzt || 0)));
+  const mon = new Date().toISOString().slice(0, 7);
+  const luecken = Object.entries(qLuecken).filter(([k]) => k.startsWith(mon)).map(([k, v]) => { const [, th, ob, ty] = k.split('|'); return { thema: th, ort: ob, profil: ty, fragen: v.n, ohne_antwort: v.l }; }).filter((x) => x.ohne_antwort).sort((a, b) => b.ohne_antwort - a.ohne_antwort).slice(0, 5);
+  return { tage: tage || 1, rueckmeldungen: rk.length, schlecht: schlecht.slice(-8).reverse().map((x) => ({ art: x.art, thema: x.thema, frage: x.frage, antwort: x.antwort, t: x.t })), entwuerfe: Object.keys(rEntwurf).length,
+    faelligPrio1: faellig.length, faelligListe: faellig.slice(0, 6).map((x) => ({ name: rBez(x.o), art: x.o.art, gebiet: x.o.gebiet, abgelaufen: x.abgelaufen, offen: x.gesamt - x.erfasst })), luecken };
+}
 async function rRoute(req, res, p, url, origin, ip) {
   if (req.method === 'POST' && p === '/api/redaktion/login') { const b = await readBody(req, 1024); return send(res, 200, rLogin(String(b.code || ''), ip), origin); }
   const me = rAuth(req);
@@ -3622,7 +3632,7 @@ async function rRoute(req, res, p, url, origin, ip) {
     const kat = rKatalog(), st = kat.map((o) => Object.assign({ o }, rStand(o, cl)));
     const grp = (key) => { const g = {}; for (const x of st) { const k = key(x.o), e = g[k] || (g[k] = { objekte: 0, fragen: 0, erfasst: 0, frisch: 0, ohneAngabe: 0 }); e.objekte++; e.fragen += x.gesamt; e.erfasst += x.erfasst; e.frisch += x.frisch; if (!x.erfasst) e.ohneAngabe++; } return g; };
     const rk = qRueckListe(), top = Object.entries(qLuecken).map(([k, v]) => { const [m, th, ob, ty] = k.split('|'); return { monat: m, thema: th, ort: ob, profil: ty, fragen: v.n, ohne_antwort: v.l }; }).sort((a, b) => b.ohne_antwort - a.ohne_antwort).slice(0, 10);
-    return send(res, 200, { t: Date.now(), objekte: kat.length, nachPrio: grp((o) => 'Priorität ' + o.prio), nachGebiet: grp((o) => o.gebiet), nachArt: grp((o) => o.art),
+    return send(res, 200, { t: Date.now(), heute: rHeute(1), objekte: kat.length, nachPrio: grp((o) => 'Priorität ' + o.prio), nachGebiet: grp((o) => o.gebiet), nachArt: grp((o) => o.art),
       faellig: st.filter((x) => x.faellig).length, entwuerfe: Object.keys(rEntwurf).length, rueckmeldungen: { gut: rk.filter((x) => x.art === 'gut').length, falsch: rk.filter((x) => x.art === 'falsch').length, veraltet: rk.filter((x) => x.art === 'veraltet').length }, luecken: top }, origin);
   }
   if (req.method === 'GET' && p === '/api/redaktion/export') {
@@ -3814,6 +3824,20 @@ if (cli === 'redaktion-zuruecksetzen') {
   const ids = ziel === 'alle' ? Object.keys(rFakt).filter((k) => Object.keys(rFakt[k]).length) : [ziel];
   for (const id of ids) rSchreibe({ t: Date.now(), art: 'zurueck', objekt: id, merkmal: '*', von: 'Befehl' });
   console.log(`${ids.length} Objekt${ids.length === 1 ? '' : 'e'} zurückgesetzt. Danach: sudo chown -R flowtown: /var/lib/flowtown`);
+  process.exit(0);
+}
+if (cli === 'tagesbericht') {
+  // Der Tageszettel der Redaktion: was heute anzusehen ist. Aufruf: tagesbericht [Tage zurück, Standard 1]
+  const h = rHeute(Math.max(1, Number(process.argv[3]) || 1));
+  console.log(`Tageszettel Flowtown, ${new Date().toLocaleDateString('de-DE')} (Rückblick ${h.tage} Tag${h.tage === 1 ? '' : 'e'})\n`);
+  console.log(`1. Rückmeldungen der Nutzenden: ${h.rueckmeldungen}, davon ${h.schlecht.length} „stimmt nicht“ oder „veraltet“`);
+  for (const x of h.schlecht) console.log(`   [${x.art}] ${x.frage || ''}\n      → ${x.antwort || '(nicht übermittelt)'}`);
+  console.log(`\n2. Entwürfe zur Freigabe: ${h.entwuerfe}`);
+  console.log(`\n3. Fällige Objekte der Priorität 1: ${h.faelligPrio1}`);
+  for (const x of h.faelligListe) console.log(`   ${x.name} (${x.art}, ${x.gebiet})${x.abgelaufen ? ', ' + x.abgelaufen + ' Angabe(n) nicht mehr geprüft' : ''}${x.offen ? ', ' + x.offen + ' Frage(n) offen' : ''}`);
+  console.log('\n4. Was in diesem Monat am häufigsten fehlt (Thema, Ort, Profil, Fragen, ohne Antwort):');
+  for (const x of h.luecken) console.log(`   ${x.thema}, ${x.ort || '-'}, ${x.profil || '-'}, ${x.fragen}, ${x.ohne_antwort}`);
+  if (!h.luecken.length) console.log('   noch nichts');
   process.exit(0);
 }
 if (cli === 'redaktion-zugang') {
