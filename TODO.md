@@ -121,5 +121,5 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (334 Einträge in 26 Gr
 - [x] L3 (11.11.) Neue Testfragen als Gruppe 26 im Prüfkatalog (K329 bis K334, noch nicht gelaufen; Lauf: `testlauf pruefkatalog.csv K329,K330,K331,K332,K333,K334`): Umsteigezeit im eigenen Tempo, Rampe im nächsten Bus, nächste Notrufsäule, Antwort ohne Ton, einfache Sprache, „Wer kann mir jetzt helfen?“
 - [x] L3a (11.11.) Gruppe 26 gelaufen: 2 erfüllt, 4 teils (K329, K332, K333, K334). Vorschläge in `PRUEFERGEBNIS-2026-11-10.md`, „Neunter Lauf“.
 - [x] L3b (11.11.) Umgesetzt (App 0.100.2, Server): FA96/FA97 „Hilfe jetzt“ (Gefahr zuerst, Be My Eyes nur beim Sehprofil, Gegenfragen ohne Fehltreffer); „ohne Ton“ und „einfache Sprache“ als Einstellungen in der App (sofort bestätigt, ohne KI; „einfache Sprache“ nach einer Antwort schreibt diese um); Server kennt `kontext.einfach` und die Regel für Wünsche ohne Frage.
-- [ ] L3c Server aktualisieren (`git pull`, Neustart), dann K329 bis K334 noch einmal laufen lassen. K329 (Gehtempo bei Abfahrten und Umstiegen) ist noch offen.
+- [x] L3c (11.11.) Server aktualisiert, Gruppe 26 noch einmal gelaufen: 5 erfüllt, 1 teils. Offen: K329 (Gehtempo bei Abfahrten und Umstiegen) ist noch offen.
 - [ ] L4 Morgenwarnung für feste Wege (Konzept für Mobil), danach „Ich komme nicht weiter“ und Umsteigezeit nach Tempo

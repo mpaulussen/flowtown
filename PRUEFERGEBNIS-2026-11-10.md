@@ -330,3 +330,16 @@ K329 bis K334, nach Konsolenausgabe bewertet (nur die ersten 100 Zeichen jeder A
 - **K334:** Festantworten FA96 (Sehprofil, mit Be My Eyes) und FA97 (alle anderen). Gefahr und Verletzung zuerst (112), dann Menschen ansprechen mit einem Satz zum Sagen, Fahrpersonal, Servicepersonal am Bahnhof, Kundenservice moBiel auf mobiel.de, nora. Nicht bei Aufzug, Rampe, Störung und Wegfragen. 0 Fehltreffer bei 28 Gegenfragen, 1 Treffer im Katalog (K334).
 - **K332 und K333:** App 0.100.2 setzt „ohne Ton“ (Ansagen aus) und „einfache Sprache“ sofort um und bestätigt es, ohne KI. Nach einer Antwort schreibt „Erkläre das in einfacher Sprache“ diese Antwort um. „Normale Sprache“ schaltet zurück. Der Server kennt dafür `kontext.einfach` und hat eine Regel für Wünsche ohne Frage. Im Testlauf (ohne App) bleibt K332/K333 bei der KI; die Antwort soll dort jetzt den Wunsch bestätigen.
 - **K329 offen:** Gehtempo bei Abfahrten und Umstiegen.
+
+## Zehnter Lauf (11. November): Gruppe 26 nach den Korrekturen (App 0.100.2, FA96/FA97)
+
+K329 bis K334 noch einmal, nach Konsolenausgabe bewertet: 5 erfüllt, 1 teils, 0 nicht erfüllt, 0 falsch (vorher 2 erfüllt, 4 teils).
+
+| Nr | Ergebnis | Befund |
+| --- | --- | --- |
+| K329 | teils | Weiter „Ich kenne deine genaue Umsteigezeit nicht“, nennt jetzt Linien ab Gleis; keine Rechnung mit dem Gehtempo des Profils (offen) |
+| K330 | erfüllt | unverändert |
+| K331 | erfüllt | unverändert (FA06) |
+| K332 | erfüllt | „Ich antworte ohne Ton.“ (vorher falsch: „kann nur Text“) |
+| K333 | erfüllt | Kurze Sätze und einfache Wörter, Wunsch nicht ausdrücklich bestätigt |
+| K334 | erfüllt | Festantwort FA97 |
