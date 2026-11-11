@@ -131,6 +131,9 @@ Konzept: `FAKTEN.md` und der Abschnitt „Datenqualität und Redaktion“ im Ges
 - [x] M1c (0.101.0) Systemregel: Quelle und Stand nennen, wenn ein Werkzeug sie liefert
 - [ ] M1d Server aktualisieren, nach einer Woche `luecken` und `rueckmeldungen` ansehen
 - [ ] M1e Quelle und Stand in weitere Werkzeugergebnisse einbauen (Aufzüge, Haltestellen, Toiletten, Parkplätze)
+- [x] M2 (11.11., Version 0.1.0) Redaktions-App gebaut: `redaktion/`, Server `/api/redaktion/*`, Befehle `redaktion-code`, `redaktion-zugang`, `redaktion-sperren`, Fakten-Protokoll, Entwürfe und Freigabe, Bericht, Export, Warteschlange. Noch offen: auf dem Server einrichten (`git pull`, `chown`, Code erzeugen), erste Erfassung mit den 33 Objekten der Priorität 1.
+- [ ] M2b Fakten der Redaktion in die Antworten der Assistenz einbinden (Quelle, Stufe, Alter); Aufzugsstatus der Redaktion in die Direktantwort für Stadtbahn-Aufzüge
+- [ ] M2c Fotos, neue Objekte in der App, Zweitprüfung
 - [ ] M2 Redaktions-App (eigene PWA `/redaktion`): Fakten-Speicher (JSON-Zeilen plus Schnappschuss), Rollen mit Einladungscodes, Erfassen vor Ort mit Checkliste, Prüfliste nach Frischeklasse, Änderungsprotokoll, Qualitätsbericht
 - [x] M2a (11.11.) Entwurf: `server/checklisten.csv` (67 Fragen, 8 Objektarten), `server/pilotgebiet.json`, Befehl `objektkatalog`, `REDAKTION.md`. Noch offen: ersten echten Lauf auf dem Server, Mittelpunkte Bethel und Uni prüfen, Richtwerte gegen Normen prüfen.
 - [x] M2a1 (11.11.) Erster Lauf auf dem Server: 774 Objekte, danach Ampeln und Haltestellen zusammengefasst. Noch offen: zweiter Lauf, Zahlen ansehen, Mittelpunkte sind plausibel (Bethel 52.00698/8.52530, Uni 52.03745/8.49382).

@@ -49,6 +49,37 @@ Zweiter Lauf: 675 OSM-Elemente zu 482 Objekten zusammengefasst, 487 Objekte insg
 
 Wer anfangen will: **Priorität 1 (34 Objekte) zuerst**, das sind die Aufzüge und Stadtbahn-Haltestellen und damit der Fall Jahnplatz. Danach Priorität 2, zuerst die öffentlichen Einrichtungen. Priorität 3 später.
 
+## Redaktions-App (Version 0.1.0)
+
+Eigene Web-App, getrennt von der Nutzer-App: **https://mpaulussen.github.io/flowtown/redaktion/** (Dateien in `redaktion/`). Sie spricht mit `/api/redaktion/*` des Flowtown-Servers.
+
+**Einrichten (einmal):**
+
+```bash
+cd /opt/flowtown && sudo git pull && sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown
+```
+
+Das `chown` ist wichtig: Der Katalog wurde als root erzeugt, der Server läuft als Benutzer `flowtown` und könnte sonst nichts in `/var/lib/flowtown/qualitaet` speichern (auch nicht den Lückenzähler). `/api/health` zeigt unter `qualitaet.schreibbar`, ob es klappt.
+
+**Zugang:** Einladungscodes (`RD-XXXX-XXXX`), der Server speichert nur einen Hash.
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs redaktion-code redaktion Markus' && sudo chown -R flowtown: /var/lib/flowtown
+```
+
+Rollen: `redaktion` (erfasst gültig, bestätigt, gibt Entwürfe frei, exportiert) und `mitwirkend` (erfasst Entwürfe, die die Redaktion freigibt). Zugänge anzeigen: `… redaktion-zugang`. Sperren: `… redaktion-sperren <Anfang der Kennung>`, laufende Sitzungen enden sofort. Anmeldung gilt 30 Tage, nach acht falschen Codes Sperre für eine Viertelstunde.
+
+**Was die App kann:**
+- **Objekte:** Liste nach Priorität, Gebiet, Suche, „nur fällige“, auf Wunsch nach Entfernung (der Standort bleibt auf dem Gerät).
+- **Erfassen:** Je Objekt die Checkliste. Ja, teilweise, nein oder weiß nicht antippen, Zahlen mit Einheit eintragen, optional eine Notiz. Jede Antwort wird sofort gespeichert. Ohne Netz landet sie in einer Warteschlange auf dem Gerät und geht später raus. OSM- und Bethel-Angaben stehen als Hinweis dabei („OSM sagt: yes, nicht geprüft“).
+- **Prüfen:** „Stimmt noch“ bestätigt eine Angabe. Nach Ablauf der Frischeklasse steht „nicht mehr geprüft“, das Objekt gilt als fällig. Klasse A (Aufzug in Betrieb) gilt 12 Stunden.
+- **Entwürfe:** Die Redaktion gibt Angaben von Mitwirkenden frei oder lehnt sie ab.
+- **Verlauf** je Objekt (wer, wann, was), **Bericht** (Abdeckung und Aktualität nach Priorität, Gebiet und Objektart, Rückmeldungen der Nutzenden, was am häufigsten fehlt) und **CSV-Export**.
+
+Die Angaben liegen als Protokoll in `/var/lib/flowtown/qualitaet/fakten.jsonl`. Sicherung: diese Datei und `redaktion-zugang.json` kopieren.
+
+**Noch nicht gebaut:** Fotos, neue Objekte, die im Katalog fehlen, und vor allem die **Anbindung an die Antworten der Assistenz**: Erfasste Angaben fließen noch nicht in die Antworten. Das ist der nächste Schritt (TODO M2b).
+
 ## Was ich nicht prüfen konnte
 
 - **Netz:** Der Befehl wurde hier nur mit einer selbst gebauten Beispieldatei getestet (Overpass ist in dieser Umgebung gesperrt). Auf dem Server fehlt noch der erste echte Lauf.

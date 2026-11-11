@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Flowtown Redaktion</title>
+<meta name="theme-color" content="#0f5c3c">
+<meta name="robots" content="noindex">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="../icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<a class="skip" href="#main">Zum Inhalt</a>
+<header class="top">
+  <div class="brand"><svg viewBox="0 0 40 14" width="40" height="14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg><b>Redaktion</b><span class="ver" id="ver"></span></div>
+  <span class="net" id="net" role="status" aria-live="polite"></span>
+</header>
+<main id="main" tabindex="-1">
+  <section id="v-login" class="view" hidden aria-labelledby="h-login">
+    <h1 id="h-login">Anmelden</h1>
+    <p class="muted">Nur für die Redaktion und eingeladene Mitwirkende. Den Code bekommst du von der Redaktion.</p>
+    <form id="f-login">
+      <label for="in-code">Einladungscode</label>
+      <input id="in-code" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="RD-XXXX-XXXX" required>
+      <details class="srv"><summary>Server</summary><label for="in-server">Adresse des Flowtown-Servers</label><input id="in-server" type="url" inputmode="url" autocomplete="off"></details>
+      <button class="btn primary" type="submit">Anmelden</button>
+      <p id="login-msg" class="msg" role="alert"></p>
+    </form>
+  </section>
+
+  <section id="v-liste" class="view" hidden aria-labelledby="h-liste">
+    <h1 id="h-liste">Objekte</h1>
+    <form class="filter" id="f-filter" aria-label="Filter">
+      <label>Gebiet<select id="fl-gebiet"></select></label>
+      <label>Priorität<select id="fl-prio"><option value="1">1 (zuerst)</option><option value="2">2</option><option value="3">3</option><option value="">alle</option></select></label>
+      <label class="wide">Suche<input id="fl-q" type="search" placeholder="Name oder Art" autocomplete="off"></label>
+      <label class="chk"><input id="fl-faellig" type="checkbox" checked> nur fällige</label>
+      <button type="button" class="btn" id="b-nah">Nach Entfernung sortieren</button>
+    </form>
+    <p id="liste-zahl" class="muted" role="status" aria-live="polite"></p>
+    <ul id="liste" class="liste"></ul>
+  </section>
+
+  <section id="v-objekt" class="view" hidden aria-labelledby="h-objekt">
+    <a class="back" href="#/liste">‹ Liste</a>
+    <h1 id="h-objekt" tabindex="-1"></h1>
+    <div id="objekt-kopf"></div>
+    <p id="objekt-msg" class="msg" role="status" aria-live="polite"></p>
+    <div id="checkliste"></div>
+    <details class="verlauf"><summary>Verlauf</summary><ul id="verlauf"></ul></details>
+  </section>
+
+  <section id="v-entwuerfe" class="view" hidden aria-labelledby="h-entw">
+    <h1 id="h-entw">Entwürfe prüfen</h1>
+    <p class="muted">Von Mitwirkenden erfasst, noch nicht gültig. Mit „Freigeben“ gelten sie als von der Redaktion geprüft.</p>
+    <ul id="entwuerfe" class="liste"></ul>
+  </section>
+
+  <section id="v-bericht" class="view" hidden aria-labelledby="h-bericht">
+    <h1 id="h-bericht">Bericht</h1>
+    <div id="bericht"></div>
+  </section>
+
+  <section id="v-mehr" class="view" hidden aria-labelledby="h-mehr">
+    <h1 id="h-mehr">Mehr</h1>
+    <p id="mehr-wer"></p>
+    <p><button class="btn" id="b-sync">Warteschlange jetzt senden</button> <span id="mehr-queue" class="muted"></span></p>
+    <p><button class="btn" id="b-export">Alle Angaben als Tabelle (CSV)</button></p>
+    <p><button class="btn" id="b-logout">Abmelden</button></p>
+    <p class="muted">Angaben gelten als „Redaktion geprüft“ (Stufe 2). „Weiß nicht“ ist immer erlaubt und besser als geraten. Maße nur messen, nicht schätzen.</p>
+  </section>
+</main>
+<nav class="tabs" id="tabs" aria-label="Bereiche" hidden>
+  <a href="#/liste" data-t="liste">Objekte</a>
+  <a href="#/entwuerfe" data-t="entwuerfe" id="t-entw">Entwürfe</a>
+  <a href="#/bericht" data-t="bericht">Bericht</a>
+  <a href="#/mehr" data-t="mehr">Mehr</a>
+</nav>
+<script src="app.js"></script>
+</body>
+</html>

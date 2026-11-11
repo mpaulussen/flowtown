@@ -43,11 +43,14 @@ Nach Ablauf gilt der Fakt als „nicht mehr geprüft“ und steht in der Prüfli
 - **Rückmeldung:** Unter jeder Antwort „Stimmt“, „Stimmt nicht“, „Veraltet“. Nur bei den beiden letzten gehen Frage und Antwort an die Redaktion. Anzeigen: `node flowtown-server.mjs rueckmeldungen`.
 - **Quelle und Stand in der Antwort:** Die Assistenz nennt, wenn ein Werkzeug sie liefert, die Quelle und den Stand (zum Beispiel „Bielefeld barrierefrei erleben“).
 
+## Redaktions-App (Version 0.1.0, 11.11.2026)
+
+Gebaut: Speicher als Protokoll (`fakten.jsonl`), Zugang mit Einladungscodes, Objektliste, Checkliste je Objekt, Bestätigen, Entwürfe und Freigabe, Verlauf, Bericht, CSV-Export, Warteschlange ohne Netz. Siehe `REDAKTION.md`.
+
 ## Was noch fehlt
 
-- Speicher für Fakten (Protokoll im JSON-Zeilenformat plus Schnappschuss, ohne Zusatzpakete) und Anbindung an die Werkzeuge.
-- Redaktions-App (eigene PWA unter `/redaktion`), Rollen mit Einladungscodes.
-- Prüfliste nach Frischeklasse, Zweitprüfung, Änderungsprotokoll, Qualitätsbericht.
+- Anbindung der Fakten an die Werkzeuge der Assistenz (M2b): Antworten nennen Quelle „Redaktion“, Stufe und Alter.
+- Fotos, neue Objekte in der App, Zweitprüfung bei wichtigen Merkmalen.
 - Automatische Quellen: OSM-Lückenbericht, Fahrplan-Felder für Rollstuhl-Einstieg, DWD-Wetter, Gehtempo aus Fahrten.
 
 Entscheidungen (11.11.): Pilotgebiet Altstadt, Hauptbahnhof, Bethel und Uni. Zunächst ein Redakteur (Markus Paulußen). Redaktions-App als eigene PWA. Kein Rückfluss nach OpenStreetMap.

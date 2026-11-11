@@ -3397,9 +3397,173 @@ function qRueckListe() {
 }
 // </qualitaet>
 
+// <redaktion>
+// Redaktions-App (M2): Zugang mit Einladungscode, Fakten-Speicher als Protokoll, Objektliste, Prüfliste, Bericht.
+// Alles unter /api/redaktion/*. Der Speicher ist ein Protokoll im JSON-Zeilenformat (fakten.jsonl); aus ihm wird der aktuelle Stand im Speicher gebaut.
+const R_ZUGANG = path.join(Q_DIR, 'redaktion-zugang.json');
+const R_SITZUNG = path.join(Q_DIR, 'redaktion-sitzungen.json');
+const R_FAKTEN = path.join(Q_DIR, 'fakten.jsonl');
+const R_FRIST = { A: 864e5, B: 7 * 864e5, C: 180 * 864e5, D: 365 * 864e5 };   // wie lange eine Angabe als frisch gilt
+const R_ROLLEN = ['redaktion', 'mitwirkend'];
+const rNorm = (c) => String(c || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+const rHash = (c) => crypto.createHash('sha256').update(SALT + '|rd|' + rNorm(c)).digest('hex');
+function rNeuerCode(rolle, name) {
+  if (!R_ROLLEN.includes(rolle)) throw new Error('Rolle: redaktion oder mitwirkend');
+  const v = readJson(R_ZUGANG, {});
+  const b = crypto.randomBytes(8), body = Array.from(b, (x) => CODE_ABC[x % CODE_ABC.length]).join('');
+  const code = `RD-${body.slice(0, 4)}-${body.slice(4, 8)}`;
+  v[rHash(code)] = { rolle, name: clip(name || rolle, 40), erstellt: new Date().toISOString() };
+  fs.mkdirSync(Q_DIR, { recursive: true }); fs.writeFileSync(R_ZUGANG, JSON.stringify(v, null, 1));
+  return code;
+}
+let rSitz = readJson(R_SITZUNG, {});
+function rSaveSitz() { const n = Date.now(); for (const k of Object.keys(rSitz)) if (rSitz[k].bis < n) delete rSitz[k]; try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.writeFileSync(R_SITZUNG, JSON.stringify(rSitz)); } catch (e) { /* Sitzung bleibt im Speicher */ } }
+const rLoginIp = new Map();
+function rLogin(code, ip) {
+  const n = Date.now(), c = rLoginIp.get(ip);
+  if (c && n - c.t < 15 * 60000 && c.n >= 8) throw Object.assign(new Error('Zu viele Versuche. Bitte in einer Viertelstunde noch einmal.'), { status: 429 });
+  const z = readJson(R_ZUGANG, {})[rHash(code)];
+  if (!z) { rLoginIp.set(ip, c && n - c.t < 15 * 60000 ? { n: c.n + 1, t: c.t } : { n: 1, t: n }); throw Object.assign(new Error('Diesen Code kennt der Server nicht.'), { status: 403 }); }
+  const token = crypto.randomBytes(24).toString('base64url');
+  rSitz[crypto.createHash('sha256').update(token).digest('hex')] = { h: rHash(code), rolle: z.rolle, name: z.name, bis: n + 30 * 864e5 };
+  rSaveSitz();
+  return { token, rolle: z.rolle, name: z.name };
+}
+function rAuth(req) {
+  const m = /^Bearer (\S+)$/.exec(req.headers.authorization || ''); if (!m) return null;
+  const s = rSitz[crypto.createHash('sha256').update(m[1]).digest('hex')];
+  if (!s || s.bis < Date.now()) return null;
+  if (!readJson(R_ZUGANG, {})[s.h]) return null;   // gesperrte Codes: Sitzung endet sofort
+  return s;
+}
+// Checklisten und Katalog (neu gelesen, wenn die Datei sich ändert)
+const rDatei = {};
+function rCsv(file) {
+  const st = fs.statSync(file); if (rDatei[file] && rDatei[file].m === st.mtimeMs) return rDatei[file].rows;
+  const rows = parseCsv(fs.readFileSync(file, 'utf8')); rDatei[file] = { m: st.mtimeMs, rows }; return rows;
+}
+function rChecklisten() {
+  try {
+    const r = rCsv(path.join(path.dirname(new URL(import.meta.url).pathname), 'checklisten.csv')), h = r[0].map((x) => x.trim().toLowerCase()), c = (n) => h.indexOf(n);
+    const out = {};
+    for (const x of r.slice(1)) { const a = x[c('objektart')]; if (a) (out[a] = out[a] || []).push({ merkmal: x[c('merkmal')], frage: x[c('frage')], antwort: x[c('antwort')], einheit: x[c('einheit')], klasse: x[c('klasse')] || 'D', profile: x[c('profile')], osm: x[c('osm-tag')], hinweis: x[c('messhinweis')] }); }
+    return out;
+  } catch (e) { return {}; }
+}
+function rKatalog() {
+  try {
+    const r = rCsv(path.join(Q_DIR, 'objektkatalog-pilot.csv')), h = r[0].map((x) => x.trim().toLowerCase()), c = (n) => h.indexOf(n);
+    return r.slice(1).filter((x) => x[c('id')]).map((x) => ({ id: x[c('id')], typ: x[c('id')].split('-')[0], art: x[c('objektart')], name: x[c('name')], gebiet: x[c('gebiet')], lat: Number(x[c('breite')]), lon: Number(x[c('länge')]), prio: Number(x[c('priorität')]), bekannt: x[c('bekannt')] || '', lage: x[c('lage')] || '', osm: x[c('osm-link')] || '', quelle: x[c('quelle')] || '' }));
+  } catch (e) { return []; }
+}
+// Fakten: Protokoll lesen und den aktuellen Stand bauen
+let rFakt = {}, rEntwurf = {}, rVerlauf = {};
+function rApply(ev) {
+  (rVerlauf[ev.objekt] = rVerlauf[ev.objekt] || []).push(ev);
+  const cur = (rFakt[ev.objekt] = rFakt[ev.objekt] || {});
+  if (ev.art === 'erfassung') {
+    if (ev.status === 'entwurf') rEntwurf[ev.eid] = ev;
+    else cur[ev.merkmal] = { wert: ev.wert, notiz: ev.notiz || '', t: ev.t, geprueft: ev.t, von: ev.von, stufe: 2, gilt_bis: ev.gilt_bis || null, eid: ev.eid };
+  } else if (ev.art === 'bestaetigung' && cur[ev.merkmal]) { cur[ev.merkmal].geprueft = ev.t; cur[ev.merkmal].von = ev.von; if (ev.gilt_bis) cur[ev.merkmal].gilt_bis = ev.gilt_bis; }
+  else if (ev.art === 'freigabe' && rEntwurf[ev.ziel]) {
+    const e = rEntwurf[ev.ziel]; delete rEntwurf[ev.ziel];
+    if (ev.ok) (rFakt[e.objekt] = rFakt[e.objekt] || {})[e.merkmal] = { wert: e.wert, notiz: e.notiz || '', t: ev.t, geprueft: ev.t, von: `${e.von}, geprüft ${ev.von}`, stufe: 2, gilt_bis: e.gilt_bis || null, eid: e.eid };
+  }
+}
+function rLade() {
+  rFakt = {}; rEntwurf = {}; rVerlauf = {};
+  try { for (const l of fs.readFileSync(R_FAKTEN, 'utf8').split('\n')) if (l.trim()) { try { rApply(JSON.parse(l)); } catch (e) { /* kaputte Zeile überspringen */ } } } catch (e) { /* noch keine Datei */ }
+}
+rLade();
+function rSchreibe(ev) {
+  fs.mkdirSync(Q_DIR, { recursive: true });
+  fs.appendFileSync(R_FAKTEN, JSON.stringify(ev) + '\n');   // wirft, wenn der Ordner nicht beschreibbar ist: dann kommt die Fehlermeldung beim Speichern, nicht erst später
+  rApply(ev);
+}
+const rFrisch = (f, klasse) => (f.gilt_bis || f.geprueft + (R_FRIST[klasse] || R_FRIST.D)) > Date.now();
+function rStand(o, cl) {
+  const fr = (cl[o.typ] || []), fk = rFakt[o.id] || {};
+  let erfasst = 0, frisch = 0, zuletzt = 0;
+  for (const f of fr) { const x = fk[f.merkmal]; if (!x) continue; erfasst++; if (rFrisch(x, f.klasse)) frisch++; zuletzt = Math.max(zuletzt, x.geprueft); }
+  return { gesamt: fr.length, erfasst, frisch, abgelaufen: erfasst - frisch, zuletzt, faellig: erfasst < fr.length || frisch < erfasst };
+}
+function rWertOk(f, wert) {
+  const w = String(wert == null ? '' : wert).trim(); if (!w || w.length > 200) return null;
+  if (/^weiß nicht$/i.test(w)) return 'weiß nicht';
+  const a = String(f.antwort || '');
+  if (/^ja \/ teilweise/.test(a)) return ['ja', 'teilweise', 'nein'].includes(w.toLowerCase()) ? w.toLowerCase() : null;
+  if (/^Zahl/.test(a)) { const n = Number(w.replace(',', '.')); return isFinite(n) && Math.abs(n) < 100000 ? String(n) : (/^(nein)$/i.test(w) && /oder nein/.test(a) ? 'nein' : null); }
+  const opts = a.split(' / ').map((x) => x.trim()).filter(Boolean);
+  if (opts.length > 1 && !/^Text|^Datum/.test(a)) { const hit = opts.find((x) => x.toLowerCase() === w.toLowerCase()); return hit || null; }
+  return clip(w, 200);
+}
+async function rRoute(req, res, p, url, origin, ip) {
+  if (req.method === 'POST' && p === '/api/redaktion/login') { const b = await readBody(req, 1024); return send(res, 200, rLogin(String(b.code || ''), ip), origin); }
+  const me = rAuth(req);
+  if (!me) return send(res, 401, { fehler: 'Bitte anmelden.' }, origin);
+  const redakteur = me.rolle === 'redaktion';
+  if (req.method === 'GET' && p === '/api/redaktion/me') return send(res, 200, { rolle: me.rolle, name: me.name, entwuerfe: redakteur ? Object.keys(rEntwurf).length : 0 }, origin);
+  const cl = rChecklisten();
+  if (req.method === 'GET' && p === '/api/redaktion/objekte') {
+    const kat = rKatalog();
+    return send(res, 200, { t: Date.now(), objekte: kat.map((o) => Object.assign({ id: o.id, art: o.art, name: o.name, gebiet: o.gebiet, lat: o.lat, lon: o.lon, prio: o.prio, lage: o.lage }, rStand(o, cl))), entwuerfe: redakteur ? Object.keys(rEntwurf).length : 0 }, origin);
+  }
+  if (req.method === 'GET' && p === '/api/redaktion/objekt') {
+    const o = rKatalog().find((x) => x.id === url.searchParams.get('id'));
+    if (!o) return send(res, 404, { fehler: 'Objekt unbekannt.' }, origin);
+    const fk = rFakt[o.id] || {}, osmBekannt = {};
+    for (const m of o.bekannt.split('; ')) { const x = /^([a-z_0-9]+)=(.+) \((OSM|Bethel)\)$/.exec(m); if (x) osmBekannt[x[1]] = { wert: x[2], quelle: x[3] }; }
+    return send(res, 200, { objekt: o, checkliste: (cl[o.typ] || []).map((f) => Object.assign({}, f, { bekannt: osmBekannt[f.merkmal] || null, fakt: fk[f.merkmal] ? Object.assign({}, fk[f.merkmal], { frisch: rFrisch(fk[f.merkmal], f.klasse) }) : null })),
+      verlauf: (rVerlauf[o.id] || []).slice(-40).reverse(), entwuerfe: Object.values(rEntwurf).filter((e) => e.objekt === o.id) }, origin);
+  }
+  if (req.method === 'POST' && (p === '/api/redaktion/fakt' || p === '/api/redaktion/bestaetigen')) {
+    const b = await readBody(req, 2048);
+    const o = rKatalog().find((x) => x.id === b.objekt); if (!o) return send(res, 404, { fehler: 'Objekt unbekannt.' }, origin);
+    const f = (cl[o.typ] || []).find((x) => x.merkmal === b.merkmal); if (!f) return send(res, 400, { fehler: 'Merkmal unbekannt.' }, origin);
+    const t = Date.now(), gh = Number(b.gilt_h), gilt = f.klasse === 'A' && isFinite(gh) && gh > 0 && gh <= 72 ? t + gh * 3600e3 : null;
+    if (p === '/api/redaktion/bestaetigen') {
+      if (!redakteur) return send(res, 403, { fehler: 'Bestätigen darf nur die Redaktion.' }, origin);
+      if (!(rFakt[o.id] || {})[f.merkmal]) return send(res, 400, { fehler: 'Dazu gibt es noch keine Angabe.' }, origin);
+      rSchreibe({ t, art: 'bestaetigung', objekt: o.id, merkmal: f.merkmal, von: me.name, gilt_bis: gilt || undefined });
+      return send(res, 200, { ok: true }, origin);
+    }
+    const wert = rWertOk(f, b.wert); if (wert == null) return send(res, 400, { fehler: 'Diese Antwort passt nicht zur Frage.' }, origin);
+    const eid = 'E' + t.toString(36) + crypto.randomBytes(2).toString('hex');
+    rSchreibe({ t, art: 'erfassung', eid, objekt: o.id, merkmal: f.merkmal, wert, notiz: clip(b.notiz, 300), von: me.name, status: redakteur ? 'gueltig' : 'entwurf', gilt_bis: gilt || undefined });
+    return send(res, 200, { ok: true, eid, status: redakteur ? 'gueltig' : 'entwurf' }, origin);
+  }
+  if (req.method === 'GET' && p === '/api/redaktion/entwuerfe') {
+    if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
+    const kat = rKatalog();
+    return send(res, 200, { entwuerfe: Object.values(rEntwurf).map((e) => { const o = kat.find((x) => x.id === e.objekt) || {}; const f = (cl[o.typ] || []).find((x) => x.merkmal === e.merkmal) || {}; const alt = (rFakt[e.objekt] || {})[e.merkmal]; return Object.assign({}, e, { objekt_name: o.name || e.objekt, frage: f.frage, vorher: alt ? alt.wert : null }); }) }, origin);
+  }
+  if (req.method === 'POST' && p === '/api/redaktion/freigabe') {
+    if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
+    const b = await readBody(req, 512); if (!rEntwurf[b.eid]) return send(res, 404, { fehler: 'Entwurf unbekannt.' }, origin);
+    const e = rEntwurf[b.eid];
+    rSchreibe({ t: Date.now(), art: 'freigabe', objekt: e.objekt, merkmal: e.merkmal, ziel: b.eid, ok: b.ok === true, von: me.name });
+    return send(res, 200, { ok: true }, origin);
+  }
+  if (req.method === 'GET' && p === '/api/redaktion/bericht') {
+    const kat = rKatalog(), st = kat.map((o) => Object.assign({ o }, rStand(o, cl)));
+    const grp = (key) => { const g = {}; for (const x of st) { const k = key(x.o), e = g[k] || (g[k] = { objekte: 0, fragen: 0, erfasst: 0, frisch: 0, ohneAngabe: 0 }); e.objekte++; e.fragen += x.gesamt; e.erfasst += x.erfasst; e.frisch += x.frisch; if (!x.erfasst) e.ohneAngabe++; } return g; };
+    const rk = qRueckListe(), top = Object.entries(qLuecken).map(([k, v]) => { const [m, th, ob, ty] = k.split('|'); return { monat: m, thema: th, ort: ob, profil: ty, fragen: v.n, ohne_antwort: v.l }; }).sort((a, b) => b.ohne_antwort - a.ohne_antwort).slice(0, 10);
+    return send(res, 200, { t: Date.now(), objekte: kat.length, nachPrio: grp((o) => 'Priorität ' + o.prio), nachGebiet: grp((o) => o.gebiet), nachArt: grp((o) => o.art),
+      faellig: st.filter((x) => x.faellig).length, entwuerfe: Object.keys(rEntwurf).length, rueckmeldungen: { gut: rk.filter((x) => x.art === 'gut').length, falsch: rk.filter((x) => x.art === 'falsch').length, veraltet: rk.filter((x) => x.art === 'veraltet').length }, luecken: top }, origin);
+  }
+  if (req.method === 'GET' && p === '/api/redaktion/export') {
+    if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
+    const q = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"', kat = rKatalog(), rows = ['Objekt;Name;Gebiet;Merkmal;Wert;Notiz;Geprüft;Von;Frisch'];
+    for (const o of kat) for (const f of cl[o.typ] || []) { const x = (rFakt[o.id] || {})[f.merkmal]; if (x) rows.push([o.id, o.name, o.gebiet, f.merkmal, x.wert, x.notiz, new Date(x.geprueft).toISOString().slice(0, 10), x.von, rFrisch(x, f.klasse) ? 'ja' : 'nein'].map(q).join(';')); }
+    res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Cache-Control': 'no-store', 'Access-Control-Allow-Origin': origin || '' }); return res.end('﻿' + rows.join('\r\n') + '\r\n');
+  }
+  return send(res, 404, { fehler: 'unbekannt' }, origin);
+}
+// </redaktion>
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
-  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
+  if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, Authorization', 'Access-Control-Max-Age': '86400' });
   res.writeHead(status, h);
   res.end(obj == null ? '' : JSON.stringify(obj));
 }
@@ -3419,7 +3583,8 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (p.startsWith('/api/redaktion/')) return await rRoute(req, res, p, url, origin, ip);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, qualitaet: { schreibbar: (() => { try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.accessSync(Q_DIR, fs.constants.W_OK); return true; } catch (e) { return false; } })(), objekte: rKatalog().length, fakten: Object.values(rFakt).reduce((n, o) => n + Object.keys(o).length, 0) }, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -3553,6 +3718,25 @@ const server = http.createServer(async (req, res) => {
 });
 // Verwaltung von der Kommandozeile: neue Pilot-Codes, Export aller Pilotfahrten
 const cli = process.argv[2];
+if (cli === 'redaktion-code') {
+  // Zugangscode für die Redaktions-App. Aufruf: redaktion-code <redaktion|mitwirkend> <Name>
+  const rolle = process.argv[3], name = process.argv.slice(4).join(' ');
+  if (!R_ROLLEN.includes(rolle) || !name) { console.error('Aufruf: node flowtown-server.mjs redaktion-code <redaktion|mitwirkend> <Name>'); process.exit(1); }
+  console.log(`${rNeuerCode(rolle, name)}   (${rolle}, ${name})`);
+  console.log('Den Code nur der Person geben. Der Server speichert nur einen Hash. Danach: sudo chown -R flowtown: /var/lib/flowtown');
+  process.exit(0);
+}
+if (cli === 'redaktion-zugang') {
+  const v = readJson(R_ZUGANG, {});
+  for (const [h, z] of Object.entries(v)) console.log(`${h.slice(0, 8)}  ${z.rolle.padEnd(10)} ${z.name}  (${z.erstellt.slice(0, 10)})`);
+  console.log(Object.keys(v).length + ' Zugänge. Sperren: node flowtown-server.mjs redaktion-sperren <Anfang der Kennung>');
+  process.exit(0);
+}
+if (cli === 'redaktion-sperren') {
+  const v = readJson(R_ZUGANG, {}), k = Object.keys(v).filter((h) => h.startsWith(String(process.argv[3] || '#')));
+  if (k.length !== 1) { console.error(k.length ? 'Mehrere Treffer, bitte mehr Zeichen.' : 'Keine Kennung gefunden (siehe redaktion-zugang).'); process.exit(1); }
+  delete v[k[0]]; fs.writeFileSync(R_ZUGANG, JSON.stringify(v, null, 1)); console.log('Gesperrt. Laufende Sitzungen enden sofort.'); process.exit(0);
+}
 if (cli === 'neue-codes') {
   for (const c of newCodes(Math.max(1, Math.min(100, Number(process.argv[3]) || 1)))) console.log(`${c.code}   (Pseudonym im Export: ${c.pseudonym})`);
   console.log('Liste der Codes nur bei dir aufbewahren. Der Server speichert nur einen Hash.');
@@ -3809,6 +3993,7 @@ if (cli === 'faq') {
     for (const [k, n] of Object.entries(zaehl).sort()) console.log(String(n).padStart(5), k);
     console.log(`${rows.length} Objekte, Priorität 1: ${rows.filter((r) => r.prio === 1).length}, 2: ${rows.filter((r) => r.prio === 2).length}, 3: ${rows.filter((r) => r.prio === 3).length}.`);
     console.log('Datei: ' + file);
+    console.log('Wichtig, wenn du das als root gestartet hast: sudo chown -R flowtown: /var/lib/flowtown   (sonst kann der Server dort nichts schreiben)');
     process.exit(0);
   })().catch((e) => { console.error('Fehler: ' + e.message); process.exit(1); });
 } else if (cli === 'frage') {
