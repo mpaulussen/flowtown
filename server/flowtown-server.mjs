@@ -2288,6 +2288,7 @@ Regeln:
 - Plan B: Gibt ein Werkzeug plan_b zurück oder meldet es ein Hindernis (Stufen, Sperrung, Störung, Aufzug außer Betrieb), nenne neben dem Problem immer eine Alternative daraus. Fehlt plan_b, sag offen, dass du keine kennst, und verweise auf Menschen vor Ort (Werkzeug hilfe_menschen).
 - Rückweg („Wann muss ich zurück?“, „Wie komme ich wieder heim?“, „Fährt abends noch eine Bahn?“): Werkzeug rueckweg mit dem Ort, von dem es zurückgeht. Nenne die letzte Abfahrt heute (bei Profil mit Hochbahnsteig), sag, dass der Fahrplan keine späteren Verspätungen kennt, und rate zu etwa 15 Minuten Reserve.
 - Weiß die Person nicht weiter, hat sich verlaufen, ist ein Ort unübersichtlich oder braucht sie beim Ein- und Aussteigen Hilfe: Werkzeug hilfe_menschen. Nenne zwei Möglichkeiten, erfinde keine Telefonnummern, verweise auf bahn.de oder mobiel.de. Bei Gefahr zuerst Notruf 112.
+- Fragen zu einem bestimmten Aufzug oder Ort, ob ein Aufzug in Betrieb ist, zu Maßen (Tür, Kabine, Schwelle), Eingang, WC oder Haltestelle: zusätzlich Werkzeug redaktion_fakten. Nenne die Angabe „laut Redaktion“ mit dem Zeitpunkt der Prüfung. Ist aktuell falsch, sag, dass sie nicht mehr aktuell ist, und bitte um Prüfung vor Ort. Liefert es keine Angaben, sag offen, dass die Redaktion den Ort noch nicht erfasst hat. Erfinde nichts.
 - Liefert ein Werkzeug zu einem Fakt Quelle oder Stand (zum Beispiel „quelle“, „stand“), nenne beides kurz, etwa „laut Bielefeld barrierefrei erleben, Stand 2025“. Erfinde nie eine Quelle oder ein Datum.
 - Fehlen Angaben (angaben_fehlen, keine Angabe, unbekannt), sag das offen in einem Satz, zum Beispiel „Zur Türbreite habe ich keine Angabe.“ Nenne nur Fehlendes, das zum Profil passt.
 - Ampel-Angaben (Tonsignal, Taster, Leitstreifen) sind Angaben aus Karten, nie eine Zusage, dass das Queren sicher ist. Sag „laut Karte“ und dass die Person am Signal selbst entscheidet.
@@ -2335,6 +2336,8 @@ Regeln:
 - Bei Rollstuhl oder Rollator nennst du die Gehzeit mit dem Zusatz „geschätzt“ (Feld tempo) und empfiehlst nie das Auto, wenn die Person „mit dem Rollator“ oder „mit dem Rollstuhl“ geht. Gibt es Stufen, nenne Bus und Bahn mit Hochbahnsteig.
 - Nenne eine Verbindung mit Bus und Bahn nur „stufenlos“, wenn das Feld stufenlos mit „ja“ beginnt. Sonst sag: „Zur Barrierefreiheit dieser Verbindung habe ich keine vollständige Angabe.“`;
 const ASSIST_TOOLS = [
+  { type: 'function', function: { name: 'redaktion_fakten', description: 'Angaben der Redaktion von Flowtown, vor Ort geprüft und mit Datum: ob ein Aufzug in Betrieb ist, Maße von Tür und Kabine, Schwelle und Eingang, WC, Haltestelle. Für Fragen zu einem bestimmten Ort oder Aufzug. Liefert nichts, wenn die Redaktion den Ort noch nicht erfasst hat.', parameters: { type: 'object', properties: {
+    name: { type: 'string', description: 'Name des Orts, der Haltestelle oder des Gebäudes, zum Beispiel Jahnplatz, Hauptbahnhof, Rathaus' }, art: { type: 'string', enum: ['aufzug', 'gebaeude_eingang', 'wc', 'stadtbahn_haltestelle', 'bushaltestelle', 'querung_ampel', 'behindertenparkplatz'], description: 'nur diese Objektart; leer = alle' } }, required: ['name'] } } },
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
   { type: 'function', function: { name: 'rueckweg', description: 'Rückweg: von einem Ziel zurück zum Standort oder zu einem anderen Ort. Liefert die letzten Abfahrten heute mit Bus und Bahn nahe dem Ziel (Fahrplan, ohne Verspätung), mit Profil auch Hochbahnsteig, die Aufzüge am Bahnhof und die Verbindungen jetzt.', parameters: { type: 'object', properties: {
@@ -2884,6 +2887,7 @@ function letzteAbfahrten(pos, max) {
 async function assistTool(name, a, ctx, act) {
   a = a || {};
   if (name === 'hilfe_menschen') return HILFE[a.art] || HILFE.orientierung;
+  if (name === 'redaktion_fakten') return redaktionFakten(String(a.name || ''), a.art ? String(a.art) : '');
   if (name === 'rueckweg') {
     const von = await assistOrt(a.ziel, ctx);
     if (!von) return { fehler: 'Der Ort, von dem es zurückgeht, ist unbekannt' };
@@ -3121,6 +3125,62 @@ function aufzugPlan(frage, stopNames) {
   return null;
 }
 // </aufzug>
+// <redaktionsfakten>
+// M2b: Angaben der Redaktion (vor Ort geprüft, mit Datum) für die Assistenz. Stufe 2 im Datenmodell (FAKTEN.md).
+const rNn = (x) => String(x || '').toLowerCase().replace(/\s*\(u\)\s*$/, '').replace(/ß/g, 'ss').replace(/[^a-z0-9äöü]/g, '');
+function rVor(t) {
+  const d = Date.now() - t, m = Math.round(d / 60000);
+  if (m < 2) return 'gerade eben'; if (m < 90) return `vor ${m} Minuten`;
+  const h = Math.round(d / 3600000); if (h < 30) return `vor ${h} Stunden`;
+  return 'am ' + new Date(t).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'Europe/Berlin' });
+}
+// passende Objekte der Redaktion zu einem Ortsnamen: nach Namen, bei Haltestellen und Bahnhöfen auch die Aufzüge im Umkreis
+function rObjekteZu(name, art) {
+  const kat = rKatalog(), q = rNn(name); if (q.length < 3) return [];
+  const treffer = kat.filter((o) => (rNn(o.name).includes(q) || q.includes(rNn(o.name)) && rNn(o.name).length >= 5 || rNn(o.lage).includes(q)) && (!art || o.typ === art));
+  const out = new Map(treffer.map((o) => [o.id, o]));
+  const halte = kat.filter((o) => o.typ === 'stadtbahn_haltestelle' && (rNn(o.name).includes(q) || q.includes(rNn(o.name))));
+  if (!art || art === 'aufzug') for (const h of halte) for (const o of kat) if (o.typ === 'aufzug' && distM(h.lat, h.lon, o.lat, o.lon) <= 200) out.set(o.id, o);
+  return [...out.values()];
+}
+const distM = (a, b, c, d) => Math.round(Math.hypot((a - c) * 111320, (b - d) * 68500));
+function rFaktenVon(o, cl) {
+  const fk = rFakt[o.id] || {}, angaben = [];
+  for (const f of cl[o.typ] || []) {
+    const x = fk[f.merkmal]; if (!x) continue;
+    const zahl = /^-?\d+(\.\d+)?$/.test(x.wert);
+    angaben.push({ merkmal: f.merkmal, frage: f.frage, antwort: (zahl ? x.wert.replace('.', ',') : x.wert) + (zahl && f.einheit ? ' ' + f.einheit : ''), geprueft: rVor(x.geprueft), aktuell: rFrisch(x, f.klasse), notiz: x.notiz || undefined });
+  }
+  return angaben;
+}
+function redaktionFakten(name, art) {
+  const cl = rChecklisten();
+  const liste = rObjekteZu(name, art).map((o) => ({ o, angaben: rFaktenVon(o, cl) })).filter((x) => x.angaben.length);
+  if (!liste.length) return { keine_angaben_der_redaktion: true, hinweis: 'Die Redaktion hat diesen Ort noch nicht erfasst. Das offen sagen, nichts erfinden.' };
+  return { quelle: 'Redaktion von Flowtown, vor Ort geprüft', hinweis: 'Nenne die Angabe mit „laut Redaktion“ und wann geprüft. Ist aktuell falsch, sag, dass die Angabe nicht mehr aktuell ist, und bitte um Prüfung vor Ort.',
+    objekte: liste.slice(0, 6).map(({ o, angaben }) => ({ name: o.name || '(ohne Namen)', art: o.art, lage: o.lage || undefined, angaben })) };
+}
+// ein Satz zum Aufzugsstatus für die Direktantwort an Haltestellen und Bahnhöfen (nur Angaben zu „in Betrieb“)
+function redaktionAufzugSatz(name) {
+  try {
+    const cl = rChecklisten(), teile = [];
+    for (const o of rObjekteZu(name, 'aufzug')) {
+      const x = (rFakt[o.id] || {}).status, f = (cl.aufzug || []).find((y) => y.merkmal === 'status'); if (!x || !f) continue;
+      const bez = (o.lage || '').split(';')[0].replace(/^Ebene.*$/, '').trim() || o.name || 'ein Aufzug';
+      const wo = /^(Aufzug|Zugang)/i.test(bez) ? bez.charAt(0).toLowerCase() + bez.slice(1) : o.name && o.name !== '(ohne Namen)' ? o.name : bez;
+      const st = x.wert === 'ja' ? 'in Betrieb' : x.wert === 'nein' ? 'außer Betrieb' : 'unklar';
+      teile.push({ txt: `${wo}: ${st}`, frisch: rFrisch(x, f.klasse), t: x.geprueft, nein: x.wert === 'nein' });
+    }
+    if (!teile.length) return '';
+    const frisch = teile.filter((x) => x.frisch), alt = teile.filter((x) => !x.frisch);
+    const out = [];
+    if (frisch.length) out.push(`Laut Redaktion, geprüft ${rVor(Math.min(...frisch.map((x) => x.t)))}: ${frisch.slice(0, 3).map((x) => x.txt).join('; ')}.`);
+    if (alt.length && !frisch.length) out.push(`Die letzte Prüfung der Redaktion ist nicht mehr aktuell (${rVor(Math.max(...alt.map((x) => x.t)))}): ${alt.slice(0, 2).map((x) => x.txt).join('; ')}.`);
+    return ' ' + out.join(' ');
+  } catch (e) { return ''; }
+}
+// </redaktionsfakten>
+
 // <direkt>
 // Antworten, die der Server selbst zusammensetzt, aus Daten und ohne KI: Standort mit Adresse, Aufzug an der Stadtbahn
 async function direktAntwort(frage, ctx) {
@@ -3156,9 +3216,9 @@ async function direktAntwort(frage, ctx) {
   if (plan.typ === 'stop') {
     let lift = null;
     try { lift = (await assistTool('haltestelle', { name: plan.name }, ctx, {})).aufzug; } catch (e) { /* ohne Angabe */ }
-    return `${lift === 'ja' ? `Am ${plan.name} gibt es laut Fahrplan einen Aufzug.` : `Zu einem Aufzug am ${plan.name} habe ich keine Angabe.`} ${KEIN}${flow(plan.name)}`.trim();
+    return `${lift === 'ja' ? `Am ${plan.name} gibt es laut Fahrplan einen Aufzug.` : `Zu einem Aufzug am ${plan.name} habe ich keine Angabe.`}${redaktionAufzugSatz(plan.name)} ${KEIN}${flow(plan.name)}`.trim();
   }
-  if (plan.typ === 'bahnhof') return `${KEIN}${dbSatz}${flow('Hauptbahnhof')}`.trim();
+  if (plan.typ === 'bahnhof') return `${KEIN}${dbSatz}${flow('Hauptbahnhof')}${redaktionAufzugSatz('Hauptbahnhof')}`.trim();
   if (plan.typ === 'unbekannt') return `Den Ort „${plan.ort}“ finde ich nicht bei den Haltestellen. ${KEIN}`.trim();
   return `${KEIN}${flow(null)}${dbSatz}`.trim();
 }
@@ -3584,7 +3644,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
     if (p.startsWith('/api/redaktion/')) return await rRoute(req, res, p, url, origin, ip);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, qualitaet: { schreibbar: (() => { try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.accessSync(Q_DIR, fs.constants.W_OK); return true; } catch (e) { return false; } })(), objekte: rKatalog().length, fakten: Object.values(rFakt).reduce((n, o) => n + Object.keys(o).length, 0) }, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, qualitaet: { schreibbar: (() => { try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.accessSync(Q_DIR, fs.constants.W_OK); return true; } catch (e) { return false; } })(), objekte: rKatalog().length, fakten: Object.values(rFakt).reduce((n, o) => n + Object.keys(o).length, 0) }, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen', 'redaktion_fakten'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -3724,6 +3784,13 @@ if (cli === 'redaktion-code') {
   if (!R_ROLLEN.includes(rolle) || !name) { console.error('Aufruf: node flowtown-server.mjs redaktion-code <redaktion|mitwirkend> <Name>'); process.exit(1); }
   console.log(`${rNeuerCode(rolle, name)}   (${rolle}, ${name})`);
   console.log('Den Code nur der Person geben. Der Server speichert nur einen Hash. Danach: sudo chown -R flowtown: /var/lib/flowtown');
+  process.exit(0);
+}
+if (cli === 'redaktion-satz') {
+  // Was die Assistenz aus den Angaben der Redaktion zu einem Ort sagen würde. Aufruf: redaktion-satz <Ort>
+  const ort = process.argv.slice(3).join(' ');
+  console.log('Direktantwort (Aufzugsstatus):', redaktionAufzugSatz(ort) || '(nichts)');
+  console.log('Werkzeug redaktion_fakten:', JSON.stringify(redaktionFakten(ort, ''), null, 1));
   process.exit(0);
 }
 if (cli === 'redaktion-zugang') {

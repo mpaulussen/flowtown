@@ -47,9 +47,12 @@ Nach Ablauf gilt der Fakt als „nicht mehr geprüft“ und steht in der Prüfli
 
 Gebaut: Speicher als Protokoll (`fakten.jsonl`), Zugang mit Einladungscodes, Objektliste, Checkliste je Objekt, Bestätigen, Entwürfe und Freigabe, Verlauf, Bericht, CSV-Export, Warteschlange ohne Netz. Siehe `REDAKTION.md`.
 
+## Anbindung an die Assistenz (M2b, 11.11.2026)
+
+Die Assistenz nutzt die Angaben der Redaktion: Aufzugsstatus in der Direktantwort an Haltestellen und am Hauptbahnhof, dazu das Werkzeug `redaktion_fakten` für Maße, Eingang, WC und Haltestellen. Jede Angabe wird mit „laut Redaktion“ und Zeitpunkt genannt, abgelaufene als „nicht mehr aktuell“. Details: `REDAKTION.md`.
+
 ## Was noch fehlt
 
-- Anbindung der Fakten an die Werkzeuge der Assistenz (M2b): Antworten nennen Quelle „Redaktion“, Stufe und Alter.
 - Fotos, neue Objekte in der App, Zweitprüfung bei wichtigen Merkmalen.
 - Automatische Quellen: OSM-Lückenbericht, Fahrplan-Felder für Rollstuhl-Einstieg, DWD-Wetter, Gehtempo aus Fahrten.
 

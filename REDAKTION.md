@@ -78,7 +78,13 @@ Rollen: `redaktion` (erfasst gültig, bestätigt, gibt Entwürfe frei, exportier
 
 Die Angaben liegen als Protokoll in `/var/lib/flowtown/qualitaet/fakten.jsonl`. Sicherung: diese Datei und `redaktion-zugang.json` kopieren.
 
-**Noch nicht gebaut:** Fotos, neue Objekte, die im Katalog fehlen, und vor allem die **Anbindung an die Antworten der Assistenz**: Erfasste Angaben fließen noch nicht in die Antworten. Das ist der nächste Schritt (TODO M2b).
+**Anbindung an die Assistenz (M2b, 11.11.2026):**
+- **Aufzugsstatus:** Fragt jemand nach einem Aufzug an einer Stadtbahn-Haltestelle oder am Hauptbahnhof, hängt die Direktantwort einen Satz an, wenn die Redaktion einen Status erfasst hat: „Laut Redaktion, geprüft vor 2 Stunden: Aufzug zum Gleis 8: in Betrieb.“ Ist die Prüfung älter als 12 Stunden, steht dort „nicht mehr aktuell“ mit Datum, nie als gültige Auskunft. Der Satz kommt zusätzlich zu den Angaben der DB und den Meldungen von moBiel.
+- **Neues Werkzeug `redaktion_fakten`:** Für Fragen zu einem bestimmten Ort oder Aufzug (Maße von Tür und Kabine, Schwelle, Eingang, WC, Haltestelle). Die KI nennt die Angabe „laut Redaktion“ mit Zeitpunkt und sagt offen, wenn die Redaktion den Ort noch nicht erfasst hat.
+- **Vorschau:** `node flowtown-server.mjs redaktion-satz Hauptbahnhof` zeigt, was die Assistenz zu einem Ort aus den Angaben der Redaktion sagen würde (Satz der Direktantwort und Ergebnis des Werkzeugs).
+- Zuordnung: Aufzüge gelten für eine Haltestelle, wenn sie höchstens 200 m entfernt sind oder den Namen in der Lage nennen.
+
+**Noch nicht gebaut:** Fotos, neue Objekte, die im Katalog fehlen, Zweitprüfung.
 
 ## Was ich nicht prüfen konnte
 
