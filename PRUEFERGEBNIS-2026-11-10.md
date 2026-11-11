@@ -325,3 +325,8 @@ K329 bis K334, nach Konsolenausgabe bewertet (nur die ersten 100 Zeichen jeder A
 1. **K332 und K333 sind Einstellungen, keine Fragen.** Der Wunsch muss ankommen: die App erkennt „ohne Ton“ und „einfache Sprache“, schaltet Vorlesen aus beziehungsweise setzt das Profil „Einfache Sprache“ für die Sitzung, und die Assistenz bestätigt in einem Satz. Bis dahin Festantwort, die nichts Falsches verspricht.
 2. **K334:** Festantwort mit fester Reihenfolge: Gefahr → 112; Verletzung → 112; Verloren oder festgesteckt → Leitstelle, Servicestelle moBiel, Begleitung ansprechen; Be My Eyes nur bei Sehprofil.
 3. **K329:** Gehtempo des Profils auch in `abfahrten_in_der_naehe` und beim Umsteigen nennen (E13 ausweiten).
+
+**Umgesetzt am 11. November (noch nicht auf deinem Server):**
+- **K334:** Festantworten FA96 (Sehprofil, mit Be My Eyes) und FA97 (alle anderen). Gefahr und Verletzung zuerst (112), dann Menschen ansprechen mit einem Satz zum Sagen, Fahrpersonal, Servicepersonal am Bahnhof, Kundenservice moBiel auf mobiel.de, nora. Nicht bei Aufzug, Rampe, Störung und Wegfragen. 0 Fehltreffer bei 28 Gegenfragen, 1 Treffer im Katalog (K334).
+- **K332 und K333:** App 0.100.2 setzt „ohne Ton“ (Ansagen aus) und „einfache Sprache“ sofort um und bestätigt es, ohne KI. Nach einer Antwort schreibt „Erkläre das in einfacher Sprache“ diese Antwort um. „Normale Sprache“ schaltet zurück. Der Server kennt dafür `kontext.einfach` und hat eine Regel für Wünsche ohne Frage. Im Testlauf (ohne App) bleibt K332/K333 bei der KI; die Antwort soll dort jetzt den Wunsch bestätigen.
+- **K329 offen:** Gehtempo bei Abfahrten und Umstiegen.

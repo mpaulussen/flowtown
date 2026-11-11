@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.100.1';
+  const VERSION = '0.100.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1939,7 +1939,7 @@
     } finally { woBusy = false; }
   }
   // ---------- Assistenz (Stufe 3): freie Fragen, Antwort aus den Flowtown-Daten ----------
-  let assistHist = [], assistAct = null, assistBusy = false, assistLast = '';
+  let assistHist = [], assistAct = null, assistBusy = false, assistLast = '', assistEinfach = false;
   // gesprochene Fragen werden immer laut beantwortet, getippte, wenn die Ansagen an sind
   // ---------- Eine Fahrt genau beschreiben: für „Wie lange habe ich bei der letzten Fahrt gestanden?“ ----------
   // Dieselben Zahlen wie in der Fahrtbilanz; Zeiten in Worten, damit nichts umgerechnet oder gerundet werden muss
@@ -2002,6 +2002,25 @@
     if (spoken || voiceOn()) speak(msg, Object.assign({ now: true, force: true }, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : {}));
     return true;
   }
+  // „Sag es mir ohne Ton“, „Erkläre das in einfacher Sprache“ sind Einstellungen, keine Fragen. Rückgabe: { msg } (fertige Antwort), { frage } (Frage für den Server umgeschrieben) oder null
+  function assistSetting(frage) {
+    const c = String(frage).toLowerCase().replace(/[.!?,;:„“"]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (c.split(' ').length > 9 || /\b(wie|wann|wo|wohin|zum|zur|nach|bahn|bus|weg|haltestelle)\b/.test(c)) return null;
+    if (/\b(ohne ton|kein ton|nur (als )?text|nur schreiben|nicht (mehr )?vorlesen|stumm|ohne ansagen)\b/.test(c)) {
+      setVoice(false); if (canSpeak) speechSynthesis.cancel();
+      return { msg: 'Alles klar. Ich antworte nur als Text, die Ansagen sind aus. Unter Mehr, „Ansagen und Sprache“, schaltest du sie wieder ein.' };
+    }
+    if (/\bnormale[rn]? sprache\b|\bnicht mehr in (einfacher|leichter) sprache\b/.test(c)) {
+      assistEinfach = false;
+      return { msg: 'Gut, ich schreibe wieder in normaler Sprache.', sprich: true };
+    }
+    if (/\b(einfache[rn]?|leichte[rn]?) sprache\b/.test(c)) {
+      assistEinfach = true;
+      if (assistLast) return { frage: 'Sag das noch einmal in einfacher Sprache: kurze Sätze, einfache Wörter.' };
+      return { msg: 'Gern. Ich schreibe ab jetzt in einfacher Sprache. Was möchtest du wissen?', sprich: true };
+    }
+    return null;
+  }
   async function askAssist(frage, spoken) {
     const say = (t, o) => { if (spoken || voiceOn()) speak(t, Object.assign({ now: true, force: true }, o || {})); };
     frage = String(frage || '').trim();
@@ -2009,6 +2028,11 @@
     let shown = frage;
     if (pendingIntent) { const d = intentDef(pendingIntent); pendingIntent = null; frage = d.tpl.replace('{x}', frage.replace(/^(zu[mr]?|nach|in die|ins|zur|zum)\s+/i, '')); }
     if (isLastTripQ(frage)) { answerLastTrip(frage, spoken); return; }
+    // Wünsche an die App selbst („ohne Ton“, „in einfacher Sprache“): sofort umsetzen und bestätigen, ohne Server und ohne KI
+    const st = assistSetting(frage);
+    if (st && st.msg) { assistAct = null; showAssist(frage, st.msg);   // assistLast und der Verlauf bleiben bei der letzten echten Antwort, damit „das“ sich darauf bezieht
+       if (st.sprich && (spoken || voiceOn())) speak(st.msg, { now: true, force: true }); return; }
+    if (st && st.frage) frage = st.frage;
     if (settings.assist !== 2) {   // 2 = Einwilligung zur genauen Standortnutzung (ab 0.100.0); ältere Einwilligungen fragen neu
       const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein genauer Standort an den Flowtown-Server, und die Frage, dein Profil und Wegdaten an Mistral (KI-Anbieter, Rechenzentren in der EU). Dein genauer Standort geht nur an den Flowtown-Server und an HERE für Adresse und Wege, nie an Mistral. Gespeichert wird nichts. Einverstanden?');
       if (!ok) { speak('Gut, dann ohne Assistenz.', { now: true, force: true }); return; }
@@ -2025,7 +2049,7 @@
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
       const kontext = { pos: pos ? pos.map((x) => Math.round(x * 100000) / 100000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '', vorrang: vorrangSchnell() ? 'schnell' : '',
-        unterwegs: !!rec, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
+        unterwegs: !!rec, einfach: assistEinfach, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
       assistAct = r.aktion || null;
