@@ -143,5 +143,5 @@ Konzept: `FAKTEN.md` und der Abschnitt „Datenqualität und Redaktion“ im Ges
 - [ ] M3a Anfragen: moBiel (Aufzugsstatus E2, Fahrzeugdaten), Stadt Bielefeld (Haltestellenkataster, Bordsteinabsenkungen)
 - [ ] M4 Lernen aus Fahrten: Gehtempo je Profil, Umwege und Abbrüche, nur anonym und ab Mindestzahl (K13a)
 - [ ] M5 Bericht für Stadt und moBiel aus dem Qualitätsbericht
-- [x] M6 (11.11.) Übersicht `WAS-FLOWTOWN-KANN.md` (vier Karten, Quellen, heute/bald/später, tägliche Routine, Schreibregeln), Tageszettel (`tagesbericht`, „Heute zu tun“ im Bericht), Klick-Dummy mit Seite „Überblick“ (Mehr, „Was kann Flowtown?“) und Rückmelde-Zeile unter Antworten
-- [ ] M6a Die vier Karten in die Nutzer-App übernehmen (Willkommen oder Mehr, „Was kann Flowtown?“) und in den Flyer
+- [x] M6 (11.11.) Übersicht `WAS-FLOWTOWN-KANN.md` (drei Karten für alle, Profil, tägliche Routine in drei Schritten, Schreibregeln), Tageszettel (`tagesbericht`, „Heute zu tun“ im Bericht), Klick-Dummy mit Seite „Überblick“ (Mehr, „Was kann Flowtown?“) und Rückmelde-Zeile unter Antworten
+- [ ] M6a Die drei Karten („Dein Weg“, „Gerade jetzt“, „Dein Flow“) in die Nutzer-App übernehmen (Willkommen oder Mehr, „Was kann Flowtown?“) und in den Flyer
