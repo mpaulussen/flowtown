@@ -208,7 +208,19 @@
     <div id="acc-tips" class="acc-tips" hidden></div>
     <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="a2hs" class="a2hs" hidden></div>
-    <section class="today-list" aria-labelledby="h-weg"><h3 class="eyebrow" id="h-weg">Dein Weg heute</h3><div id="weg"></div><div id="st-detail"></div></section>
+    <button type="button" class="tag-link" id="tag-link" aria-label="Dein Weg heute öffnen">
+      <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-calendar"/></svg></span>
+      <span class="tag-tx"><b>Dein Weg heute</b><span id="tag-sub" class="small">Fahrten, Meldungen, Tipps</span></span>
+      <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
+    </button>
+  </section>
+
+  <!-- Dein Weg heute: alles, was nicht zum Losgehen gehört -->
+  <section id="view-tag" class="view" hidden aria-labelledby="h-tag">
+    <button type="button" class="tag-back" id="tag-back"><svg class="ic" aria-hidden="true" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg>Heute</button>
+    <div class="hero-wohin hero-page hero-compact"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg><header class="page-head"><h2 id="h-tag" class="display">Dein Weg heute</h2></header></div>
+    <p id="tag-empty" class="small muted" hidden>Noch nichts zu zeigen. Sobald du fährst, siehst du hier deine Fahrten, Meldungen auf deinen Wegen und Tipps.</p>
+    <section class="today-list" aria-label="Fahrten und Meldungen"><div id="weg"></div><div id="st-detail"></div></section>
     <div id="vorfahrt" class="vorfahrt" hidden></div>
     <div id="tip-strip"></div>
     <div class="fuer-dich" id="fuer-dich" hidden></div>

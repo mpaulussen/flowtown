@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.100.0';
+  const VERSION = '0.100.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4185,7 +4185,7 @@
     document.body.dataset.view = name;   // Farbe und Ruhe je Ansicht (Aufzeichnung ohne Menü)
     // Frag Flowtown oben auf den Hauptseiten, mit einem Beispiel, das zur Seite passt
     askBar(name);
-    const tabFor = { drive: 'start', review: 'stats', plan: 'start', best: 'start' };
+    const tabFor = { drive: 'start', review: 'stats', plan: 'start', best: 'start', tag: 'start' };
     // Womit? und das Profil gehören zu beiden Seiten: Heute (Losfahren) und Planen
     if (name === 'start' || name === 'plan') { const slot = $('#mode-slot-' + name), box = $('#mode-box'); if (box.parentNode !== slot) slot.appendChild(box); }
     $$('.tabs button').forEach((b) => {
@@ -4197,12 +4197,13 @@
     if (name === 'map') { mapFitted = false; renderMap(); }
     if (name === 'start') { planFromBest = false; renderToday(); renderLastTrip(); }
     if (name === 'best') renderBest();
+    if (name === 'tag') { renderToday(); renderLastTrip(); }
     if (name === 'plan') { $('#plan-off').hidden = !!apiBase(); renderToday(); }
     if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
     if (name === 'start') renderA2hs();
     const h = $('#view-' + name + ' h2');
     // Seitentitel nennt die Ansicht, damit Screenreader und App-Umschalter wissen, wo man ist
-    const titles = { welcome: 'Willkommen', start: 'Heute', plan: 'Wohin?', best: 'Weg zum Ziel', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
+    const titles = { welcome: 'Willkommen', start: 'Heute', tag: 'Dein Weg heute', plan: 'Wohin?', best: 'Weg zum Ziel', drive: 'Aufzeichnung läuft', review: 'Fahrtbilanz', tips: 'Tipps', stats: 'Verlauf', map: 'Karte', more: 'Einstellungen' };
     document.title = (titles[name] ? titles[name] + ' – ' : '') + 'Flowtown';
     if (h && name !== 'drive') { h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true }); }
     window.scrollTo(0, 0);
@@ -4220,7 +4221,7 @@
   });
 
   // ---------- Heute: Verkehrsmittel, eigene Wege, beste Abfahrtszeit ----------
-  const heuteOn = () => !$('#view-start').hidden || !$('#view-plan').hidden;
+  const heuteOn = () => !$('#view-start').hidden || !$('#view-plan').hidden || !$('#view-tag').hidden;
   // Heute, Karte „Wohin?“: die eigenen Ziele zum direkten Antippen, Planen öffnet eine eigene Seite
   // Heute: „Womit heute am besten?“ für ein gespeichertes Ziel. Nur auf Knopfdruck, wie die Ziel-Prüfung:
   // Ziel und Standort (auf etwa 100 m) gehen an den Server, der Auto, Bus und Bahn, Rad und Fuß vergleicht, mit Profil.
@@ -4565,10 +4566,15 @@
     wegSay = say.join(' ').replace(/\s+/g, ' ').trim();
     $('#weg').innerHTML = html;
     $('#st-detail').innerHTML = detail;
-    const tl = $('#weg').closest('.today-list'); if (tl) tl.hidden = !html && !detail;   // ohne Fahrten und Meldungen keine leere Überschrift
+    const tl = $('#weg').closest('.today-list'); if (tl) tl.hidden = !html && !detail;   // ohne Fahrten und Meldungen kein leerer Block
+    $('#tag-empty').hidden = !!(html || detail);
+    // Kurzinfo auf dem Link der Heute-Seite
+    $('#tag-sub').textContent = nHits ? `${nHits} Meldung${nHits === 1 ? '' : 'en'} auf deinen Wegen` : week.length ? `Diese Woche ${week.length} Fahrt${week.length === 1 ? '' : 'en'}` : real.length ? 'Diese Woche noch keine Fahrt' : 'Fahrten, Meldungen, Tipps';
     const top = computeTips()[0];
     $('#tip-strip').innerHTML = top ? `<button type="button" class="tip-strip" data-goto="tips">${ic('bulb')}<span>${top.num ? `<b>${top.num}</b> · ` : ''}${plain(top.short)}</span>${ic('chevron')}</button>` : '';
   }
+  $('#tag-link').addEventListener('click', () => showView('tag'));
+  $('#tag-back').addEventListener('click', () => showView('start'));
   ['#weg', '#tip-strip'].forEach((id) => $(id).addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-weg],[data-goto]');
     if (!b) return;

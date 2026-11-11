@@ -1594,3 +1594,15 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .hero-wohin #h-tips.long,.hero-wohin #h-stats.long{font-size:clamp(30px,9.5vw,42px);line-height:1.02}
 .hero-wohin #h-tips.xlong,.hero-wohin #h-stats.xlong{font-size:clamp(26px,7.8vw,34px);line-height:1.06}
 @media (max-height:740px){.hero-wohin #h-tips.long,.hero-wohin #h-stats.long{font-size:30px}.hero-wohin #h-tips.xlong,.hero-wohin #h-stats.xlong{font-size:26px}}
+
+/* 0.100.1 Heute reduziert: Dein Weg heute auf eigener Seite */
+.tag-link{display:flex;align-items:center;gap:12px;width:100%;text-align:left;padding:14px 16px;min-height:64px;border:1.5px solid #4f8f6e;border-radius:18px;background:var(--surface,#fff);color:inherit;font:inherit;cursor:pointer}
+.tag-link .tag-ic{display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:#e3f2ea;color:#0f5c3c;flex:none}
+.tag-link .tag-tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+.tag-link .tag-tx b{font-size:18px}
+.tag-link .tag-tx .small{color:var(--muted,#555)}
+.tag-link>.ic:last-child{flex:none;opacity:.7}
+.tag-back{display:inline-flex;align-items:center;gap:4px;margin:0 0 8px;padding:8px 12px 8px 4px;min-height:44px;border:0;background:none;color:var(--accent,#0f5c3c);font:inherit;font-weight:700;cursor:pointer}
+#view-tag .claim-mark circle:nth-child(-n+2){fill:#bfc7c2}
+#view-tag{display:flex;flex-direction:column;gap:12px}
+#view-tag[hidden]{display:none}
