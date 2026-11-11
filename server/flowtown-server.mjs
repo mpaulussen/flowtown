@@ -2288,6 +2288,7 @@ Regeln:
 - Plan B: Gibt ein Werkzeug plan_b zurück oder meldet es ein Hindernis (Stufen, Sperrung, Störung, Aufzug außer Betrieb), nenne neben dem Problem immer eine Alternative daraus. Fehlt plan_b, sag offen, dass du keine kennst, und verweise auf Menschen vor Ort (Werkzeug hilfe_menschen).
 - Rückweg („Wann muss ich zurück?“, „Wie komme ich wieder heim?“, „Fährt abends noch eine Bahn?“): Werkzeug rueckweg mit dem Ort, von dem es zurückgeht. Nenne die letzte Abfahrt heute (bei Profil mit Hochbahnsteig), sag, dass der Fahrplan keine späteren Verspätungen kennt, und rate zu etwa 15 Minuten Reserve.
 - Weiß die Person nicht weiter, hat sich verlaufen, ist ein Ort unübersichtlich oder braucht sie beim Ein- und Aussteigen Hilfe: Werkzeug hilfe_menschen. Nenne zwei Möglichkeiten, erfinde keine Telefonnummern, verweise auf bahn.de oder mobiel.de. Bei Gefahr zuerst Notruf 112.
+- Liefert ein Werkzeug zu einem Fakt Quelle oder Stand (zum Beispiel „quelle“, „stand“), nenne beides kurz, etwa „laut Bielefeld barrierefrei erleben, Stand 2025“. Erfinde nie eine Quelle oder ein Datum.
 - Fehlen Angaben (angaben_fehlen, keine Angabe, unbekannt), sag das offen in einem Satz, zum Beispiel „Zur Türbreite habe ich keine Angabe.“ Nenne nur Fehlendes, das zum Profil passt.
 - Ampel-Angaben (Tonsignal, Taster, Leitstreifen) sind Angaben aus Karten, nie eine Zusage, dass das Queren sicher ist. Sag „laut Karte“ und dass die Person am Signal selbst entscheidet.
 - Endet der Weg an einem eingang (Feld eingang), nenne den Eingang und ob er stufenlos ist; der Weg führt dorthin, nicht in die Gebäudemitte.
@@ -3346,6 +3347,56 @@ async function assist(body) {
   return { antwort: 'Das konnte ich gerade nicht vollständig nachschlagen. Versuch es bitte etwas genauer.', aktion: null, werkzeuge: used };
 }
 
+// <qualitaet>
+// Datenqualität, Schritt 1: Lückenzähler und Rückmeldungen. Gezählt wird nie eine Frage und nie eine Person, nur Thema, bekannter Ort, Profilart und Monat.
+const Q_DIR = path.join(DATA_DIR, 'qualitaet');
+const LUECKE_FILE = path.join(Q_DIR, 'luecken.json');
+const RUECK_FILE = path.join(Q_DIR, 'rueckmeldungen.jsonl');
+const Q_THEMEN = [['aufzug', /aufz[uü]g|\blift\b/], ['rampe', /rampe|hublift|niederflur|rollstuhlplatz/], ['wc', /toilette|\bwc\b/], ['notruf', /notruf|notrufs/], ['umsteigen', /umstei/], ['tempo', /tempo|langsam|reicht (die|meine) zeit/],
+  ['eingang', /eingang|\btür|stufe|schwelle|barrierefrei/], ['ampel', /ampel|querung|überqu/], ['haltestelle', /haltestelle|bahnsteig/], ['parken', /parkplatz|parken|parkhaus/], ['baustelle', /baustelle|sperrung|umleitung|störung/],
+  ['sprache', /einfache sprache|leichte sprache|ohne ton/], ['oeffnungszeiten', /geöffnet|öffnungszeit|\boffen\b/], ['hilfe', /hilfe|helfen|begleit/], ['weg', /weg|route|komme ich|fahrt|fährt|bahn|bus/]];
+const Q_LUECKE = /keine angabe|weiß ich (gerade )?nicht|kenne ich (nicht|dazu)|habe ich (dazu )?(keine|nicht)|nicht sicher|nicht bekannt|kann ich (dir )?(nicht|nichts)|dazu kann ich nichts/i;
+let qLuecken = {};
+try { qLuecken = JSON.parse(fs.readFileSync(LUECKE_FILE, 'utf8')); } catch (e) { qLuecken = {}; }
+function qThema(f) { const t = String(f || '').toLowerCase(); for (const [k, re] of Q_THEMEN) if (re.test(t)) return k; return 'sonstiges'; }
+// nur Orte, die wir selbst kennen (Haltestellen, Gebäude von Bethel): so landet nie eine private Adresse im Zähler
+function qObjekt(f) {
+  const t = hstNorm(f); if (t.length < 4) return '';
+  const namen = [...((hst && hst.liste) || []).map((z) => z.name), ...((bf && bf.orte) || []).map((o) => o.name)].filter((n) => n && hstNorm(n).length >= 4);
+  const hit = namen.filter((n) => t.includes(hstNorm(n))).sort((a, b) => b.length - a.length)[0];
+  return hit ? clip(hit, 60) : '';
+}
+function qZaehle(frage, r, typ) {
+  try {
+    if (!r || !r.antwort) return;
+    const mon = new Date().toISOString().slice(0, 7), key = [mon, qThema(frage), qObjekt(frage), typ || ''].join('|');
+    const e = qLuecken[key] || (qLuecken[key] = { n: 0, l: 0 });
+    e.n++; if (Q_LUECKE.test(r.antwort)) e.l++;
+    fs.mkdirSync(Q_DIR, { recursive: true });
+    fs.writeFileSync(LUECKE_FILE + '.tmp', JSON.stringify(qLuecken)); fs.renameSync(LUECKE_FILE + '.tmp', LUECKE_FILE);
+  } catch (e) { /* Zähler darf nie eine Antwort verhindern */ }
+}
+const Q_ARTEN = ['gut', 'falsch', 'veraltet'];
+function qRueck(b) {
+  const art = Q_ARTEN.includes(b && b.art) ? b.art : null;
+  if (!art) throw Object.assign(new Error('Unbekannte Art'), { status: 400 });
+  const eintrag = { t: Date.now(), art, thema: qThema(b.frage), typ: clip(b.profil_typ, 20) };
+  // Text nur bei „stimmt nicht“ und „veraltet“, und nur, weil die Person das ausdrücklich gewählt hat; Adressen aus „Wo bin ich?“ nie
+  if (art !== 'gut') {
+    eintrag.frage = clip(b.frage, 300);
+    eintrag.antwort = /stehst bei /i.test(String(b.antwort)) ? '' : clip(b.antwort, 600);
+    eintrag.werkzeuge = (Array.isArray(b.werkzeuge) ? b.werkzeuge : []).slice(0, 6).map((x) => clip(x, 30));
+    eintrag.id = 'R' + Date.now().toString(36);
+  }
+  fs.mkdirSync(Q_DIR, { recursive: true });
+  fs.appendFileSync(RUECK_FILE, JSON.stringify(eintrag) + '\n');
+  return eintrag.id || null;
+}
+function qRueckListe() {
+  try { return fs.readFileSync(RUECK_FILE, 'utf8').split('\n').filter(Boolean).map((l) => JSON.parse(l)); } catch (e) { return []; }
+}
+// </qualitaet>
+
 function send(res, status, obj, origin) {
   const h = { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store', Vary: 'Origin' };
   if (origin && ORIGINS.includes(origin)) Object.assign(h, { 'Access-Control-Allow-Origin': origin, 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -3381,7 +3432,14 @@ const server = http.createServer(async (req, res) => {
     }
     if (req.method === 'POST' && p === '/api/assist') {
       if (!assistAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Fragen möglich.' }, origin);
-      return send(res, 200, await assist(await readBody(req, 8 * 1024)), origin);
+      const ab = await readBody(req, 8 * 1024), ar = await assist(ab);
+      qZaehle(ab.frage, ar, profilTyp(ab.kontext || {}));
+      return send(res, 200, ar, origin);
+    }
+    if (req.method === 'POST' && p === '/api/rueckmeldung') {
+      if (!hinweisAllowed(ip)) return send(res, 429, { fehler: 'Heute sind keine weiteren Meldungen möglich.' }, origin);
+      const b = await readBody(req, 4096); b.profil_typ = profilTyp(b.kontext || { profil_typ: b.profil_typ });
+      return send(res, 200, { ok: true, id: qRueck(b) }, origin);
     }
     if (req.method === 'GET' && p === '/api/lage') return send(res, 200, await readLage(), origin);
     if (req.method === 'GET' && p === '/api/oepnv') return send(res, 200, await readMobiel(), origin);
@@ -3611,6 +3669,24 @@ if (cli === 'faq') {
     console.log('Jetzt: sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown');
     process.exit(0);
   })();
+} else if (cli === 'luecken') {
+  // Lückenzähler: zu welchen Themen und Orten fehlten Antworten (ohne Fragen, ohne Personen). Aufruf: luecken [Monat JJJJ-MM]
+  const mon = process.argv[3] || '';
+  const rows = Object.entries(qLuecken).map(([k, v]) => { const [m, th, ob, ty] = k.split('|'); return { m, th, ob, ty, n: v.n, l: v.l }; }).filter((r) => !mon || r.m === mon).sort((a, b) => b.l - a.l || b.n - a.n);
+  console.log('Monat   Thema            Ort                           Profil     Fragen  ohne Antwort  Anteil');
+  for (const r of rows.slice(0, 60)) console.log(r.m.padEnd(8), r.th.padEnd(16), (r.ob || '-').slice(0, 28).padEnd(29), (r.ty || '-').padEnd(10), String(r.n).padStart(6), String(r.l).padStart(12), String(Math.round(100 * r.l / r.n) + ' %').padStart(8));
+  console.log(rows.length + ' Zeilen. Sortiert nach Zahl der fehlenden Antworten: oben steht, was zuerst erfasst werden sollte.');
+  process.exit(0);
+} else if (cli === 'rueckmeldungen') {
+  // Rückmeldungen „stimmt nicht“ und „veraltet“ mit Frage und Antwort; zuerst die neuesten. Aufruf: rueckmeldungen [Anzahl]
+  const all = qRueckListe(), bad = all.filter((x) => x.art !== 'gut');
+  const gut = all.filter((x) => x.art === 'gut').length;
+  for (const x of bad.slice(-(Number(process.argv[3]) || 20)).reverse()) {
+    console.log(`${x.id} ${x.art.padEnd(8)} ${new Date(x.t).toLocaleDateString('de-DE')} ${x.thema} ${x.typ ? '[' + x.typ + ']' : ''} ${x.werkzeuge && x.werkzeuge.length ? '(' + x.werkzeuge.join(', ') + ')' : ''}`);
+    console.log('  Frage:  ' + (x.frage || '')); console.log('  Antwort: ' + (x.antwort || '(nicht übermittelt)'));
+  }
+  console.log(`${all.length} Rückmeldungen: ${gut}× „stimmt“, ${bad.length}× „stimmt nicht“ oder „veraltet“.`);
+  process.exit(0);
 } else if (cli === 'frage') {
   // Assistenz von der Kommandozeile testen: node flowtown-server.mjs frage "Wo ist die nächste rollstuhlgerechte Toilette?" 52.0214 8.5339 [Profil]
   loadFahrplan();

@@ -123,3 +123,17 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (334 Einträge in 26 Gr
 - [x] L3b (11.11.) Umgesetzt (App 0.100.2, Server): FA96/FA97 „Hilfe jetzt“ (Gefahr zuerst, Be My Eyes nur beim Sehprofil, Gegenfragen ohne Fehltreffer); „ohne Ton“ und „einfache Sprache“ als Einstellungen in der App (sofort bestätigt, ohne KI; „einfache Sprache“ nach einer Antwort schreibt diese um); Server kennt `kontext.einfach` und die Regel für Wünsche ohne Frage.
 - [x] L3c (11.11.) Server aktualisiert, Gruppe 26 noch einmal gelaufen: 5 erfüllt, 1 teils. Offen: K329 (Gehtempo bei Abfahrten und Umstiegen) ist noch offen.
 - [ ] L4 Morgenwarnung für feste Wege (Konzept für Mobil), danach „Ich komme nicht weiter“ und Umsteigezeit nach Tempo
+
+## M. Datenqualität und Redaktion (Entscheidungen 11.11.: Pilotgebiet Altstadt, Hauptbahnhof, Bethel, Uni; zunächst ein Redakteur; eigene PWA; kein OSM-Rückfluss)
+Konzept: `FAKTEN.md` und der Abschnitt „Datenqualität und Redaktion“ im Gesamtkonzept (deutsch und englisch).
+- [x] M1a (0.101.0) Lückenzähler im Server (`luecken`), ohne Fragen und Personen
+- [x] M1b (0.101.0) „Stimmt / Stimmt nicht / Veraltet“ unter Antworten, Server `rueckmeldungen`, Datenschutzerklärung ergänzt
+- [x] M1c (0.101.0) Systemregel: Quelle und Stand nennen, wenn ein Werkzeug sie liefert
+- [ ] M1d Server aktualisieren, nach einer Woche `luecken` und `rueckmeldungen` ansehen
+- [ ] M1e Quelle und Stand in weitere Werkzeugergebnisse einbauen (Aufzüge, Haltestellen, Toiletten, Parkplätze)
+- [ ] M2 Redaktions-App (eigene PWA `/redaktion`): Fakten-Speicher (JSON-Zeilen plus Schnappschuss), Rollen mit Einladungscodes, Erfassen vor Ort mit Checkliste, Prüfliste nach Frischeklasse, Änderungsprotokoll, Qualitätsbericht
+- [ ] M2a Objektkatalog und Checklisten für das Pilotgebiet (Stadtbahn-Haltestellen mit Aufzug und Rampe, Eingänge öffentlicher Gebäude, WC, Ampeln und Querungen, Dauerhindernisse; 6 bis 10 Fragen je Objektart)
+- [ ] M3 Automatische Quellen: OSM-Lückenbericht (Orte ohne `wheelchair`), Fahrplan-Felder für Rollstuhl-Einstieg prüfen (K330), DWD-Wetter (E3), Wheelmap-Lizenz und Reisen für Alle klären
+- [ ] M3a Anfragen: moBiel (Aufzugsstatus E2, Fahrzeugdaten), Stadt Bielefeld (Haltestellenkataster, Bordsteinabsenkungen)
+- [ ] M4 Lernen aus Fahrten: Gehtempo je Profil, Umwege und Abbrüche, nur anonym und ab Mindestzahl (K13a)
+- [ ] M5 Bericht für Stadt und moBiel aus dem Qualitätsbericht

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.100.2';
+  const VERSION = '0.101.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2053,7 +2053,7 @@
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
       assistAct = r.aktion || null;
-      showAssist(shown, r.antwort);
+      showAssist(shown, r.antwort, { frage: shown, antwort: r.antwort, werkzeuge: r.werkzeuge || [] });
       assistLast = r.antwort;
       say(r.antwort, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : null);
     } catch (e) {
@@ -2114,7 +2114,9 @@
     clearInterval(assistTick); assistTick = setInterval(assistLoop, 400); assistLoop();
   }
   const sprechIcon = () => (settings.sprechIcon === 'phone' ? 'handset' : 'mic');
-  function showAssist(frage, antwort) {
+  let assistFb = null;   // Rückmeldung zur letzten Serverantwort: { frage, antwort, werkzeuge }
+  function showAssist(frage, antwort, fb) {
+    assistFb = antwort && fb ? fb : null;
     const el = $('#assist');
     el.classList.toggle('big', assistBig);
     el.classList.toggle('nosr', !SR);
@@ -2123,6 +2125,7 @@
       ${assistBig ? '<p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><p class="call-heard" id="call-heard" aria-live="off"></p>' : ''}
       ${frage ? `<p class="assist-q">${esc(frage)}</p>` : ''}
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
+      ${assistFb ? `<div class="assist-fb" id="assist-fb" role="group" aria-label="War die Antwort richtig?"><span>War das richtig?</span><button type="button" class="btn quiet" data-assist="fb-gut">Stimmt</button><button type="button" class="btn quiet" data-assist="fb-falsch">Stimmt nicht</button><button type="button" class="btn quiet" data-assist="fb-veraltet">Veraltet</button></div><p class="small muted" id="assist-fb-note">Bei „Stimmt nicht“ und „Veraltet“ gehen Frage und Antwort an die Redaktion.</p>` : ''}
       <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>
       ${assistBig ? `<button type="button" class="hangup" data-assist="close" aria-label="Auflegen und Gespräch beenden">${ic('handset')}<span>Auflegen</span></button>` : ''}
       <p class="small muted">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>`;
@@ -6770,6 +6773,13 @@
     if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog) { recog.userAbort = true; recog.abort(); } micStatus(''); }
     else if (a === 'mic') { unlockSpeech(); listen(); }
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
+    else if (/^fb-(gut|falsch|veraltet)$/.test(a) && assistFb) {
+      const art = a.slice(3), d = assistFb; assistFb = null;
+      const box = $('#assist-fb'), note = $('#assist-fb-note');
+      if (box) box.innerHTML = '<span role="status">Danke, das hilft.</span>';
+      if (note) note.hidden = true;
+      postJson('/api/rueckmeldung', { art, frage: d.frage, antwort: art === 'gut' ? '' : d.antwort, werkzeuge: d.werkzeuge, profil_typ: settings.access.on ? settings.access.typ : '' }).catch(() => {});
+    }
     else if (a === 'ziel' && assistAct) {
       const x = assistAct, near = settings.ziele.find((z) => dist(z, x) < 150);
       if (x.mode) setModeVoice(x.mode === 'oepnv' ? 'bahn' : x.mode);

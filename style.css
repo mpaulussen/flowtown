@@ -1606,3 +1606,10 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 #view-tag .claim-mark circle:nth-child(-n+2){fill:#bfc7c2}
 #view-tag{display:flex;flex-direction:column;gap:12px}
 #view-tag[hidden]{display:none}
+
+/* 0.101.0 Rückmeldung unter Antworten */
+.assist-fb{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin:10px 0 2px}
+.assist-fb>span{font-weight:700}
+.assist-fb .btn{min-height:44px;padding:0 14px}
+.assist-fb .btn{border:1.5px solid #4f8f6e;border-radius:999px;background:var(--surface,#fff)}
+.assist-fb{gap:8px 8px}

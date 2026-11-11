@@ -262,6 +262,26 @@ Die Assistenz lernt aus geprüften Beispielen: Zu jeder neuen Frage bekommt Mist
 
 `node flowtown-server.mjs hinweise` listet alle Meldungen mit Kennung, Art, Stelle, Datum, Bestätigungen und einem Kartenlink. `node flowtown-server.mjs hinweis <Kennung> geprueft` markiert eine Meldung als von der Redaktion geprüft (Häkchen in der App, bleibt fünf Jahre, verschwindet erst nach drei „Ist weg“), `… hinweis <Kennung> weg` löscht sie. Danach `sudo chown -R flowtown: /var/lib/flowtown && sudo systemctl restart flowtown`.
 
+### Datenqualität: Lückenzähler und Rückmeldungen
+
+Ab App 0.101.0 gibt es zwei Auswertungen, beide ohne Namen, ohne Standort und ohne IP-Adresse. Konzept: `FAKTEN.md`.
+
+Der **Lückenzähler** zählt je Monat, Thema, bekanntem Ort (Haltestelle oder Gebäude von Bethel) und Profilart, wie oft eine Antwort fehlte („keine Angabe“, „weiß ich nicht“). Die Frage selbst wird nicht gespeichert. Anzeigen, oben steht, was zuerst erfasst werden sollte:
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs luecken'
+```
+
+Nur ein Monat: `… luecken 2026-11`. Datei: `/var/lib/flowtown/qualitaet/luecken.json`.
+
+**Rückmeldungen:** Unter jeder Antwort kann man „Stimmt“, „Stimmt nicht“ oder „Veraltet“ antippen. Bei „Stimmt“ gehen nur Thema und Profilart an den Server, bei den beiden anderen auch Frage und Antwort (die Person hat das ausdrücklich gewählt). Antworten auf „Wo bin ich?“ werden nie übermittelt. Anzeigen:
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs rueckmeldungen'
+```
+
+Datei: `/var/lib/flowtown/qualitaet/rueckmeldungen.jsonl`. Wer nicht möchte, dass Frage und Antwort gespeichert werden, löscht die Zeilen mit `art` gleich `falsch` oder `veraltet` nach der Prüfung.
+
 ### Hinweise von Nutzer*innen
 
 Ab 0.40 können Nutzer*innen auf der Karte Hindernisse melden (Stufe, hoher Bordstein, schlechter Belag, Aufzug defekt, Gehweg blockiert, Toilette nicht nutzbar, Ampel, „gut zugänglich“), bestätigen oder als erledigt markieren. Nur feste Arten, kein freier Text, gespeichert ohne IP in `/var/lib/flowtown/hinweise.json`. Aufzüge verfallen nach 7 Tagen, blockierte Wege und Toiletten nach 14, Ampeln nach 180, bauliche Hindernisse nach 365 Tagen; zwei „Ist weg“ entfernen einen Hinweis. Höchstens 30 Meldungen je IP und Tag (nur im Arbeitsspeicher). Einen Hinweis von Hand löschen: Eintrag aus der Datei entfernen und den Dienst neu starten.
