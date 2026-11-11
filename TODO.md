@@ -114,3 +114,9 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [x] K13b (11.11.) Gesamtlauf 6 mit E15 und E13: 256 erfüllt, 22 teils, 0 nicht erfüllt, 1 falsch, 8 nicht prüfbar; K061, K070, K116 behoben
 - [x] K13c (11.11.) Hinweis „stufenlos nur mit Beleg“ im Werkzeug und im Systemtext (K271)
 - [ ] K13a Gehtempo im Pilot mit echten Wegen prüfen und die Annahmen anpassen
+
+## L. Leitidee und offene Fragen aus Sicht der Nutzenden (11.11.)
+- [ ] L1 Leitidee **„Barriere-Atlas von unten“** ins Konzept (deutsch und englisch): Bielefelds Barrieren als Bild, das aus den Wegen, Meldungen und Messwerten der Nutzenden wächst; jeder Eintrag mit Quelle, Datum und Zahl der Bestätigungen; „weiß ich nicht“ ist ein gültiger Zustand; keine Zusage und kein amtliches Zertifikat. Englisch erledigt (Abschnitt „The barrier atlas from below“ in „Flowtown Concept (English)“), deutsche Konzeptfassung fehlt noch.
+- [ ] L2 Offene Fragen ins Konzept (englisch erledigt): E2 Aufzugsstatus moBiel; Umsteigezeit im eigenen Tempo; Rollstuhlplatz und Rampe im Fahrzeug; Knopf „Ich komme nicht weiter“; Blind, gehörlos, schwerhörig getrennt und einfache Sprache; Morgenwarnung als Web-App (iPhone); Pflege und Verfall der Atlas-Einträge.
+- [ ] L3 Neue Testfragen als eigene Gruppe im Prüfkatalog: Umsteigezeit im eigenen Tempo, Rampe im nächsten Bus, nächste Notrufsäule, Antwort ohne Ton, einfache Sprache, „Wer kann mir jetzt helfen?“
+- [ ] L4 Morgenwarnung für feste Wege (Konzept für Mobil), danach „Ich komme nicht weiter“ und Umsteigezeit nach Tempo
