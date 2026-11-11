@@ -3750,7 +3750,7 @@ if (cli === 'faq') {
         const key = e.type + e.id, t = e.tags || {}, typ = typOf(t), p = mid(e);
         if (!typ || !p || gesehen.has(key) || mAbs(p, g.pos) > g.r) continue;
         gesehen.add(key);
-        objekte.push({ id: `${typ}-${e.type[0]}${e.id}`, typ, name: t.name || t['name:de'] || t.ref || '', gebiet: g.name, pos: p, tags: t, quelle: 'OpenStreetMap' });
+        objekte.push({ id: `${typ}-${e.type[0]}${e.id}`, typ, name: t.name || t['name:de'] || t.ref || '', gebiet: g.name, pos: p, tags: t, quelle: 'OpenStreetMap', osm: `https://www.openstreetmap.org/${e.type}/${e.id}` });
       }
     }
     // OSM führt Haltestellen je Bahnsteig oder Richtung und Ampeln je Furt: gleichnamige oder dicht beieinander liegende zu einem Objekt zusammenfassen
@@ -3759,8 +3759,9 @@ if (cli === 'faq') {
       for (const o of objekte) {
         const zus = ['stadtbahn_haltestelle', 'bushaltestelle', 'querung_ampel'].includes(o.typ);
         if (!zus) { rest.push(o); continue; }
-        const nah = o.typ === 'querung_ampel' ? 25 : 60;
-        const z = eins.find((y) => y.typ === o.typ && y.gebiet === o.gebiet && (o.name ? y.name === o.name : !y.name) && mAbs(y.pos, o.pos) <= nah);
+        const nah = o.typ === 'querung_ampel' ? 25 : o.typ === 'bushaltestelle' ? 80 : 120;
+        const nn = (x) => String(x || '').toLowerCase().replace(/\s*\(u\)\s*$/, '').trim();   // „Jahnplatz“ und „Jahnplatz (U)“ sind eine Haltestelle
+        const z = eins.find((y) => y.typ === o.typ && y.gebiet === o.gebiet && (o.name ? nn(y.name) === nn(o.name) : !y.name) && mAbs(y.pos, o.pos) <= nah);
         if (z) { for (const [k, v] of Object.entries(o.tags)) if (z.tags[k] == null) z.tags[k] = v; z.n = (z.n || 1) + 1; } else eins.push(o);
       }
       const vorher = objekte.length; objekte.length = 0; objekte.push(...rest, ...eins);
@@ -3781,7 +3782,7 @@ if (cli === 'faq') {
       objekte.push({ id: 'hindernis_weg-h' + h.id, typ: 'hindernis_weg', name: HINWEIS_NAME[h.art] || h.art, gebiet: g.name, pos: [h.lat, h.lon], tags: {}, quelle: `Nutzende (${h.ok}× bestätigt)` });
     }
     const q = (x) => '"' + String(x == null ? '' : x).replace(/"/g, '""') + '"';
-    const out = ['ID;Objektart;Name;Gebiet;Breite;Länge;Priorität;Fehlt (Zahl);Fehlt;Bekannt;Quelle;Status'];
+    const out = ['ID;Objektart;Name;Gebiet;Breite;Länge;Priorität;Fehlt (Zahl);Fehlt;Bekannt;Quelle;Status;Lage;OSM-Link'];
     const rows = [];
     for (const o of objekte) {
       const fr = frag[o.typ] || [], bekannt = [], fehlt = [];
@@ -3791,11 +3792,15 @@ if (cli === 'faq') {
         if (v != null) bekannt.push(`${f.m}=${/^(width|door:width|entrance:width|kerb:height)$/.test(f.osm) && /^\d+([.,]\d+)?$/.test(String(v)) && Number(String(v).replace(',', '.')) < 10 ? Math.round(Number(String(v).replace(',', '.')) * 100) + ' cm' : v} (OSM)`); else if (bk) bekannt.push(`${f.m}=${bk} (Bethel)`); else fehlt.push(f.m);
       }
       const prio = o.typ === 'bushaltestelle' && o.gebiet === 'Hauptbahnhof' ? 2 : o.typ === 'gebaeude_eingang' && /^(bank|pharmacy|doctors|cinema)$/.test(o.tags.amenity || '') ? 3 : PRIO[o.typ] || 3;
-      rows.push({ o, prio, fehlt, bekannt });
+      // Lage: Angaben aus OSM und das nächste benannte Objekt, damit man ein Objekt ohne Namen vor Ort findet (zum Beispiel einen Aufzug)
+      const nb = objekte.filter((y) => y !== o && y.name && !['querung_ampel', 'wc', 'behindertenparkplatz', 'hindernis_weg'].includes(y.typ) && mAbs(y.pos, o.pos) <= 150).sort((a, b) => mAbs(a.pos, o.pos) - mAbs(b.pos, o.pos))[0];
+      const lage = [o.tags.description, o.tags['name:de'] && o.tags['name:de'] !== o.name ? o.tags['name:de'] : '', o.tags.level ? 'Ebene ' + o.tags.level : '', o.tags.operator ? 'Betreiber ' + o.tags.operator : '', o.tags.ref && o.tags.ref !== o.name ? 'Kennung ' + o.tags.ref : '', nb ? `nahe ${nb.name}, ${mAbs(nb.pos, o.pos)} m` : ''].filter(Boolean).join('; ');
+      const rel = { townhall: 0, library: 1, hospital: 2, clinic: 3, post_office: 4, police: 5, social_facility: 6, public_building: 7, courthouse: 8 }[o.tags.amenity] ?? 9;
+      rows.push({ o, prio, fehlt, bekannt, lage, rel });
     }
     const gOrd = gebiete.map((g) => g.name);
-    rows.sort((a, b) => a.prio - b.prio || gOrd.indexOf(a.o.gebiet) - gOrd.indexOf(b.o.gebiet) || b.fehlt.length - a.fehlt.length || String(a.o.name).localeCompare(String(b.o.name), 'de'));
-    for (const { o, prio, fehlt, bekannt } of rows) out.push([o.id, LABEL[o.typ], o.name || '(ohne Namen)', o.gebiet, o.pos[0].toFixed(5), o.pos[1].toFixed(5), prio, fehlt.length, fehlt.join(', '), bekannt.join('; '), o.quelle, 'offen'].map(q).join(';'));
+    rows.sort((a, b) => a.prio - b.prio || gOrd.indexOf(a.o.gebiet) - gOrd.indexOf(b.o.gebiet) || a.rel - b.rel || b.fehlt.length - a.fehlt.length || String(a.o.name).localeCompare(String(b.o.name), 'de'));
+    for (const { o, prio, fehlt, bekannt, lage } of rows) out.push([o.id, LABEL[o.typ], o.name || '(ohne Namen)', o.gebiet, o.pos[0].toFixed(5), o.pos[1].toFixed(5), prio, fehlt.length, fehlt.join(', '), bekannt.join('; '), o.quelle, 'offen', lage, o.osm || ''].map(q).join(';'));
     fs.mkdirSync(Q_DIR, { recursive: true });
     const file = path.join(Q_DIR, nur ? `objektkatalog-pilot-${nur}.csv` : 'objektkatalog-pilot.csv');
     fs.writeFileSync(file, '﻿' + out.join('\r\n') + '\r\n');

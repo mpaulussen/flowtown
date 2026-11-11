@@ -45,7 +45,9 @@ Mittelpunkte gefunden: Bethel 52.00698, 8.52530, Uni 52.03745, 8.49382. Der erst
 - Gleichnamige Haltestellen (60 m) und nahe Ampeln (25 m) gelten als ein Objekt.
 - Banken, Apotheken, Praxen und Kinos haben Priorität 3.
 
-Wer anfangen will: Priorität 1 und 2 zuerst, Priorität 3 später.
+Zweiter Lauf: 675 OSM-Elemente zu 482 Objekten zusammengefasst, 487 Objekte insgesamt (Priorität 1: 34, 2: 210, 3: 243). Ganz oben stehen richtig die Aufzüge und Stadtbahn-Haltestellen (Hauptbahnhof, Jahnplatz, Rathaus, Landgericht, Bethel, Universität). Viele Aufzüge haben in OpenStreetMap keinen Namen. Dafür gibt es jetzt die Spalten **Lage** (Beschreibung, Ebene, Betreiber, Kennung, nächstes benanntes Objekt mit Abstand) und **OSM-Link**. Haltestellen mit Zusatz „(U)“ gelten als eine, Bushaltestellen gleichen Namens bis 80 m ebenso. Unter den Gebäuden stehen Rathaus, Bibliothek, Klinik, Post und Polizei zuerst.
+
+Wer anfangen will: **Priorität 1 (34 Objekte) zuerst**, das sind die Aufzüge und Stadtbahn-Haltestellen und damit der Fall Jahnplatz. Danach Priorität 2, zuerst die öffentlichen Einrichtungen. Priorität 3 später.
 
 ## Was ich nicht prüfen konnte
 
