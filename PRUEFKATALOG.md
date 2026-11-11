@@ -1,6 +1,6 @@
 # Prüfkatalog: Was Nutzende erwarten und was Flowtown darauf antwortet
 
-Stand 10.11.2026 (erster Testlauf: siehe `PRUEFERGEBNIS-2026-11-10.md`) · 328 Einträge in 25 Gruppen · Datei: `server/pruefkatalog.csv`
+Stand 10.11.2026 (erster Testlauf: siehe `PRUEFERGEBNIS-2026-11-10.md`) · 334 Einträge in 26 Gruppen · Datei: `server/pruefkatalog.csv`
 
 Der Katalog sammelt Fragen, Aufgaben und Service-Erwartungen, die Menschen mit sehr verschiedenen Behinderungen und Mobilitätsbedürfnissen an Flowtown stellen können. Zu jedem Eintrag steht, was eine gute Reaktion sein müsste. So lässt sich nachprüfen, was die App kann, und was nicht, und daraus ergibt sich die Liste für die nächsten Entwicklungsschritte.
 
@@ -9,7 +9,7 @@ Der Katalog sammelt Fragen, Aufgaben und Service-Erwartungen, die Menschen mit s
 | Spalte | Inhalt |
 | --- | --- |
 | Nr, Thema, Profil, Frage, Breite, Länge | wie in `testfragen.csv`; `Profil` ist `rollstuhl`, `rollator`, `sehen`, `hoeren`, `lernen`, `ruhe`, `andere` oder leer |
-| Gruppe | Lebensbereich oder Zielgruppe (01 bis 25) |
+| Gruppe | Lebensbereich oder Zielgruppe (01 bis 26) |
 | Erwartung | woran man eine gute Reaktion erkennt, überprüfbar in einem Satz |
 | Prüfweg | `Assistenz` (Frage an die KI, per `testlauf`), `App` (Sicht- oder Bedienprüfung), `Beobachtung` (nur mit echten Personen oder Geräten) |
 | Vermutung | meine Einschätzung vor der Prüfung aus dem Wissen über den Code: `erfüllt`, `teils`, `unklar`, `fehlt`. Sie ist nicht geprüft |
@@ -72,9 +72,10 @@ Jede Antwort der Assistenz wird gegen dieselben acht Kriterien gelesen, zusätzl
 | 23 Dienstleistungen, die die App nicht selbst erbringt | 15 | 0 | 0 | 1 | 14 |
 | 24 Gruppen und Begleitende | 12 | 0 | 9 | 1 | 2 |
 | 25 Vertrauen und Transparenz | 10 | 0 | 6 | 4 | 0 |
-| **Gesamt** | **328** | **72** | **128** | **47** | **81** |
+| 26 Sicht der Nutzenden: Lücken (11.11.) | 6 | 0 | 4 | 0 | 2 |
+| **Gesamt** | **334** | **72** | **132** | **47** | **83** |
 
-Von 328 Einträgen sind 287 Fragen, die der Testlauf an die Assistenz schickt. Die übrigen 41 sind Anforderungen an die App und werden von Hand oder mit Playwright geprüft; 6 davon brauchen echte Personen oder Geräte.
+Von 334 Einträgen sind 293 Fragen, die der Testlauf an die Assistenz schickt. Die übrigen 41 sind Anforderungen an die App und werden von Hand oder mit Playwright geprüft; 6 davon brauchen echte Personen oder Geräte.
 
 ## Voraussichtliche Lücken
 
@@ -98,6 +99,7 @@ Das sind die Einträge, bei denen ich nach dem Code vermute, dass die App heute 
 - **17 Hilfe und Sicherheit:** Angehörige informieren, Standort teilen, Notrufsäule, Polizei.
 - **22 Grenzfälle und Sicherheit der Antworten:** Hotelpreis.
 - **23 Dienstleistungen, die die App nicht selbst erbringt:** Taxi, Fahrdienst, Ticket kaufen, moBiel anrufen, Begleitung buchen, Krankentransport, SMS-Erinnerung, Beschwerde schreiben, Platz reservieren, Hotel buchen, Abholen, Brief vorlesen, Anrufen lassen, Fahrer informieren.
+- **26 Sicht der Nutzenden: Lücken:** sechs Fragen, die ein Mensch mit Behinderung dringend stellen würde und die bisher fehlten (Umsteigezeit im eigenen Tempo, Rampe im Fahrzeug, Notrufsäule, Antwort ohne Ton, einfache Sprache, Hilfe jetzt). K329 bis K334, Stand 11.11., noch nicht gelaufen.
 - **24 Gruppen und Begleitende:** Schulklasse, Hindernisse für die Stadt.
 
 Häufige Ursachen, die sich aus der Liste ablesen lassen:

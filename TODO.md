@@ -82,7 +82,7 @@ Konzept: Abschnitt „Telefon-Assistenz“ im Gesamtkonzept. Eine Rufnummer, unt
 - [ ] J6 Test mit älteren Menschen und Menschen mit Hörbehinderung (Telefonklang, Dialekt, Hörgerät), Messgrößen wie bei der Assistenz
 
 ## K. Prüfkatalog: Fragen und Erwartungen der Nutzenden
-Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gruppen, 287 davon als Fragen an die Assistenz).
+Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (334 Einträge in 26 Gruppen, 293 davon als Fragen an die Assistenz).
 - [x] K0 (10.11.) Katalog angelegt, mit Erwartung, Prüfweg und Vermutung je Eintrag; `testlauf` reicht Gruppe und Erwartung in der Ergebnistabelle durch
 - [x] K1 (10.11.) Erster Testlauf mit 287 Fragen, nach Konsolenausgabe bewertet: 163 erfüllt, 53 teils, 26 nicht erfüllt, 37 falsch, 8 nicht prüfbar (`PRUEFERGEBNIS-2026-11-10.md`)
 - [x] K1a (10.11.) Server: Texte als Liste, unbekannte Werkzeugnamen, Wiederholungen, Telefonnummern, Aufzug-Hinweis, elf neue Regeln im Systemtext (noch nicht auf dem Server geprüft)
@@ -118,5 +118,5 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 ## L. Leitidee und offene Fragen aus Sicht der Nutzenden (11.11.)
 - [x] L1 Leitidee **„Barriere-Atlas von unten“** ins Konzept (deutsch und englisch): Bielefelds Barrieren als Bild, das aus den Wegen, Meldungen und Messwerten der Nutzenden wächst; jeder Eintrag mit Quelle, Datum und Zahl der Bestätigungen; „weiß ich nicht“ ist ein gültiger Zustand; keine Zusage und kein amtliches Zertifikat. Erledigt (11.11.) in „Flowtown Concept (English)“ (Abschnitt „The barrier atlas from below“) und im deutschen „Flowtown Gesamtkonzept“ (Abschnitt „Der Barriere-Atlas von unten“).
 - [x] L2 Offene Fragen ins Konzept (englisch und deutsch erledigt, 11.11.): E2 Aufzugsstatus moBiel; Umsteigezeit im eigenen Tempo; Rollstuhlplatz und Rampe im Fahrzeug; Knopf „Ich komme nicht weiter“; Blind, gehörlos, schwerhörig getrennt und einfache Sprache; Morgenwarnung als Web-App (iPhone); Pflege und Verfall der Atlas-Einträge.
-- [ ] L3 Neue Testfragen als eigene Gruppe im Prüfkatalog: Umsteigezeit im eigenen Tempo, Rampe im nächsten Bus, nächste Notrufsäule, Antwort ohne Ton, einfache Sprache, „Wer kann mir jetzt helfen?“
+- [x] L3 (11.11.) Neue Testfragen als Gruppe 26 im Prüfkatalog (K329 bis K334, noch nicht gelaufen; Lauf: `testlauf pruefkatalog.csv K329,K330,K331,K332,K333,K334`): Umsteigezeit im eigenen Tempo, Rampe im nächsten Bus, nächste Notrufsäule, Antwort ohne Ton, einfache Sprache, „Wer kann mir jetzt helfen?“
 - [ ] L4 Morgenwarnung für feste Wege (Konzept für Mobil), danach „Ich komme nicht weiter“ und Umsteigezeit nach Tempo
