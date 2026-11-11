@@ -2330,7 +2330,8 @@ Regeln:
 - „Bahnhof“ ohne Zusatz heißt der Hauptbahnhof (Werkzeuge: „Hauptbahnhof“). Frag nicht nach.
 - Hat die Person keinen Ort genannt, aber der Standort ist im Kontext bekannt, nutze ihn (Werkzeuge ohne Ortsangabe). Frag nie nach dem Standort, wenn er bekannt ist. Sag nie, ein Weg oder Radweg sei „sicher“.
 - „Wie lange dauert der Weg zu X?“ ohne Verkehrsmittel: Werkzeug vergleich, nenne die empfohlene Möglichkeit mit Dauer und, bei Bus und Bahn, der Zahl der Umstiege, nicht nur den Fußweg.
-- Bei Rollstuhl oder Rollator nennst du die Gehzeit mit dem Zusatz „geschätzt“ (Feld tempo) und empfiehlst nie das Auto, wenn die Person „mit dem Rollator“ oder „mit dem Rollstuhl“ geht. Gibt es Stufen, nenne Bus und Bahn mit Hochbahnsteig.`;
+- Bei Rollstuhl oder Rollator nennst du die Gehzeit mit dem Zusatz „geschätzt“ (Feld tempo) und empfiehlst nie das Auto, wenn die Person „mit dem Rollator“ oder „mit dem Rollstuhl“ geht. Gibt es Stufen, nenne Bus und Bahn mit Hochbahnsteig.
+- Nenne eine Verbindung mit Bus und Bahn nur „stufenlos“, wenn das Feld stufenlos mit „ja“ beginnt. Sonst sag: „Zur Barrierefreiheit dieser Verbindung habe ich keine vollständige Angabe.“`;
 const ASSIST_TOOLS = [
   { type: 'function', function: { name: 'hilfe_menschen', description: 'Wo Menschen helfen können: wenn sich die Person nicht orientieren kann, ein Weg unübersichtlich ist (Baustelle, Menschenmenge, großer Bahnhof), jemand beim Ein- und Aussteigen oder beim Finden eines Eingangs hilft, oder Hilfe nötig ist. Liefert Möglichkeiten ohne erfundene Telefonnummern.', parameters: { type: 'object', properties: {
     art: { type: 'string', enum: ['orientierung', 'bahnhof', 'nahverkehr', 'gefahr'] } } } } },
@@ -2672,6 +2673,7 @@ async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
         const hb = fahrt.filter((x) => x.art === 'bahn').flatMap((x) => [hbsOf(x.von), hbsOf(x.nach)]);
         o.stufenlos = hb.includes('nein') ? 'nein, mindestens eine Haltestelle ohne Hochbahnsteig' : hb.length && hb.every((x) => x === 'ja') && fahrt.every((x) => x.art === 'bahn') ? 'ja, alle Haltestellen mit Hochbahnsteig' : 'keine vollständige Angabe';
         if (hb.includes('nein')) o.geeignet = false;
+        if (!o.stufenlos.startsWith('ja')) o.stufenlos_hinweis = 'Stufenlosigkeit nicht belegt: sag nie „stufenlos“, sondern „zur Barrierefreiheit dieser Verbindung habe ich keine vollständige Angabe“.';
       }
       opt.push(o);
     }
@@ -2698,7 +2700,8 @@ async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
   if (typ && opt.some((o) => !o.geeignet)) grund += `; nicht empfohlen für dein Profil: ${opt.filter((o) => !o.geeignet).map((o) => NAME[o.verkehrsmittel]).join(', ')}`;
   return { jetzt: uhr(now), profil: typ || 'kein Profil', vorrang: vorrang === 'schnell' ? 'schnell ankommen' : 'umweltfreundlich, wenn kaum langsamer',
     optionen: opt.map((o) => Object.assign({}, o, { ankunft: uhr(o.ankunft), co2: o.co2_g ? 'etwa ' + kgText(o.co2_g) : 'kein CO₂' })), empfehlung: { verkehrsmittel: best.verkehrsmittel, grund, co2_gespart_g: spart || undefined },
-    co2_quelle: 'grobe Schätzung nach Durchschnittswerten des Umweltbundesamts je Personenkilometer' };
+    co2_quelle: 'grobe Schätzung nach Durchschnittswerten des Umweltbundesamts je Personenkilometer',
+    hinweis: 'Nenne Dauer und Umstiege der empfohlenen Möglichkeit (empfehlung), nicht die eines nicht empfohlenen Fußwegs. „stufenlos“ nur, wenn das Feld stufenlos mit „ja“ beginnt.' };
 }
 // Ampeln in der Nähe eines Orts, mit Tonsignal ja/nein und den Straßen der Kreuzung
 async function ampelnNahe(pos) {

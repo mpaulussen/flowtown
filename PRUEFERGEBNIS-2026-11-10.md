@@ -269,6 +269,31 @@ Gegenüber dem letzten Gesamtlauf sind 7 Fragen besser und 6 schlechter. Nichts 
 
 **Einordnung:** Der Katalog ist ausgereizt. Vier Läufe in Folge liegen bei 244 bis 252 erfüllt, und die Änderungen zwischen den Läufen sind jetzt vor allem zufällige Schwankungen der KI bei Wegen und Orten. Weitere Festantworten bringen kaum noch etwas. Die restlichen 25 „teils“-Antworten brauchen Werkzeug-Änderungen (E8, E11 bis E16) und neue Quellen.
 
+## Achter Lauf (11. November): sechster Gesamtlauf mit E15 und E13
+
+| Ergebnis | Lauf 1 | Gesamtlauf 5 (Lauf 7) | Gesamtlauf 6 (Lauf 8) |
+| --- | ---: | ---: | ---: |
+| erfüllt | 163 | 252 | **256** |
+| teils | 53 | 25 | 22 |
+| nicht erfüllt | 26 | 0 | 0 |
+| falsch | 37 | 2 | **1** |
+| nicht prüfbar | 8 | 8 | 8 |
+
+**Was E15 und E13 gebracht haben:**
+- **K061** („Wie lange brauche ich mit Rollator zum Jahnplatz?“): „Geschätzt 10 Minuten mit Rollator“ statt 5 Minuten wie ohne Hilfsmittel.
+- **K070** („Wie komme ich mit dem Rollator zum nächsten Supermarkt?“): „Mit dem Rollator dauert der Fußweg etwa 25 Minuten“ statt das Auto zu empfehlen.
+- **K266** (Rollstuhl, Paderborn): der Bus R81 vor dem Auto, mit der geschätzten Gehzeit.
+- **K116** („Ist die Linie 4 pünktlich?“): „Die Linie 4 hat aktuell 1 Minute Verspätung.“ Das war vorher „laut Fahrplan pünktlich“ oder „keine Abfahrten gefunden“.
+- **K127, K169:** brauchbare Bahn-Alternativen.
+
+**Die eine falsche Antwort:** K271 („Wie komme ich ohne Stufen nach Berlin?“) → „Mit Bus und Bahn bist du stufenlos in Berlin“. Die Daten haben dazu keine vollständige Angabe. Jetzt trägt das Werkzeug bei jeder Verbindung ohne belegte Stufenlosigkeit einen Hinweis („sag nie stufenlos“) und der Systemtext eine Regel dazu. Das ist noch nicht im Lauf geprüft.
+
+**Rückschritte:** K152 (ein Satz „Die App zeigt unter …“ abgeschnitten, möglicherweise erfundene Funktion), K252 (Ukrainisch wieder auf Deutsch), K271 (siehe oben).
+
+**Noch nicht erledigt:** K110 („Wie lange dauert der Weg zur Universität?“) nennt weiter nur den Fußweg von 58 Minuten. Das Werkzeug `vergleich` wurde genutzt, die KI hat aber den Fußweg gewählt. Jetzt trägt das Ergebnis den Hinweis, Dauer und Umstiege der empfohlenen Möglichkeit zu nennen.
+
+**Hinweis zu den Zahlen:** Seit dem Update nutzen `weg` und `vergleich` den genauen Standort. Entfernungen und Zeiten ändern sich dadurch leicht (zum Beispiel K002: 1,1 Kilometer statt 900 Meter). Das ist erwartet.
+
 ## So prüfen wir, ob es besser geworden ist
 
 Auf dem Server nach `git pull` und `sudo systemctl restart flowtown` (die Assistenz läuft im Server, ein Neustart ist diesmal nötig):

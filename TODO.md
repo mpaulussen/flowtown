@@ -111,4 +111,6 @@ Katalog: `PRUEFKATALOG.md` und `server/pruefkatalog.csv` (328 Einträge in 25 Gr
 - [ ] K11 Neue Werkzeug-Aufgaben aus dem Lösungsplan: E11 Pünktlichkeit direkt, E12 rueckweg mit Richtung, E13 Gehtempo je Profil, E14 unbekannte Linie, E15 Rangfolge nach Profil in vergleich und weg (kein Auto vor Bahn bei Rollstuhl), E16 Mehrfachprofil in der App
 - [ ] K12 Quellen einbinden (Reihenfolge nach Nutzen): E2 moBiel-Aufzugsstatus, E1 Fahrplan mit Zeitpunkt, E10 Radweganteil, E8 Orte aus OpenStreetMap (Bänke, Trinkwasser, Apotheken, Ärzte, Geldautomaten, Ladesäulen, Fahrradständer), E3 Wetter, E4 Höhenprofil
 - [x] K13 (10.11.) E15 und E13 gebaut: Rangfolge nach Profil in `vergleich` (Rollstuhl, Rollator: zu Fuß vor Bahn vor Auto, größerer Spielraum, „mit dem Rollator“ heißt Fußweg), Gehtempo je Profil (Rollator 2,5 km/h, Rollstuhl 3,5 km/h, Annahme), genauer Standort in `weg` und `vergleich`, Regel für Dauerfragen mit Umstiegen. Mit Testwerten geprüft, noch nicht im Lauf (betrifft auch „Womit heute am besten?“ in der App)
+- [x] K13b (11.11.) Gesamtlauf 6 mit E15 und E13: 256 erfüllt, 22 teils, 0 nicht erfüllt, 1 falsch, 8 nicht prüfbar; K061, K070, K116 behoben
+- [x] K13c (11.11.) Hinweis „stufenlos nur mit Beleg“ im Werkzeug und im Systemtext (K271)
 - [ ] K13a Gehtempo im Pilot mit echten Wegen prüfen und die Annahmen anpassen
