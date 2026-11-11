@@ -133,6 +133,7 @@ Konzept: `FAKTEN.md` und der Abschnitt „Datenqualität und Redaktion“ im Ges
 - [ ] M1e Quelle und Stand in weitere Werkzeugergebnisse einbauen (Aufzüge, Haltestellen, Toiletten, Parkplätze)
 - [ ] M2 Redaktions-App (eigene PWA `/redaktion`): Fakten-Speicher (JSON-Zeilen plus Schnappschuss), Rollen mit Einladungscodes, Erfassen vor Ort mit Checkliste, Prüfliste nach Frischeklasse, Änderungsprotokoll, Qualitätsbericht
 - [x] M2a (11.11.) Entwurf: `server/checklisten.csv` (67 Fragen, 8 Objektarten), `server/pilotgebiet.json`, Befehl `objektkatalog`, `REDAKTION.md`. Noch offen: ersten echten Lauf auf dem Server, Mittelpunkte Bethel und Uni prüfen, Richtwerte gegen Normen prüfen.
+- [x] M2a1 (11.11.) Erster Lauf auf dem Server: 774 Objekte, danach Ampeln und Haltestellen zusammengefasst. Noch offen: zweiter Lauf, Zahlen ansehen, Mittelpunkte sind plausibel (Bethel 52.00698/8.52530, Uni 52.03745/8.49382).
 - [ ] M2a-alt Objektkatalog und Checklisten für das Pilotgebiet (Stadtbahn-Haltestellen mit Aufzug und Rampe, Eingänge öffentlicher Gebäude, WC, Ampeln und Querungen, Dauerhindernisse; 6 bis 10 Fragen je Objektart)
 - [ ] M3 Automatische Quellen: OSM-Lückenbericht (Orte ohne `wheelchair`), Fahrplan-Felder für Rollstuhl-Einstieg prüfen (K330), DWD-Wetter (E3), Wheelmap-Lizenz und Reisen für Alle klären
 - [ ] M3a Anfragen: moBiel (Aufzugsstatus E2, Fahrzeugdaten), Stadt Bielefeld (Haltestellenkataster, Bordsteinabsenkungen)

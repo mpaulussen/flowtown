@@ -3732,7 +3732,8 @@ if (cli === 'faq') {
       if (t.highway === 'bus_stop') return 'bushaltestelle';
       if (t.highway === 'elevator') return 'aufzug';
       if (t.amenity === 'toilets') return 'wc';
-      if (t.highway === 'traffic_signals' || (t.highway === 'crossing' && /traffic_signals/.test(t.crossing || ''))) return 'querung_ampel';
+      // nur Ampeln für Fußgänger: Kreuzungssignale ohne Fußgängerquerung gehören nicht in die Liste
+      if (t.crossing === 'traffic_signals' || t['crossing:signals'] === 'yes' || t['traffic_signals:sound'] || t['traffic_signals:vibration']) return 'querung_ampel';
       if (t.amenity === 'parking' && t['capacity:disabled'] || t.parking_space === 'disabled') return 'behindertenparkplatz';
       if (/^(townhall|library|post_office|police|courthouse|community_centre|hospital|clinic|doctors|social_facility|public_building|theatre|cinema|arts_centre|bank|pharmacy|college|university)$/.test(t.amenity || '') || /^(museum|gallery)$/.test(t.tourism || '') || t.office === 'government') return 'gebaeude_eingang';
       return null;
@@ -3742,7 +3743,7 @@ if (cli === 'faq') {
     const objekte = [], gesehen = new Set();
     for (const g of gebiete) {
       const a = `(around:${g.r},${g.pos[0]},${g.pos[1]})`;
-      const j = await run(`[out:json][timeout:120];(node["railway"="tram_stop"]${a};node["highway"="bus_stop"]${a};node["highway"="elevator"]${a};nwr["amenity"="toilets"]${a};node["highway"="traffic_signals"]${a};node["highway"="crossing"]["crossing"~"traffic_signals"]${a};`
+      const j = await run(`[out:json][timeout:120];(node["railway"="tram_stop"]${a};node["highway"="bus_stop"]${a};node["highway"="elevator"]${a};nwr["amenity"="toilets"]${a};node["crossing"="traffic_signals"]${a};node["traffic_signals:sound"]${a};node["traffic_signals:vibration"]${a};`
         + `nwr["amenity"~"^(townhall|library|post_office|police|courthouse|community_centre|hospital|clinic|doctors|social_facility|public_building|theatre|cinema|arts_centre|bank|pharmacy|college|university)$"]${a};nwr["tourism"~"^(museum|gallery)$"]${a};nwr["office"="government"]${a};`
         + `nwr["amenity"="parking"]["capacity:disabled"]${a};nwr["parking_space"="disabled"]${a};);out center tags;`, `Gebiet ${g.name} laden`);
       for (const e of j.elements || []) {
@@ -3751,6 +3752,19 @@ if (cli === 'faq') {
         gesehen.add(key);
         objekte.push({ id: `${typ}-${e.type[0]}${e.id}`, typ, name: t.name || t['name:de'] || t.ref || '', gebiet: g.name, pos: p, tags: t, quelle: 'OpenStreetMap' });
       }
+    }
+    // OSM führt Haltestellen je Bahnsteig oder Richtung und Ampeln je Furt: gleichnamige oder dicht beieinander liegende zu einem Objekt zusammenfassen
+    {
+      const rest = [], eins = [];
+      for (const o of objekte) {
+        const zus = ['stadtbahn_haltestelle', 'bushaltestelle', 'querung_ampel'].includes(o.typ);
+        if (!zus) { rest.push(o); continue; }
+        const nah = o.typ === 'querung_ampel' ? 25 : 60;
+        const z = eins.find((y) => y.typ === o.typ && y.gebiet === o.gebiet && (o.name ? y.name === o.name : !y.name) && mAbs(y.pos, o.pos) <= nah);
+        if (z) { for (const [k, v] of Object.entries(o.tags)) if (z.tags[k] == null) z.tags[k] = v; z.n = (z.n || 1) + 1; } else eins.push(o);
+      }
+      const vorher = objekte.length; objekte.length = 0; objekte.push(...rest, ...eins);
+      console.log(`Zusammengefasst: ${vorher} OSM-Elemente zu ${objekte.length} Objekten (Haltestellen je Bahnsteig und Ampeln je Furt).`);
     }
     // Gebäude von Bethel („Bielefeld barrierefrei erleben“): zu einem OSM-Gebäude in der Nähe dazu, sonst neu
     const BF2 = { eingang_stufenlos: 'stufenlos', aufzug_im_haus: 'aufzug', wc_barrierefrei: 'wc', schleife: 'hoeranlage', leitsystem: 'leit' };
@@ -3776,7 +3790,7 @@ if (cli === 'faq') {
         const bk = o.bf && BF2[f.m] && o.bf[BF2[f.m]] != null ? (o.bf[BF2[f.m]] === 1 ? 'ja' : 'nein') : null;
         if (v != null) bekannt.push(`${f.m}=${/^(width|door:width|entrance:width|kerb:height)$/.test(f.osm) && /^\d+([.,]\d+)?$/.test(String(v)) && Number(String(v).replace(',', '.')) < 10 ? Math.round(Number(String(v).replace(',', '.')) * 100) + ' cm' : v} (OSM)`); else if (bk) bekannt.push(`${f.m}=${bk} (Bethel)`); else fehlt.push(f.m);
       }
-      const prio = o.typ === 'bushaltestelle' && o.gebiet === 'Hauptbahnhof' ? 2 : PRIO[o.typ] || 3;
+      const prio = o.typ === 'bushaltestelle' && o.gebiet === 'Hauptbahnhof' ? 2 : o.typ === 'gebaeude_eingang' && /^(bank|pharmacy|doctors|cinema)$/.test(o.tags.amenity || '') ? 3 : PRIO[o.typ] || 3;
       rows.push({ o, prio, fehlt, bekannt });
     }
     const gOrd = gebiete.map((g) => g.name);

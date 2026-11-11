@@ -37,6 +37,16 @@ Die Fragen stehen in `server/checklisten.csv` (Spalten Objektart, Merkmal, Frage
 
 **Sehr wichtig:** „Weiß nicht“ ist immer erlaubt und besser als geraten.
 
+## Erster Lauf auf dem Server (11.11.2026)
+
+Mittelpunkte gefunden: Bethel 52.00698, 8.52530, Uni 52.03745, 8.49382. Der erste Lauf ergab 774 Objekte (Priorität 1: 54, 2: 329, 3: 391), darunter 312 Ampeln und 256 Gebäude. Das war mehr als geplant (300 bis 500), weil OpenStreetMap Haltestellen je Bahnsteig und Ampeln je Furt führt und Kreuzungssignale ohne Fußgängerquerung mitzählten. Deshalb jetzt:
+
+- Ampeln nur noch, wenn sie als Fußgängerquerung oder mit Ton oder Vibration eingetragen sind.
+- Gleichnamige Haltestellen (60 m) und nahe Ampeln (25 m) gelten als ein Objekt.
+- Banken, Apotheken, Praxen und Kinos haben Priorität 3.
+
+Wer anfangen will: Priorität 1 und 2 zuerst, Priorität 3 später.
+
 ## Was ich nicht prüfen konnte
 
 - **Netz:** Der Befehl wurde hier nur mit einer selbst gebauten Beispieldatei getestet (Overpass ist in dieser Umgebung gesperrt). Auf dem Server fehlt noch der erste echte Lauf.
