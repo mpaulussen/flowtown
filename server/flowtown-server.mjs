@@ -3849,6 +3849,41 @@ if (cli === 'redaktion-code') {
   console.log('Den Code nur der Person geben. Der Server speichert nur einen Hash. Danach: sudo chown -R flowtown: /var/lib/flowtown');
   process.exit(0);
 }
+if (cli === 'echtzeit-test') {
+  // Selbsttest der Zuordnung mit echten Daten: Fahrten mit Echtzeit-Meldung aus dem Datenstrom werden so angefragt, wie HERE sie nennt
+  // (Linie, Lage des Halts, geplante Abfahrt). Aufruf: echtzeit-test
+  loadFahrplan(); rtWanted = Date.now(); rtTick();
+  if (rtRun) await rtRun.catch(() => {});
+  const { ymd, min } = berlinNow();
+  const berlinMin = (ts) => { const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts)).map((x) => [x.type, x.value])); return Number(f.hour) * 60 + Number(f.minute); };
+  const base = Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8));
+  let n = 0, ok = 0, nul = 0, falsch = 0; const bsp = [];
+  for (const id of Object.keys(fahrplaene)) {
+    const d = fpData(id), m = rt.staedte[id] || {};
+    for (const ti of Object.keys(m)) {
+      const t = d.trips[ti]; if (!t || n >= 80) continue;
+      if (!(d.services[t[3]] || []).includes(ymd)) continue;
+      const pat = d.patterns[t[1]]; let tm = t[4];
+      for (let j = 0; j < pat.length - 1; j++, tm += t[5][j - 1] || 0) {
+        if (tm < min || tm > min + 180) continue;
+        const exp = rtAt(id, Number(ti), pat, j); if (!exp) continue;
+        const st = d.stops[pat[j]]; let ab = null;
+        for (const off of [3600000, 7200000]) { const ts = base + tm * 60000 - off; if (berlinMin(ts) === tm) { ab = new Date(ts).toISOString(); break; } }
+        if (!ab) continue;
+        n++;
+        const got = rtLeg({ vonPos: [st[2], st[3]], linie: d.routes[t[0]][0], ab });
+        const same = got && ((exp.faellt_aus && got.faellt_aus) || (exp.verspaetung_min != null && got.verspaetung_min === exp.verspaetung_min));
+        if (same) ok++; else if (!got) nul++; else falsch++;
+        if (!same && bsp.length < 6) bsp.push(`${id}: ${d.routes[t[0]][0]} ab ${fpName(st[1], d)} ${String(Math.floor(tm / 60)).padStart(2, '0')}:${String(tm % 60).padStart(2, '0')}  erwartet ${JSON.stringify(exp)}  Zuordnung ${JSON.stringify(got)}`);
+        break;
+      }
+    }
+  }
+  console.log(`Selbsttest: ${n} Fahrten mit Echtzeit in den nächsten 3 Stunden geprüft. Richtig zugeordnet: ${ok}. Keine eindeutige Zuordnung (null): ${nul}. Falsche Angabe: ${falsch}.`);
+  bsp.forEach((x) => console.log('  nicht gefunden:', x));
+  if (!n) console.log('Es gibt gerade keine Fahrten mit Echtzeit in den nächsten 3 Stunden. Später noch einmal versuchen.');
+  process.exit(0);
+}
 if (cli === 'echtzeit-leg') {
   // Prüft, ob die Echtzeit zu einer Fahrt von HERE passt. Aufruf: echtzeit-leg "<Linie>" <Breite> <Länge> <Abfahrt als Datum mit Uhrzeit, z. B. 2026-11-13T07:12:00+01:00>
   const [, , , linie, lat, lon, ab] = process.argv;
