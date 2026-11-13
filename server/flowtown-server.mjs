@@ -2281,6 +2281,7 @@ Regeln:
 - Bittet die Person nur um „einfache Sprache“ oder darum, „ohne Ton“ oder „nur als Text“ zu antworten, ohne eine Frage zu stellen: bestätige das in einem Satz und frag, wobei du helfen sollst. Behaupte nie, du könntest nur Text oder kein Vorlesen; das Vorlesen ist eine Einstellung der App (Mehr, „Ansagen und Sprache“).
 - Duze immer, auch im Notfall.
 - Notfall, Sturz, Verletzung: zuerst „Ruf sofort den Notruf 112 an“, dazu, dass das rote Plus oben in Flowtown den Notruf öffnet und die App nora hilft, wenn Sprechen nicht geht. Keine medizinischen Ratschläge.
+- Fahrplan-Aussagen kommen ausschließlich aus Werkzeugen, nie aus deinem Wissen. „Hält der Zug nach X in Y?“, „Fährt von Y ein Zug nach X?“, „Kommt man mit dem Zug von Y nach X?“: Werkzeug fahrt_pruefen mit von (Y) und nach (X). Sag nur „ja“, wenn das Werkzeug Fahrten liefert, und nenne dann Linie und Uhrzeit daraus. Liefert es keine Fahrten oder meldet es, dass Start oder Ziel im Fahrplan nicht vorkommen, sag: „Das kann ich nicht sicher sagen, im Fahrplan, den ich kenne, finde ich dazu keine Fahrt. Bitte prüf es auf bahn.de oder in der Bahn-App.“ Nenne nie Linien, Halte oder Ziele, die nicht im Ergebnis stehen, und rate nicht anhand von Streckenverläufen, die du kennst.
 - „Wann fährt die nächste Bahn oder der nächste Bus?“ ohne Haltestelle: Werkzeug abfahrten_in_der_naehe, nicht nachfragen.
 - Universität, Hauptbahnhof, Rathaus, Jahnplatz, Kunsthalle, Stadttheater und alle Haltestellennamen sind eindeutige Ziele. Frag nur nach, wenn ein Werkzeug „mehrdeutig“ oder „auswahl“ meldet oder kein Ziel genannt ist.
 - Fehlt der Standort (Werkzeug meldet „Kein Standort“), frag nach dem Start: Haltestelle, Straße oder Adresse.
@@ -2366,6 +2367,8 @@ const ASSIST_TOOLS = [
     ziel: { type: 'string' }, start: { type: 'string', description: 'leer = Standort' } }, required: ['ziel'] } } },
   { type: 'function', function: { name: 'oepnv_stoerungen', description: 'Aktuelle Umleitungen und Störungen bei Bus und Stadtbahn von moBiel und gemeldete defekte Aufzüge.', parameters: { type: 'object', properties: {
     linie: { type: 'string', description: 'z. B. 4 oder 25; leer = alle' } } } } },
+  { type: 'function', function: { name: 'fahrt_pruefen', description: 'Prüft im Fahrplan, ob ein Zug, eine Bahn oder ein Bus an einer Haltestelle oder in einem Ort hält und danach an einem Ziel hält (zum Beispiel: „Hält der Zug nach Osnabrück in Detmold?“, „Fährt von Detmold ein Zug nach Herford?“). Liefert nur, was im Fahrplan steht, mit Echtzeit, wo vorhanden. Sagt auch, wenn das Ziel oder der Start im Fahrplan nicht vorkommt.', parameters: { type: 'object', properties: {
+    von: { type: 'string', description: 'Haltestelle oder Ort, an dem der Zug oder Bus hält, zum Beispiel Detmold' }, nach: { type: 'string', description: 'Ziel, das danach angefahren wird, zum Beispiel Osnabrück oder Herford' }, art: { type: 'string', enum: ['zug', 'bus', 'alle'] } }, required: ['von', 'nach'] } } },
   { type: 'function', function: { name: 'abfahrten_in_der_naehe', description: 'Die nächsten Abfahrten laut Fahrplan an den Haltestellen am nächsten beim Standort oder bei einem Ort, ohne dass die Person eine Haltestelle nennen muss.', parameters: { type: 'object', properties: {
     ort: { type: 'string', description: 'leer = Standort' }, nur: { type: 'string', enum: ['stadtbahn', 'zug', 'bus', 'alle'] } } } } },
   { type: 'function', function: { name: 'ort_info', description: 'Was an einem Ort zählt, an dem die Person sein will (nicht am Standort): Barrierefreiheit des Gebäudes laut Bielefeld barrierefrei erleben, nächstes rollstuhlgerechtes WC und Toilette, Behindertenparkplatz, nächste Stadtbahn-Haltestelle mit Hochbahnsteig, gemeldete Hindernisse.', parameters: { type: 'object', properties: {
@@ -2996,6 +2999,7 @@ async function assistTool(name, a, ctx, act) {
       meldungen: lin ? items : items.slice(0, 3), aufzuege_gemeldet: aufzug.length ? aufzug : 'keine Meldung in Flowtown; das heißt nicht, dass alle Aufzüge funktionieren', quelle: 'moBiel (Umleitungen) und Meldungen in Flowtown', stand: mb.t ? uhr(mb.t) : 'unbekannt',
       hinweis: lin ? undefined : 'Nicht alle Linien vorlesen: Zahl nennen, höchstens drei Beispiele, sagen ob die Stadtbahn betroffen ist, nach der eigenen Linie fragen.' };
   }
+  if (name === 'fahrt_pruefen') return fahrtPruefen(a.von, a.nach, a.art);
   if (name === 'abfahrten_in_der_naehe') {
     const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Kein Standort; frag, an welcher Haltestelle die Person ist' };
@@ -3385,6 +3389,84 @@ function beispieleFuer(frage, typ) {
     return { b, sc, both };
   }).filter((x) => x.both >= 1 && (x.both >= 2 || w.size <= 3) && x.sc >= 0.15).sort((a, b) => b.sc - a.sc).slice(0, 3).map((x) => x.b);
 }
+// Fahrt prüfen: gibt es im Fahrplan eine Fahrt, die am Start hält und danach am Ziel? Nur Fahrplan und Echtzeit, nichts aus Wissen.
+// Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt das Ziel dort, sagt das Werkzeug „nicht prüfbar“.
+function fahrtPruefen(von, nach, art) {
+  const kv = hstNorm(von), kn = hstNorm(nach);
+  if (kv.length < 3 || kn.length < 3) return { fehler: 'Bitte Start und Ziel nennen' };
+  rtWanted = Date.now(); rtTick();
+  const { ymd, min } = berlinNow();
+  const prev = (() => { const t = new Date(Date.UTC(+ymd.slice(0, 4), +ymd.slice(4, 6) - 1, +ymd.slice(6, 8)) - 864e5); return t.toISOString().slice(0, 10).replace(/-/g, ''); })();
+  const kind = art === 'zug' ? 2 : art === 'bus' ? 3 : null;
+  let startGefunden = false, zielGefunden = false; const halte = new Set(), fahrten = [];
+  for (const id of Object.keys(fahrplaene)) {
+    const d = fpData(id); if (!d) continue;
+    const nm = d.stops.map((st) => hstNorm(fpName(st[1], d)));
+    const iv = new Set(), iz = new Set();
+    nm.forEach((n, i) => { if (n.includes(kv)) iv.add(i); if (n.includes(kn)) iz.add(i); });
+    if (iv.size) { startGefunden = true; iv.forEach((i) => halte.add(fpName(d.stops[i][1], d))); }
+    if (iz.size) zielGefunden = true;
+    if (!iv.size || !iz.size) continue;
+    // Haltefolgen mit Halt am Start und danach am Ziel; gemerkt wird die Stelle des Halts am Start
+    const ab = new Map();
+    d.patterns.forEach((pat, pi) => { for (let j = 0; j < pat.length - 1; j++) if (iv.has(pat[j]) && pat.slice(j + 1).some((q) => iz.has(q))) { ab.set(pi, j); break; } });
+    for (let ti = 0; ti < d.trips.length; ti++) {
+      const t = d.trips[ti]; if (!ab.has(t[1])) continue;
+      if (kind != null && d.routes[t[0]][1] !== kind) continue;
+      const pat = d.patterns[t[1]], j = ab.get(t[1]), days = d.services[t[3]] || [];
+      let tm = t[4]; for (let q = 0; q < j; q++) tm += t[5][q] || 0;
+      for (const [day, off] of [[ymd, 0], [prev, 1440]]) {
+        const at = tm - off;
+        if (at >= min - 2 && at <= min + 360 && days.includes(day)) fahrten.push(Object.assign({ in_min: at - min, uhr: `${String(Math.floor((at % 1440) / 60)).padStart(2, '0')}:${String(at % 60).padStart(2, '0')}`, linie: d.routes[t[0]][0], richtung: fpName(d.heads[t[2]], d), halt_am_start: fpName(d.stops[pat[j]][1], d), art: ['Stadtbahn', '', 'Zug', 'Bus'][d.routes[t[0]][1]] || 'Bus' }, off === 0 ? rtAt(id, ti, pat, j) || {} : {}));
+      }
+    }
+  }
+  fahrten.sort((x, y) => x.in_min - y.in_min);
+  if (!startGefunden) return { ergebnis: 'nicht prüfbar', hinweis: 'Eine Haltestelle oder einen Ort mit diesem Namen als Start kenne ich im Fahrplan nicht. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de.' };
+  if (!zielGefunden) return { ergebnis: 'nicht prüfbar', haltestellen_start: [...halte].slice(0, 4), hinweis: 'Das gefragte Ziel kommt in meinem Fahrplanausschnitt nicht vor (er reicht über Ostwestfalen und die Umgebung von Mönchengladbach, Paderborn und Detmold). Ob dorthin etwas fährt, kann ich nicht prüfen. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de oder die Bahn-App.' };
+  if (!fahrten.length) return { ergebnis: 'keine Fahrt gefunden', haltestellen_start: [...halte].slice(0, 4), hinweis: 'Im Fahrplan finde ich in den nächsten 6 Stunden keine Fahrt, die am Start hält und danach am Ziel. Sag „dazu finde ich keine Fahrt“, nicht „es gibt keine“, und verweise auf bahn.de.' };
+  return { ergebnis: 'Fahrten gefunden', haltestellen_start: [...halte].slice(0, 4), fahrten: fahrten.slice(0, 4), hinweis: 'laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden. Nenne nur diese Linien und Uhrzeiten.' };
+}
+// Quellenprüfung: Antworten zu Bus und Bahn dürfen nur enthalten, was die Werkzeuge geliefert haben. Gibt den Grund zurück, wenn etwas nicht belegt ist.
+const Q_FAHRPLAN = /\b(zug|züge|bahn|stadtbahn|bus|busse|linie|gleis|abfahrt|abfahrten|fährt|fahren|hält|halten|verbindung|umstieg|umsteigen)\b/i;
+const Q_ABSAGE = /keine angabe|keine gesicherte|nicht (sicher )?(prüfen|sagen)|kann ich (dir |das )?(nicht|nichts)|finde ich (dazu |keine|nichts)|nichts gefunden|habe ich (dazu )?(keine|nichts|nicht)|weiß ich (gerade )?nicht|kenne ich (nicht|dazu)|nicht bekannt|konnte nicht/i;
+const Q_FAHRPLAN_TOOLS = new Set(['abfahrten_in_der_naehe', 'fahrt_pruefen', 'rueckweg', 'vergleich', 'oepnv_stoerungen', 'haltestelle', 'haltestellen_in_der_naehe']);
+const Q_KEIN_ORT = new Set(['hause', 'möglichkeit', 'fahrplan', 'ankunft', 'uhr', 'minuten', 'bedarf', 'norden', 'süden', 'osten', 'westen', 'ziel', 'start', 'ort', 'stunde', 'stunden', 'haltestelle', 'bahnhof', 'richtung', 'meinem', 'deinem']);
+function quellenPruefung(antwort, messages, used) {
+  if (!Q_FAHRPLAN.test(antwort) || Q_ABSAGE.test(antwort)) return null;   // nichts zu prüfen, oder eine ehrliche Absage
+  if (!used.some((n) => Q_FAHRPLAN_TOOLS.has(n))) return 'ohne Fahrplan-Werkzeug';
+  const tools = messages.filter((m) => m.role === 'tool');
+  const nrm = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[^a-z0-9äöü]/g, '');
+  const beleg = nrm(tools.map((m) => m.content).join(' '));
+  // Linien mit Buchstaben (RE 82, RB72, ICE 543): müssen im Ergebnis vorkommen
+  for (const m of antwort.matchAll(/\b(IRE|ICE|RE|RB|IC|STB|S)\s?(\d{1,4})\b/g)) if (!beleg.includes(nrm(m[1] + m[2]))) return 'Linie ' + m[1] + ' ' + m[2];
+  // Ziele nach „nach“, „Richtung“, „bis“, „über“: müssen im Ergebnis vorkommen (die Frage allein belegt nichts)
+  for (const m of antwort.matchAll(/\b(?:nach|richtung|bis|über)\s+([A-ZÄÖÜ][A-Za-zÄÖÜäöüß.-]{2,})/g)) {
+    const w = m[1].replace(/[.-]+$/, '');
+    if (Q_KEIN_ORT.has(w.toLowerCase())) continue;
+    if (!beleg.includes(nrm(w))) return 'Ort ' + w;
+  }
+  // „Hält der Zug …?“: ohne gefundene Fahrten keine Bejahung
+  const fp = tools.filter((m) => m.name === 'fahrt_pruefen').pop();
+  if (fp) { let r = {}; try { r = JSON.parse(fp.content); } catch (e) { r = {}; } if (r.ergebnis !== 'Fahrten gefunden' && /\b(ja|hält|halten|fährt|fahren|gibt es)\b/i.test(antwort) && !/\b(nicht|kein|keine|keinen)\b/i.test(antwort)) return 'Bejahung ohne gefundene Fahrt'; }
+  return null;
+}
+const Q_ERSATZ = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es auf bahn.de, mobiel.de oder in der Bahn-App.';
+// prüft die Antwort der KI; einmal korrigieren lassen, sonst die sichere Ersatzantwort
+async function absichern(antwort, messages, used) {
+  const grund = quellenPruefung(antwort, messages, used);
+  if (!grund) return antwort;
+  console.error(new Date().toISOString(), 'Quellenprüfung:', grund);
+  used.push('quellenpruefung');
+  try {
+    messages.push({ role: 'assistant', content: antwort });
+    messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“` });
+    const m = await mistralChat(messages, true);
+    const a2 = sauber(m.content);
+    if (a2 && !quellenPruefung(a2, messages, used)) return a2;
+  } catch (e) { /* dann die Ersatzantwort */ }
+  return Q_ERSATZ;
+}
 async function assist(body) {
   const frage = clip(body.frage, 300);
   if (!frage) throw Object.assign(new Error('Keine Frage'), { status: 400 });
@@ -3427,7 +3509,7 @@ async function assist(body) {
       if (!calls.length && !String(m.content || '').trim()) m = await mistralChat(messages, true);
     }
     if (!calls.length) {
-      const antwort = sauber(m.content) || 'Dazu habe ich gerade keine Antwort.';
+      const antwort = await absichern(sauber(m.content) || 'Dazu habe ich gerade keine Antwort.', messages, used);
       return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length };
     }
     // höchstens drei Werkzeuge je Runde, und die Nachricht der KI nennt genau diese drei: sonst lehnt Mistral mit 400 ab (zu wenige Antworten)
@@ -3446,7 +3528,7 @@ async function assist(body) {
   try {
     messages.push({ role: 'user', content: 'Antworte jetzt ohne weitere Werkzeuge mit dem, was du hast, in höchstens drei Sätzen. Was fehlt, sag offen.' });
     const m = await mistralChat(messages, true);
-    const antwort = sauber(m.content);
+    const antwort = sauber(m.content) && await absichern(sauber(m.content), messages, used);
     if (antwort) return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length };
   } catch (e) { /* unten die Ersatzantwort */ }
   return { antwort: 'Das konnte ich gerade nicht vollständig nachschlagen. Versuch es bitte etwas genauer.', aktion: null, werkzeuge: used };
@@ -3847,6 +3929,23 @@ if (cli === 'redaktion-code') {
   if (!R_ROLLEN.includes(rolle) || !name) { console.error('Aufruf: node flowtown-server.mjs redaktion-code <redaktion|mitwirkend> <Name>'); process.exit(1); }
   console.log(`${rNeuerCode(rolle, name)}   (${rolle}, ${name})`);
   console.log('Den Code nur der Person geben. Der Server speichert nur einen Hash. Danach: sudo chown -R flowtown: /var/lib/flowtown');
+  process.exit(0);
+}
+if (cli === 'fahrt-pruefen') {
+  // Das Werkzeug fahrt_pruefen ohne KI: Aufruf: fahrt-pruefen <Start> <Ziel> [zug|bus|alle]
+  const [, , , von, nach, art] = process.argv;
+  if (!von || !nach) { console.error('Aufruf: node flowtown-server.mjs fahrt-pruefen Detmold Osnabrück [zug|bus|alle]'); process.exit(1); }
+  loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
+  console.log(JSON.stringify(fahrtPruefen(von, nach, art), null, 1));
+  process.exit(0);
+}
+if (cli === 'assist-frage') {
+  // Eine Frage durch die ganze Assistenz schicken (mit Mistral und Quellenprüfung). Aufruf: assist-frage "<Frage>"
+  const frage = process.argv.slice(3).join(' ');
+  if (!frage) { console.error('Aufruf: node flowtown-server.mjs assist-frage "Hält der Zug nach Osnabrück in Detmold?"'); process.exit(1); }
+  loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
+  try { const r = await assist({ frage, kontext: {} }); console.log('Antwort:', r.antwort); console.log('Werkzeuge:', (r.werkzeuge || []).join(', ') || 'keine', (r.werkzeuge || []).includes('quellenpruefung') ? '(Quellenprüfung hat eingegriffen)' : ''); }
+  catch (e) { console.error('Fehler:', e.message); }
   process.exit(0);
 }
 if (cli === 'echtzeit-test') {
