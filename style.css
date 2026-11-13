@@ -1729,3 +1729,14 @@ body.talk-in-view .fab-mic{display:none}
 .talk-btn{min-height:68px}
 .call-hint{margin:0;font-size:16px;line-height:1.4;color:var(--muted)}
 
+
+/* Sprechknopf auf Heute: größer, höher, mehr Luft */
+.talk-hero{margin:10px 0 8px}
+.talk-btn{min-height:104px;padding:20px 22px;gap:18px;border-radius:30px;background:linear-gradient(160deg,#117048,#0c4d33);box-shadow:0 12px 28px rgba(15,92,60,.30),0 2px 6px rgba(15,92,60,.18)}
+.talk-btn .tb-ic{width:68px;height:68px;box-shadow:0 2px 8px rgba(0,0,0,.18)}
+.talk-btn .tb-ic .ic{width:36px;height:36px}
+.talk-btn .tb-tx b{font-size:23px;line-height:1.15;letter-spacing:-.005em}
+.talk-btn .tb-tx small{font-size:15.5px;line-height:1.3;margin-top:5px}
+.talk-btn:active{transform:scale(.99)}
+@media (max-width:360px){.talk-btn{min-height:92px;padding:16px 18px;gap:14px}.talk-btn .tb-ic{width:58px;height:58px}.talk-btn .tb-ic .ic{width:30px;height:30px}.talk-btn .tb-tx b{font-size:21px}.talk-btn .tb-tx small{display:block;font-size:14px}}
+.talk-btn .tb-tx b,.talk-btn .tb-tx small{text-wrap:balance}
