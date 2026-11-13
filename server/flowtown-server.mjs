@@ -3457,6 +3457,18 @@ function dbWaehle(liste, vonName) {
   const mus = nrm(dbMuster(vonName)), beginnt = liste.filter((a) => nrm(a.name) === mus);
   return beginnt.length === 1 ? beginnt[0] : null;   // lieber keine Station als eine falsche
 }
+// Bahnhof zu einem Namen finden: erst mit dem vollen Namen („Bielefeld Hbf“), dann mit dem gekürzten („Detmold“). Die DB-Suche liefert für „Bielefeld“ allein nur „Bielefeld Uni/Zentrum“.
+async function dbFinde(name) {
+  const voll = String(name || '').replace(/\([^)]*\)/g, '').replace(/,/g, ' ').replace(/Hauptbahnhof/gi, 'Hbf').replace(/\s+/g, ' ').trim();
+  let letzte = [], letztesMuster = '';
+  for (const p of [voll, dbMuster(name)]) {
+    const m = String(p || '').match(/^[A-Za-z0-9 .\/-]+/), pat = (m ? m[0] : '').trim();   // Umlaute gehen im Muster nicht
+    if (pat.length < 3 || pat === letztesMuster) continue;
+    letztesMuster = pat; letzte = await dbStation(pat);
+    const st = dbWaehle(letzte, name); if (st) return { st, lst: letzte, muster: pat };
+  }
+  return { st: null, lst: letzte, muster: letztesMuster };
+}
 const berlinZ = (ts) => { const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts)).map((x) => [x.type, x.value])); return f.year + f.month + f.day + f.hour + f.minute; };
 // So schreibt die DB eine Linie, je nach Betreiber: Kategorie „RE“ mit Linie „82“, oder (eurobahn) Kategorie „ERB“ mit der ganzen Linie „RE82“; Fernzüge haben oft nur Kategorie und Nummer („ICE“, „543“)
 function dbLinien(x, ev) {
@@ -3470,8 +3482,8 @@ function dbLinien(x, ev) {
 // Nur bei genau einem Treffer; sonst null. Keine Änderung gemeldet heißt: „keine Abweichung gemeldet“, nie „pünktlich“.
 async function dbLeg(t) {
   if (!DB_ON || !t || t.art !== 'zug' || !t.von || !t.linie || !t.ab) return null;
-  const muster = dbMuster(t.von); if (muster.length < 3) return null;
-  const st = dbWaehle(await dbStation(muster), t.von); if (!st) return null;
+  if (dbMuster(t.von).length < 3) return null;
+  const st = (await dbFinde(t.von)).st; if (!st) return null;
   const pt = berlinZ(Date.parse(t.ab));
   const plan = dbStops(await dbCached(`plan|${st.eva}|${pt.slice(0, 8)}`, 6 * 3600e3, () => dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`)));
   const lin = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), want = lin(t.linie);
@@ -3711,8 +3723,8 @@ async function dbEreignis(t, welches) {
   if (!DB_ON || !t || t.art !== 'zug' || !t.linie) return null;
   const name = welches === 'ar' ? t.nach : t.von, zeit = welches === 'ar' ? t.an : t.ab;
   if (!name || !zeit || isNaN(Date.parse(zeit))) return null;
-  const muster = dbMuster(name); if (muster.length < 3) return null;
-  const st = dbWaehle(await dbStation(muster), name); if (!st) return null;
+  if (dbMuster(name).length < 3) return null;
+  const st = (await dbFinde(name)).st; if (!st) return null;
   const pt = berlinZ(Date.parse(zeit)), lin = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), want = lin(t.linie);
   const plan = dbStops(await dbCached(`plan|${st.eva}|${pt.slice(0, 8)}`, 6 * 3600e3, () => dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`)));
   let hit = plan.filter((x) => x[welches] && x[welches].pt && Math.abs(dbMin(x[welches].pt) - dbMin(pt)) <= 2 && dbLinien(x, welches).includes(want));
@@ -4378,8 +4390,8 @@ if (cli === 'db-leg') {
   if (!DB_ON) { console.error('DB_CLIENT_ID und DB_API_KEY fehlen in /etc/flowtown.env'); process.exit(1); }
   if (welches === 'ar') {
     try {
-      const lst = await dbStation(dbMuster(von)), st = dbWaehle(lst, von);
-      console.log('Muster:', dbMuster(von), '| Bahnhöfe:', lst.map((a) => a.name).slice(0, 6).join(' / ') || 'keine', '| gewählt:', st ? st.name + ' (' + st.eva + ')' : 'keiner');
+      const fd = await dbFinde(von), lst = fd.lst, st = fd.st;
+      console.log('Muster:', fd.muster, '| Bahnhöfe:', lst.map((a) => a.name).slice(0, 6).join(' / ') || 'keine', '| gewählt:', st ? st.name + ' (' + st.eva + ')' : 'keiner');
       if (st) { const pt = berlinZ(Date.parse(ab)), plan = dbStops(await dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`));
         console.log(`Sollfahrplan ${pt.slice(0, 6)} ${pt.slice(6, 8)} Uhr, ${plan.length} Halte; Ankünfte:`);
         plan.filter((x) => x.ar && x.ar.pt).sort((x, y) => x.ar.pt.localeCompare(y.ar.pt)).slice(0, 25).forEach((x) => console.log(`  ${x.ar.pt.slice(6, 8)}:${x.ar.pt.slice(8)}  ${(x.tl || {}).c || ''} ${x.ar.l || ''} (Nr. ${(x.tl || {}).n || ''})  von ${String(x.ar.ppth || '').split('|')[0]}`)); }
@@ -4387,8 +4399,8 @@ if (cli === 'db-leg') {
     const e = await dbEreignis({ art: 'zug', nach: von, an: ab, linie }, 'ar').catch((x) => ({ fehler: x.message })); console.log('Ergebnis (Ankunft', linie, 'in', von, ab + '):', JSON.stringify(e || null), '(null = keine eindeutige Zuordnung)'); process.exit(0); }
   if (!linie || !von || !ab || isNaN(Date.parse(ab))) { console.error('Aufruf: node flowtown-server.mjs db-leg "RE 82" "Detmold Bahnhof" 2026-11-13T15:40:00+01:00'); process.exit(1); }
   try {
-    const lst = await dbStation(dbMuster(von)), st = dbWaehle(lst, von);
-    console.log('Muster:', dbMuster(von), '| Bahnhöfe:', lst.map((a) => a.name).slice(0, 6).join(' / ') || 'keine', '| gewählt:', st ? st.name + ' (' + st.eva + ')' : 'keiner');
+    const fd = await dbFinde(von), lst = fd.lst, st = fd.st;
+    console.log('Muster:', fd.muster, '| Bahnhöfe:', lst.map((a) => a.name).slice(0, 6).join(' / ') || 'keine', '| gewählt:', st ? st.name + ' (' + st.eva + ')' : 'keiner');
     if (st) {
       const pt = berlinZ(Date.parse(ab)), plan = dbStops(await dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`));
       console.log(`Sollfahrplan ${pt.slice(0, 6)} ${pt.slice(6, 8)} Uhr: ${plan.length} Halte; Abfahrten:`);
