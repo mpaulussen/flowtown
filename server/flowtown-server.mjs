@@ -3647,7 +3647,7 @@ async function fahrtPruefen(a, ctx) {
     }
   }
   if (ctx) ctx.neu = { typ: 'fahrt', von: { name: von }, nach: { name: nach }, art, ueber: ueberN || '', ab: new Date(top[0].ts).toISOString(), suche_ab: new Date(T0).toISOString(), wunsch: { max_umstiege: 0, ohne_bus: art === 'zug' || art === 'nahverkehr' || art === 'fernverkehr', nur_regio: art === 'nahverkehr' }, fahrten: top.map((f) => ({ linie: f.linie, ab: new Date(f.ts).toISOString(), von: f.halt_am_start, ziel: f.richtung })) };
-  return { ergebnis: 'Fahrten gefunden', zeitraum, wunsch: { art, ueber: !!ku }, haltestellen_start: [...halte].slice(0, 4), fahrten: top.map(({ ts, ...rest }) => rest), hinweis: 'Fahrten ohne Umstieg laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden; bei keine_abweichung_gemeldet sag „laut DB keine Abweichung gemeldet“ (nie „pünktlich“). Nenne nur diese Linien und Uhrzeiten, rechne nie selbst mit Uhrzeiten. Für „später“ oder „der nächste“ ruf das Werkzeug mit versatz_min oder danach noch einmal auf.' };
+  return { ergebnis: 'Fahrten gefunden', zeitraum, wunsch: { art, ueber: !!ku }, haltestellen_start: [...halte].slice(0, 4), fahrten: top.map(({ ts, ...rest }) => rest), hinweis: 'Fahrten ohne Umstieg laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden; bei keine_abweichung_gemeldet sag „laut DB keine Abweichung gemeldet“ (nie „pünktlich“). Nenne nur diese Linien und Uhrzeiten, rechne nie selbst mit Uhrzeiten. Nenne die Fahrten in der Reihenfolge des Ergebnisses, bei „später“ oder „der nächste“ die erste Fahrt zuerst. Für „später“ oder „der nächste“ ruf das Werkzeug mit versatz_min oder danach noch einmal auf.' };
 }
 // Verbindungen mit Umstiegen von HERE (Fahrplan), mit Uhrzeit und Filtern. Echtzeit nur für die erste Fahrt (DELFI oder DB), Anschlüsse prüft anschluss_pruefen.
 async function verbindungSuchen(a, ctx) {
@@ -3873,6 +3873,11 @@ async function assist(body) {
   const act = {}, used = [];
   ctx.used = used;
   ctx.zustand = zustandClean(k.zustand);   // die zuletzt genannte Strecke und Abfahrt, von der App mitgeschickt; ctx.neu setzen die Werkzeuge
+  // „Eine Stunde später“ und „der nächste“ beziehen sich auf die zuletzt genannte Abfahrt: die letzte Fahrt aus dem Zustand, deren Uhrzeit in der letzten Antwort steht
+  if (ctx.zustand && ctx.zustand.typ === 'fahrt' && Array.isArray(ctx.zustand.fahrten) && ctx.zustand.fahrten.length) {
+    const letzte = [...verlauf].reverse().find((m) => m.role === 'assistant');
+    if (letzte) { const genannt = ctx.zustand.fahrten.filter((f) => f.ab && String(letzte.content).includes(hmZ(Date.parse(f.ab)))); if (genannt.length) ctx.zustand.ab = genannt[genannt.length - 1].ab; }
+  }
   const folge = folgeAufruf(frage, ctx.zustand);
   if (folge) {
     try {
@@ -4371,7 +4376,15 @@ if (cli === 'db-leg') {
   // Prüft, ob die DB-Echtzeit zu einer Fahrt von HERE passt. Aufruf: db-leg "<Linie>" "<Haltestelle>" <Abfahrt als Datum mit Uhrzeit>
   const [, , , linie, von, ab, welches] = process.argv;
   if (!DB_ON) { console.error('DB_CLIENT_ID und DB_API_KEY fehlen in /etc/flowtown.env'); process.exit(1); }
-  if (welches === 'ar') { const e = await dbEreignis({ art: 'zug', nach: von, an: ab, linie }, 'ar').catch((x) => ({ fehler: x.message })); console.log('Ankunft', linie, 'in', von, ab, '→', JSON.stringify(e || null), '(null = keine eindeutige Zuordnung)'); process.exit(0); }
+  if (welches === 'ar') {
+    try {
+      const lst = await dbStation(dbMuster(von)), st = dbWaehle(lst, von);
+      console.log('Muster:', dbMuster(von), '| Bahnhöfe:', lst.map((a) => a.name).slice(0, 6).join(' / ') || 'keine', '| gewählt:', st ? st.name + ' (' + st.eva + ')' : 'keiner');
+      if (st) { const pt = berlinZ(Date.parse(ab)), plan = dbStops(await dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`));
+        console.log(`Sollfahrplan ${pt.slice(0, 6)} ${pt.slice(6, 8)} Uhr, ${plan.length} Halte; Ankünfte:`);
+        plan.filter((x) => x.ar && x.ar.pt).sort((x, y) => x.ar.pt.localeCompare(y.ar.pt)).slice(0, 25).forEach((x) => console.log(`  ${x.ar.pt.slice(6, 8)}:${x.ar.pt.slice(8)}  ${(x.tl || {}).c || ''} ${x.ar.l || ''} (Nr. ${(x.tl || {}).n || ''})  von ${String(x.ar.ppth || '').split('|')[0]}`)); }
+    } catch (x) { console.error('Fehler:', x.message); }
+    const e = await dbEreignis({ art: 'zug', nach: von, an: ab, linie }, 'ar').catch((x) => ({ fehler: x.message })); console.log('Ergebnis (Ankunft', linie, 'in', von, ab + '):', JSON.stringify(e || null), '(null = keine eindeutige Zuordnung)'); process.exit(0); }
   if (!linie || !von || !ab || isNaN(Date.parse(ab))) { console.error('Aufruf: node flowtown-server.mjs db-leg "RE 82" "Detmold Bahnhof" 2026-11-13T15:40:00+01:00'); process.exit(1); }
   try {
     const lst = await dbStation(dbMuster(von)), st = dbWaehle(lst, von);
