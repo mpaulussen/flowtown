@@ -56,7 +56,7 @@ Im Dummy umgesetzt (Rundgang Schritt 8, in „Mein Profil“ die Karte „Ansage
 2. **Morgenmeldung.** Aus, bis die Person sie einschaltet. Uhrzeit wählbar (Mo bis Fr). Eine Benachrichtigung mit einem kurzen, für sich verständlichen Text; der Screenreader (VoiceOver, TalkBack) liest sie vor. Bei alten Angaben steht dort „Angaben zu alt, keine Empfehlung“.
 3. **Ansagen unterwegs** gibt es schon in der Navigation.
 
-**Datenschutz-Entwurf:** Der Server erfährt nur „sende um 7:00 eine Meldung an dieses Gerät“, nicht den Weg. Das Handy holt beim Eintreffen die Lage für den gespeicherten Weg selbst. Das passt zu „Lernen nur auf dem Handy“.
+**Datenschutz-Entwurf:** Für Wege im Gebiet Bielefeld erfährt der Server nur „sende um 7:00 eine Meldung an dieses Gerät“, nicht den Weg. Das Handy holt beim Eintreffen die Lage selbst und prüft sie. Für Wege außerhalb des Gebiets müsste das Handy die Strecke abfragen, der Server sähe dann Start und Ziel auf etwa 1 km (siehe „Entscheidungen“ unten).
 
 **Grenzen:**
 - Nicht möglich: ungefragte Sprachausgabe im Hintergrund. Browser und installierte Web-App können nicht von sich aus sprechen.
@@ -90,22 +90,25 @@ Stand 13.11.2026, nach Durchsicht von `server/flowtown-server.mjs`, `server/READ
 
 Die Lage für das Gebiet ist für alle gleich, das Handy filtert selbst: Der Server erfährt keinen Weg. Die Streckenabfrage (Zeit im Stau, Verbindung) verrät dem Server Start und Ziel, gerundet auf etwa 1 km. Das ist heute schon so und in der Datenschutzerklärung beschrieben, wenn jemand ein Ziel prüft.
 
-Vorschlag:
-- **Detmold → Bielefeld (täglich):** Gebiet der Lage nach Osten erweitern, dann bleibt alles auf dem Handy. Auch die Morgenmeldung kann das: Der Server weckt das Handy zur Uhrzeit, das Handy holt die Lage und prüft selbst.
-- **Bielefeld ↔ Mönchengladbach (selten):** nur auf Wunsch („Weg jetzt prüfen“) über die Streckenabfrage, mit dem Hinweis, dass der Server Start und Ziel auf etwa 1 km sieht. Keine Morgenmeldung dafür.
+### Entscheidungen (13.11.2026)
 
-### Was zu entscheiden ist
+1. **Das Gebiet der Lage wächst mit den Suchen der Nutzenden, nicht auf Vorrat.** Vorerst bleibt es beim Gebiet Bielefeld mit HERE. Das Gebiet wird nicht fest nach Osten erweitert.
+2. **Für Wege außerhalb des Gebiets** (Detmold, Mönchengladbach) fragt das Handy die Strecke beim Server ab. Der Server sieht dabei **Start und Ziel auf etwa 1 km genau.** Einverstanden. In der Datenschutzerklärung und in der App muss das vor der ersten Abfrage stehen.
 
-1. **Gebiet der Lage erweitern?** Der Aufwand bei HERE wächst mit der Fläche. Wie viel das kostet oder ob das Kontingent reicht, hängt vom HERE-Vertrag ab, den ich nicht kenne.
-2. **Streckenabfrage auf Wunsch für Wege außerhalb:** einverstanden mit „Start und Ziel auf etwa 1 km sichtbar“?
+**Folgen**
+- **Bielefeld:** Der Weg bleibt auf dem Handy, der Server erfährt nichts.
+- **Detmold → Bielefeld und Mönchengladbach:** Streckenabfrage auf Wunsch („Weg jetzt prüfen“). Die Quellenzeile nennt nur, was dabei wirklich geliefert wurde.
+- **Morgenmeldung:** Für Wege im Gebiet Bielefeld reicht die Uhrzeit auf dem Server. Für einen Weg außerhalb müsste das Handy zur Uhrzeit die Strecke abfragen, der Server sähe also jeden Morgen Start und Ziel. Das ist **eine eigene Entscheidung**, sobald die Morgenmeldung gebaut wird. Bis dahin steht im Dummy nicht mehr „der Server kennt nur die Uhrzeit“, sondern beide Fälle.
+- **Offen: wie das Gebiet „mit den Suchen wächst“.** Vorschlag, noch nicht entschieden und nicht gebaut: Der Server holt die Lage für Kacheln von etwa 10 km, in denen in den letzten Tagen jemand ein Ziel geprüft hat, und merkt sich nur die Kachel, keine Person. Das ist eine Ausbaustufe nach Schritt 2 der Reihenfolge unten.
+- **Tageslimit je Gerät:** Die Streckenabfrage hat eines. Das muss reichen, ohne dass Nutzende ausgesperrt werden. Zu prüfen.
 
 ### Reihenfolge für die App (M8a)
 
 1. Wege speichern (Ortssuche oder aus Fahrten), nur auf dem Handy.
 2. „Dein Weg jetzt“ für Wege im Gebiet der Lage: Meldungen aus `/api/lage`, Quelle und Alter aus der Antwort, 30-Minuten-Regel.
-3. Gebiet der Lage erweitern (Detmold), falls entschieden.
+3. Streckenabfrage für Wege außerhalb des Gebiets (Detmold, Mönchengladbach) auf Wunsch, mit Hinweis zu Start und Ziel. Das Gebiet der Lage bleibt vorerst Bielefeld.
 4. Vergleich Auto gegen Bahn über die vorhandenen Abfragen, ohne Empfehlung bei fehlenden Werten.
-5. Wege außerhalb auf Wunsch über die Streckenabfrage.
+5. Gebiet der Lage nach Nachfrage wachsen lassen (Kacheln, siehe oben), wenn die Nutzung es zeigt.
 6. Vorlesen beim Öffnen (nur App, keine neue Datenquelle nötig).
 7. Morgenmeldung (braucht Push am Server und die Datenschutzerklärung).
 
