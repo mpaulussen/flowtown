@@ -3435,7 +3435,25 @@ const Q_FAHRPLAN = /\b(zug|züge|bahn|stadtbahn|bus|busse|linie|gleis|abfahrt|ab
 const Q_ABSAGE = /keine angabe|keine gesicherte|nicht (sicher )?(prüfen|sagen)|kann ich (dir |das )?(nicht|nichts)|finde ich (dazu |keine|nichts)|nichts gefunden|habe ich (dazu )?(keine|nichts|nicht)|weiß ich (gerade )?nicht|kenne ich (nicht|dazu)|nicht bekannt|konnte nicht/i;
 const Q_FAHRPLAN_TOOLS = new Set(['abfahrten_in_der_naehe', 'fahrt_pruefen', 'rueckweg', 'vergleich', 'oepnv_stoerungen', 'haltestelle', 'haltestellen_in_der_naehe']);
 const Q_KEIN_ORT = new Set(['hause', 'möglichkeit', 'fahrplan', 'ankunft', 'uhr', 'minuten', 'bedarf', 'norden', 'süden', 'osten', 'westen', 'ziel', 'start', 'ort', 'stunde', 'stunden', 'haltestelle', 'bahnhof', 'richtung', 'meinem', 'deinem']);
+// Aussagen zu anderen Themen: Schlüsselwort in der Antwort, und das Ergebnis eines Werkzeugs muss dazu etwas enthalten (beleg); sonst ist es nicht belegt
+const Q_THEMEN_PRUEFUNG = [
+  { was: 'Barrierefreiheit', re: /\b(barrierefrei\w*|stufenlos\w*|rollstuhlgerecht\w*|ebenerdig\w*|hochbahnsteig\w*|behindertengerecht\w*)/i, beleg: /barrierefrei|stufenlos|rollstuhl|hochbahnsteig|aufzug|ebenerdig|zugang|schwelle|eingang|rampe/ },
+  { was: 'Aufzugsstatus', re: /\b(aufzug|aufzüge|fahrstuhl|lift)\b.{0,50}\b(in betrieb|funktioniert|funktionieren|geht|gehen|defekt|ausgefallen|außer betrieb|ausser betrieb)\b/i, beleg: /betrieb|defekt|ausgefallen|ausser|außer|aufzug/ },
+  { was: 'Öffnungszeiten', re: /\b(geöffnet|öffnungszeit\w*|öffnet um|schließt um|offen (von|bis|ab))\b/i, beleg: /öffnungszeit|oeffnung|geöffnet|geoeffnet/ },
+  { was: 'Preise', re: /\b\d+([.,]\d+)?\s*(€|euro)(?![a-zäöü])/i, beleg: /€|euro/ },
+  { was: 'Telefonnummern', re: /(?:\+49|\b0\d{2,5})[\s\/-]?\d[\d\s\/-]{4,}/, beleg: null }
+];
+function themenPruefung(antwort, messages) {
+  if (Q_ABSAGE.test(antwort) || /vor ort (zu )?prüfen/i.test(antwort)) return null;   // ehrliche Absage oder Hinweis zum Prüfen
+  const roh = messages.filter((m) => m.role === 'tool').map((m) => m.content).join(' ').toLowerCase();
+  for (const t of Q_THEMEN_PRUEFUNG) if (t.re.test(antwort) && (!t.beleg || !t.beleg.test(roh))) return 'Thema: ' + t.was;
+  // Maße (Türbreite 90 cm): die Zahl muss im Ergebnis stehen
+  for (const m of antwort.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:cm|zentimeter)\b/gi)) if (!roh.includes(m[1].replace(',', '.')) && !roh.includes(m[1])) return 'Thema: Maß ' + m[0];
+  return null;
+}
 function quellenPruefung(antwort, messages, used) {
+  const th = themenPruefung(antwort, messages);
+  if (th) return th;
   if (!Q_FAHRPLAN.test(antwort) || Q_ABSAGE.test(antwort)) return null;   // nichts zu prüfen, oder eine ehrliche Absage
   if (!used.some((n) => Q_FAHRPLAN_TOOLS.has(n))) return 'ohne Fahrplan-Werkzeug';
   const tools = messages.filter((m) => m.role === 'tool');
@@ -3455,6 +3473,7 @@ function quellenPruefung(antwort, messages, used) {
   return null;
 }
 const Q_ERSATZ = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es auf bahn.de, mobiel.de oder in der Bahn-App.';
+const Q_ERSATZ_ALLG = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es vor Ort oder bei der zuständigen Stelle.';
 // Zeiten aus fahrt_pruefen ohne Echtzeit stehen laut Fahrplan: Das sagt der Server selbst dazu, falls die Antwort es nicht tut
 function mitFahrplanHinweis(antwort, messages) {
   const fp = messages.filter((m) => m.role === 'tool' && m.name === 'fahrt_pruefen').pop();
@@ -3474,7 +3493,7 @@ async function absichern(antwort, messages, used) {
     const a2 = sauber(m.content);
     if (a2 && !quellenPruefung(a2, messages, used)) return mitFahrplanHinweis(a2, messages);
   } catch (e) { /* dann die Ersatzantwort */ }
-  return Q_ERSATZ;
+  return /^Thema:/.test(grund) ? Q_ERSATZ_ALLG : Q_ERSATZ;
 }
 async function assist(body) {
   const frage = clip(body.frage, 300);
