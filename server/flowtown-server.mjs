@@ -3576,6 +3576,7 @@ function folgeAufruf(frage, z) {
   if (/anschluss|umsteigezeit|(schaff|reich|klappt).*umsteig|umsteig.*(schaff|reich|klappt)/.test(q)) return { name: 'anschluss_pruefen', args: {} };
   if (/verspät|pünktlich|fällt .*aus|ausfall|fährt (der|die|das|er|sie|es) (noch|trotzdem)/.test(q)) return { name: 'verspaetung_pruefen', args: {} };
   const a = {}; let direkt = false, mitUmstieg = false, erkannt = false;
+  if (/wie lange (?:dauert|fährt|braucht|brauche|ist man|sind wir)|\bdauer\b|fahrzeit|wie viele minuten/.test(q)) erkannt = true;   // „Wie lange dauert das?“: Fahrzeit aus dem Fahrplan, nicht aus dem Gedächtnis
   // Zeit relativ: „eine Stunde später“, „30 Minuten früher“, „eine halbe Stunde später“; ohne Menge: „später“ = die nächste, „früher“ = eine Stunde früher
   const mz = /\b(?:(halbe|viertel)\s*stunde|(\d{1,3})\s*min(?:ute[n]?)?|(\d{1,2}|eine|ein|zwei|drei)\s*stunden?)\s*(später|früher|danach|davor|vorher)\b/.exec(q);
   if (mz) { const n = mz[1] ? (mz[1] === 'halbe' ? 30 : 15) : mz[2] ? Number(mz[2]) : ({ eine: 1, ein: 1, zwei: 2, drei: 3 }[mz[3]] || Number(mz[3])) * 60; a.versatz_min = /früher|davor|vorher/.test(mz[4]) ? -n : n; erkannt = true; }
@@ -3623,7 +3624,7 @@ function ortSchluessel(k, ctx) {
 function streckeAufruf(frage) {
   const f = String(frage || '').trim();
   if (f.length > 120 || !/(?:^|[^a-zäöüß])(fährt|fahren|zug|züge|bahn|stadtbahn|bus|busse|abfahrt|abfahrten)(?![a-zäöüß])/i.test(f)) return null;
-  if (/wie komme ich|verbindung|umsteig|anschluss|barriere|aufzug|dauer|lange|kostet|preis|ticket|stör|verspät/i.test(f)) return null;
+  if (/wie komme ich|verbindung|umsteig|anschluss|barriere|aufzug|kostet|preis|ticket|stör|verspät/i.test(f)) return null;
   const ORT = "([A-ZÄÖÜ][\\wäöüß.-]*(?:\\s+[A-ZÄÖÜ][\\wäöüß.-]*)*)", ART = '(?:der |dem |den |die |das )?', FILL = '(?:\\s+(?:ein|eine|einen|der|die|das|noch|heute|morgen|gleich|jetzt|[Zz]ug|[Bb]us|[Bb]ahn|[Ss]tadtbahn|[Rr]egionalzug|um \\d{1,2}(?::\\d{2})?(?: [Uu]hr)?))*';
   const m = new RegExp('(?:^|[\\s,])(?:von|vom|ab)\\s+' + ART + ORT + FILL + '\\s+(?:nach|zum|zur|zu|bis)\\s+' + ART + ORT).exec(f);
   if (!m) return null;
@@ -3701,6 +3702,11 @@ async function fahrtPruefen(a, ctx) {
   if (!zielGefunden) return { ergebnis: 'nicht prüfbar', haltestellen_start: [...halte].slice(0, 4), hinweis: 'Das gefragte Ziel kommt in meinem Fahrplanausschnitt nicht vor (er reicht über Ostwestfalen und die Umgebung von Mönchengladbach, Paderborn und Detmold). Ob dorthin etwas fährt, kann ich nicht prüfen. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de oder die Bahn-App.' };
   if (ku && !viaGefunden) return { ergebnis: 'nicht prüfbar', hinweis: 'Den Ort, über den es gehen soll, kenne ich in meinem Fahrplanausschnitt nicht. Ob eine Fahrt dorthin führt, kann ich nicht prüfen. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de.' };
   // auch ohne Fahrt bleibt die Strecke im Gespräch: „über Lage“, „mit Umstieg“ oder „nur Bus“ beziehen sich darauf
+  // Erste Frage „ein Bus von A nach B“, aber dort fährt nur die Stadtbahn: die anderen Fahrten nennen und die Abweichung sagen (nicht „keine Fahrt“)
+  if (!fahrten.length && (art === 'bus' || art === 'zug') && !a.keinFallback && !(z.von && z.von.name)) {
+    const r2 = await fahrtPruefen(Object.assign({}, a, { art: 'alle', keinFallback: true }), ctx);
+    if (r2 && r2.ergebnis === 'Fahrten gefunden') { r2.art_abweichend = `Es gibt keine Fahrt ohne Umstieg in der gefragten Art (${art === 'bus' ? 'Bus' : 'Zug'}). Die Fahrten hier sind eine andere Art (Feld art). Sag das offen und nenne die Art.`; return r2; }
+  }
   if (!fahrten.length && ctx) ctx.neu = { typ: 'fahrt', von: { name: von }, nach: { name: nach }, art, ueber: ueberN || '', ab: '', suche_ab: new Date(T0).toISOString(), wunsch: { max_umstiege: 0, ohne_bus: art === 'zug' || art === 'schiene' || art === 'nahverkehr' || art === 'fernverkehr' || art === 'stadtbahn', nur_regio: art === 'nahverkehr' }, fahrten: [] };
   if (!fahrten.length) return { ergebnis: 'keine Fahrt gefunden', zeitraum, haltestellen_start: [...halte].slice(0, 4), hinweis: 'Im Fahrplan finde ich in diesem Zeitraum keine Fahrt ohne Umstieg, die am Start hält und danach am Ziel (mit den gewählten Wünschen). Sag „dazu finde ich keine Fahrt“, nicht „es gibt keine“. Biete an, eine Verbindung mit Umstieg zu suchen (verbindung_suchen), und verweise auf bahn.de.' };
   const top = fahrten.slice(0, 4);

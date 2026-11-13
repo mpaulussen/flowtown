@@ -121,7 +121,7 @@ Fährt gleich ein Zug von Bielefeld nach Herford? => fahrt_pruefen
 Hält die RB 72 in Lage? => -
 Hält der RE 82 in Herford? => -
 Welcher Zug fährt von Detmold nach Bielefeld? => fahrt_pruefen
-Wie lange fährt man von Detmold nach Bielefeld? => -
+Wie lange fährt man von Detmold nach Bielefeld? => fahrt_pruefen
 Ich möchte von Detmold nach Bielefeld, was gibt es da?
 
 # Stadtbahn und Bus in Bielefeld
@@ -150,3 +150,9 @@ Fährt vom Hbf ein Zug nach Hannover? => fahrt_pruefen
 Wann fährt die Stadtbahn von der Universität zum Hauptbahnhof?
 Ohne Busse => fahrt_pruefen
 Keine Busse => fahrt_pruefen
+
+# Dauer als Folgefrage
+Wie komme ich von Detmold nach Herford?
+Wie lange dauert das? => fahrt_pruefen
+Wie lange dauert die Fahrt? => fahrt_pruefen
+Ohne Umstieg => fahrt_pruefen
