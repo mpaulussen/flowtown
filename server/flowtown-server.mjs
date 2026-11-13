@@ -3488,7 +3488,7 @@ async function rtLegAll(t) {
 }
 // Fahrt prüfen: gibt es im Fahrplan eine Fahrt, die am Start hält und danach am Ziel? Nur Fahrplan und Echtzeit, nichts aus Wissen.
 // Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt das Ziel dort, sagt das Werkzeug „nicht prüfbar“.
-function fahrtPruefen(von, nach, art) {
+async function fahrtPruefen(von, nach, art) {
   // Haltestellenname und Frage gleich schreiben; ein Treffer gilt nur, wenn der Name mit dem Gefragten beginnt und dort ein Wort endet:
   // „Detmold“ trifft „Detmold, Bahnhof“, aber nicht „Detmolder Straße“ in Steinheim und nicht „Höv-Riege, Detmolder Straße“
   const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -3525,7 +3525,21 @@ function fahrtPruefen(von, nach, art) {
   if (!startGefunden) return { ergebnis: 'nicht prüfbar', hinweis: 'Eine Haltestelle oder einen Ort mit diesem Namen als Start kenne ich im Fahrplan nicht. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de.' };
   if (!zielGefunden) return { ergebnis: 'nicht prüfbar', haltestellen_start: [...halte].slice(0, 4), hinweis: 'Das gefragte Ziel kommt in meinem Fahrplanausschnitt nicht vor (er reicht über Ostwestfalen und die Umgebung von Mönchengladbach, Paderborn und Detmold). Ob dorthin etwas fährt, kann ich nicht prüfen. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de oder die Bahn-App.' };
   if (!fahrten.length) return { ergebnis: 'keine Fahrt gefunden', haltestellen_start: [...halte].slice(0, 4), hinweis: 'Im Fahrplan finde ich in den nächsten 6 Stunden keine Fahrt, die am Start hält und danach am Ziel. Sag „dazu finde ich keine Fahrt“, nicht „es gibt keine“, und verweise auf bahn.de.' };
-  return { ergebnis: 'Fahrten gefunden', haltestellen_start: [...halte].slice(0, 4), fahrten: fahrten.slice(0, 4), hinweis: 'laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden. Nenne nur diese Linien und Uhrzeiten.' };
+  const top = fahrten.slice(0, 4);
+  // Züge ohne Echtzeit aus DELFI: die DB fragen (nur wenn eingerichtet); nur bei sicherer Zuordnung
+  if (DB_ON) {
+    const t0 = Math.floor(Date.now() / 60000) * 60000;
+    for (const f of top) {
+      if (f.art !== 'Zug' || f.verspaetung_min != null || f.faellt_aus) continue;
+      try {
+        const rl = await dbLeg({ art: 'zug', von: f.halt_am_start, linie: f.linie, ab: new Date(t0 + f.in_min * 60000).toISOString(), ziel: f.richtung });
+        if (!rl) continue;
+        f.echtzeit_quelle = rl.quelle;
+        if (rl.faellt_aus) f.faellt_aus = true; else if (rl.verspaetung_min != null) f.verspaetung_min = rl.verspaetung_min; else f.keine_abweichung_gemeldet = true;
+      } catch (e) { dbErr = e.message; }
+    }
+  }
+  return { ergebnis: 'Fahrten gefunden', haltestellen_start: [...halte].slice(0, 4), fahrten: top, hinweis: 'laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden; bei keine_abweichung_gemeldet sag „laut DB keine Abweichung gemeldet“ (nie „pünktlich“). Nenne nur diese Linien und Uhrzeiten.' };
 }
 // Quellenprüfung: Antworten zu Bus und Bahn dürfen nur enthalten, was die Werkzeuge geliefert haben. Gibt den Grund zurück, wenn etwas nicht belegt ist.
 const Q_FAHRPLAN = /\b(zug|züge|bahn|stadtbahn|bus|busse|linie|gleis|abfahrt|abfahrten|fährt|fahren|hält|halten|verbindung|umstieg|umsteigen)\b/i;
@@ -3576,7 +3590,7 @@ const Q_ERSATZ_ALLG = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bit
 // Zeiten aus fahrt_pruefen ohne Echtzeit stehen laut Fahrplan: Das sagt der Server selbst dazu, falls die Antwort es nicht tut
 function mitFahrplanHinweis(antwort, messages) {
   const fp = messages.filter((m) => m.role === 'tool' && m.name === 'fahrt_pruefen').pop();
-  if (!fp || !/Fahrten gefunden/.test(fp.content) || /"verspaetung_min":|"faellt_aus":/.test(fp.content) || /fahrplan|echtzeit/i.test(antwort)) return antwort;
+  if (!fp || !/Fahrten gefunden/.test(fp.content) || /"verspaetung_min":|"faellt_aus":|"keine_abweichung_gemeldet":/.test(fp.content) || /fahrplan|echtzeit/i.test(antwort)) return antwort;
   return antwort.replace(/\s+$/, '') + ' Das gilt laut Fahrplan, Verspätungen kenne ich dafür nicht.';
 }
 // prüft die Antwort der KI; einmal korrigieren lassen, sonst die sichere Ersatzantwort
@@ -4063,7 +4077,7 @@ if (cli === 'fahrt-pruefen') {
   const [, , , von, nach, art] = process.argv;
   if (!von || !nach) { console.error('Aufruf: node flowtown-server.mjs fahrt-pruefen Detmold Osnabrück [zug|bus|alle]'); process.exit(1); }
   loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
-  console.log(JSON.stringify(fahrtPruefen(von, nach, art), null, 1));
+  console.log(JSON.stringify(await fahrtPruefen(von, nach, art), null, 1));
   process.exit(0);
 }
 if (cli === 'assist-frage') {
