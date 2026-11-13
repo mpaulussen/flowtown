@@ -2690,7 +2690,7 @@ function waehleBeste(opt, { typ, vorrang, now, zuFuss }) {
   return { best, fastest, pool };
 }
 // </waehle>
-async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
+async function vergleichZiel(from, to, typ, vorrang, zuFuss, sink) {
   const now = Date.now();
   const luft = mAbs(from, to), weit = (m) => Promise.reject(new Error('zu weit'));
   const [ra, rr, rf, ro] = await Promise.allSettled([checkZiel(from, to, 'auto', true), luft > 60000 ? weit() : checkZiel(from, to, 'rad', true), luft > 25000 ? weit() : checkZiel(from, to, 'fuss', true), checkZielOepnv(from, to)]);
@@ -2704,6 +2704,7 @@ async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
     if (mob) { const near = (bpp && bpp.plaetze || []).map((p) => mAbs(to, [p[0], p[1]])).sort((a, b) => a - b)[0]; o.behindertenparkplatz = near != null && near <= 500 ? `etwa ${Math.round(near / 50) * 50} m vom Ziel` : 'keiner bis 500 m bekannt'; }
     opt.push(o);
   }
+  if (sink && ro.status === 'fulfilled') sink.verbindungen = ro.value.verbindungen;   // für das Gespräch: Verbindungen mit Bus und Bahn
   if (ro.status === 'fulfilled' && !ro.value.verbindungen.some((x) => Date.parse(x.ab) >= now - 60000)) {
     // nur abgefahrene Verbindungen im Zwischenspeicher: frisch fragen
     zielCache.delete([from, to, 'oepnv'].join('|'));
@@ -2974,7 +2975,13 @@ async function assistTool(name, a, ctx, act) {
     const f = from.pos.map((x) => Math.round(x * 100000) / 100000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
     if (name === 'vergleich') {
       const pOsm = osmAussen(to.pos, ctx.typ, 5000), pEg = zuerst(eingangNahe(to.pos, ctx.typ), 5000);   // gleichzeitig mit dem Vergleich, nicht danach
-      const v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang, ctx.zuFuss);
+      const sink = {}, v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang, ctx.zuFuss, sink);
+      // Nach einem Vergleich merkt sich das Gespräch die Verbindungen mit Bus und Bahn, damit Rückfragen („ohne Busse“, „eine Stunde später“, „schaffe ich den Anschluss?“) greifen
+      try {
+        const vb = (sink.verbindungen || []).filter((c) => Date.parse(c.ab) >= Date.now() - 60000).slice(0, 3);
+        if (vb.length) ctx.neu = { typ: 'verbindung', von: { name: from.name }, nach: { name: to.name }, art: '', ueber: '', wunsch: { max_umstiege: null, ohne_bus: false, nur_regio: false }, ab: new Date(Date.parse(vb[0].ab)).toISOString(), suche_ab: '',
+          verbindungen: vb.map((c) => ({ legs: c.teile.filter((l) => l.art !== 'fuss').map((l) => ({ art: l.art, linie: l.linie, von: l.von, nach: l.nach, ab: new Date(Date.parse(l.ab)).toISOString(), an: new Date(Date.parse(l.an)).toISOString(), ziel: l.ziel, gleis: l.gleis, vonPos: l.vonPos, nachPos: l.nachPos })) })) };
+      } catch (e) { /* ohne Gedächtnis weiter */ }
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
       const am = zielInfo(to.pos, to.name, ctx.typ, await pOsm), eg = await pEg;
       return Object.assign({ ziel: to.name, plan_b: planB('vergleich', { v, typ: ctx.typ, am }), eingang: eg ? { art: eg.art, stufenlos: eg.stufenlos, automatiktuer: eg.automatiktuer } : undefined }, v, { am_ziel: am });
