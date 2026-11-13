@@ -3443,6 +3443,14 @@ function dbWaehle(liste, vonName) {
   return beginnt.length === 1 ? beginnt[0] : null;   // lieber keine Station als eine falsche
 }
 const berlinZ = (ts) => { const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts)).map((x) => [x.type, x.value])); return f.year + f.month + f.day + f.hour + f.minute; };
+// So schreibt die DB eine Linie, je nach Betreiber: Kategorie „RE“ mit Linie „82“, oder (eurobahn) Kategorie „ERB“ mit der ganzen Linie „RE82“; Fernzüge haben oft nur Kategorie und Nummer („ICE“, „543“)
+function dbLinien(x) {
+  const lin = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), c = lin((x.tl || {}).c), l = lin(x.dp && x.dp.l), n = lin((x.tl || {}).n), out = new Set();
+  if (l && /[A-Z]/.test(l)) out.add(l);   // „RE82“ allein, wenn die Linie selbst Buchstaben hat
+  if (c && l) out.add(c + l);
+  if (c && n) out.add(c + n);
+  return [...out];
+}
 // Echtzeit der DB für die erste Fahrt einer Verbindung von HERE: Station über den Namen, Fahrt im Sollfahrplan der Stunde über Linie (Kategorie + Linie oder Nummer, ohne Leerzeichen) und geplante Abfahrt (± 2 Minuten), dann die Änderung zu dieser Fahrt.
 // Nur bei genau einem Treffer; sonst null. Keine Änderung gemeldet heißt: „keine Abweichung gemeldet“, nie „pünktlich“.
 async function dbLeg(t) {
@@ -3452,7 +3460,18 @@ async function dbLeg(t) {
   const pt = berlinZ(Date.parse(t.ab));
   const plan = dbStops(await dbCached(`plan|${st.eva}|${pt.slice(0, 8)}`, 6 * 3600e3, () => dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`)));
   const lin = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), want = lin(t.linie);
-  const hit = plan.filter((x) => x.dp && x.dp.pt && Math.abs(dbMin(x.dp.pt) - dbMin(pt)) <= 2 && [lin(((x.tl || {}).c || '') + (x.dp.l || '')), lin(((x.tl || {}).c || '') + ((x.tl || {}).n || ''))].includes(want));
+  const hit = plan.filter((x) => x.dp && x.dp.pt && Math.abs(dbMin(x.dp.pt) - dbMin(pt)) <= 2 && dbLinien(x).includes(want));
+  // mehrere Treffer (RB72 um 17:01 nach Herford und um 17:02 nach Paderborn): erst die genaueste Zeit, dann das Fahrtziel
+  const ziel = (x) => String(x || '').toLowerCase().replace(/hauptbahnhof/g, 'hbf').replace(/[^a-z0-9äöüß]/g, '');
+  if (hit.length > 1) {
+    const best = Math.min(...hit.map((x) => Math.abs(dbMin(x.dp.pt) - dbMin(pt))));
+    const eng = hit.filter((x) => Math.abs(dbMin(x.dp.pt) - dbMin(pt)) === best);
+    hit.length = 0; hit.push(...eng);
+  }
+  if (hit.length > 1 && t.ziel) {
+    const hz = ziel(t.ziel), nach = hit.filter((x) => { const e = ziel(String(x.dp.ppth || '').split('|').pop()); return e && hz && (e.startsWith(hz) || hz.startsWith(e)); });
+    hit.length = 0; hit.push(...nach);
+  }
   if (hit.length !== 1) return null;
   const quelle = 'DB Station&Service';
   const chg = dbStops(await dbCached('fchg|' + st.eva, 30000, () => dbGet('/fchg/' + st.eva))).find((x) => x.id === hit[0].id);
@@ -4101,7 +4120,7 @@ if (cli === 'db-test') {
       if (!ab) continue;
       n++;
       const erw = c.dp.cs === 'c' ? 'faellt_aus' : String(Math.round(dbMin(c.dp.ct) - dbMin(p.dp.pt)));
-      const got = await dbLeg({ art: 'zug', von: st.name, linie: ((p.tl || {}).c || '') + (p.dp.l || (p.tl || {}).n || ''), ab });
+      const got = await dbLeg({ art: 'zug', von: st.name, linie: dbLinien(p)[0] || '', ab });
       const gv = got ? (got.faellt_aus ? 'faellt_aus' : got.verspaetung_min != null ? String(got.verspaetung_min) : 'keine') : null;
       if (gv === erw) ok++; else if (!got) { nul++; console.log(`  nicht gefunden: ${(p.tl || {}).c || ''}${p.dp.l || ''} ${p.dp.pt.slice(6, 8)}:${p.dp.pt.slice(8)} erwartet ${erw}`); } else { falsch++; console.log(`  FALSCH: ${(p.tl || {}).c || ''}${p.dp.l || ''} erwartet ${erw}, Zuordnung ${JSON.stringify(got)}`); }
     }
