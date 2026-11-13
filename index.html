@@ -176,8 +176,17 @@
       <svg class="claim-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg>
       <p class="eyebrow" id="today-date"></p>
       <h2 id="h-start" class="display">Besser ankommen mit Flowtown.</h2>
-      <p class="claim-sub">Sag es oder tippe es ein.</p>
+      <p class="claim-sub">Navigation mit Sprache, einfach, direkt, barrierefrei.</p>
     </header>
+    <div class="talk-hero" id="talk-hero" hidden>
+      <button type="button" class="talk-btn" id="talk-btn"><span class="tb-ic" aria-hidden="true"><svg class="ic"><use href="#i-mic"/></svg></span><span class="tb-tx"><b>Sprich mit Flowtown</b><small>Sag, wohin du willst oder was du wissen möchtest.</small></span></button>
+      <div class="talk-ex" role="group" aria-label="Beispielfragen">
+        <button type="button" class="ask-ex-chip" data-askex="Wann fährt die Stadtbahn von der Universität zum Hauptbahnhof?">Stadtbahn zum Hauptbahnhof</button>
+        <button type="button" class="ask-ex-chip" data-askex="Ist der Aufzug am Hauptbahnhof in Betrieb?">Aufzug am Hauptbahnhof?</button>
+        <button type="button" class="ask-ex-chip" data-askex="Gibt es einen Zug von Bielefeld nach Herford?">Zug nach Herford</button>
+      </div>
+      <p class="talk-nach">Nachfragen geht: „Eine Stunde später“, „ohne Umstieg“, „schaffe ich den Anschluss?“</p>
+    </div>
     <section class="entry plan-card" id="plan-card" aria-labelledby="h-plan">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-route"/></svg></span><div><h3 id="h-plan" class="go-h">Wohin?</h3><p class="go-sub">Plane deinen Weg.</p></div></div>
       <form id="plan-form" class="vf-form plan-form" role="search"><label class="sr-only" for="plan-q">Wohin? Ort, Adresse oder Einrichtung</label><input id="plan-q" type="search" placeholder="Wohin möchtest du?" autocomplete="off" enterkeyhint="search"><button class="btn plan-search" type="submit">Suchen</button><button type="button" class="plan-mic" id="plan-mic" aria-label="Ziel sprechen" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button></form>
