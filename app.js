@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.8';
+  const VERSION = '0.111.9';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4418,21 +4418,15 @@
   let planList = null, planMsg = '', planFromBest = false;
   function renderPlanTeaser() {
     const el = $('#plan-teaser');
-    $('#plan-form').hidden = true;   // Heute hat kein eigenes Wohin-Feld mehr: Sprechknopf oben, ein Ziel tippt man unter „Weg planen“
+    $('#plan-form').hidden = !apiBase();
     $('#plan-mic').hidden = !SR;
-    $('#btn-plan').hidden = false;
+    $('#btn-plan').hidden = !!apiBase() && !settings.ziele.length;   // mit Server und ohne gespeicherte Ziele genügt das Feld
     if (planMsg || planList) {
       el.innerHTML = (planMsg ? `<p class="small muted" role="status">${esc(planMsg)}</p>` : '')
         + (planList ? (planList.length ? `<ul class="vf-orte">${planList.map((o, i) => `<li><button type="button" class="vf-ort" data-plan-ort="${i}"><b>${esc(o.name)}</b>${o.sub ? `<span class="small muted">${esc(o.sub)}</span>` : ''}</button></li>`).join('')}</ul>` : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '');
-    } else el.innerHTML = zielChips();
+    } else el.innerHTML = '';   // keine Ziel-Buttons auf Heute: Ziele stehen unter „Deine Ziele und Wege“
     renderBest();
     $('#btn-plan span').textContent = settings.ziele.length ? 'Deine Ziele und Wege' : 'Weg planen';
-  }
-  // Heute: gespeicherte Ziele als Chips unter dem Suchfeld, ein Tipp vergleicht gleich
-  function zielChips() {
-    if (!apiBase() || !settings.ziele.length) return '';
-    const z = settings.ziele.slice().sort((a, b) => (b.u || 0) - (a.u || 0)).slice(0, 2);
-    return `<div class="vf-chips" role="group" aria-label="Deine Ziele">${z.map((x) => `<button type="button" class="vf-chip" data-plan-go="${x.id}">${esc(x.name)}</button>`).join('')}</div>`;
   }
   function planGoZiel(z) {
     if (serverTools.includes('vergleich')) { bestZiel = z.id; unlockSpeech(); showView('best'); runBest(); } else openPlan(z.id);
