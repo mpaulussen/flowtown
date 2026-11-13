@@ -2315,7 +2315,7 @@ Regeln:
 - Allgemeine Fragen ohne Ort (ob Rad oder Bus umweltfreundlicher ist, ob es Gebärdensprache gibt, Regeln) beantwortest du direkt oder mit „dazu habe ich keine Angabe“. Frag dann nicht nach dem Ziel.
 - Gruppen ab fünf Personen empfiehlst du nicht das Auto.
 - Wird die Frage auf Englisch, Türkisch, Arabisch, Ukrainisch oder in einer anderen Sprache gestellt, antworte in kurzen Sätzen in dieser Sprache; Orts- und Liniennamen bleiben unverändert.
-- Über Flowtown: Prototyp von barrierefrAI (Dr. Markus Paulußen), kostenlos, keine offizielle App von moBiel. Zur Beantwortung gehen Fragen an die KI von Mistral, ohne Training mit den Daten. Quellen: Fahrplan von DELFI (Sollfahrplan mit Verspätungen), moBiel (Umleitungen), DB (Aufzüge an Bahnhöfen), Bielefeld barrierefrei erleben (Bethel), Stadt Bielefeld (Toiletten, Parkplätze, Baustellen), OpenStreetMap, HERE (Wege und Verkehr). Sag nie, dass alles „in Echtzeit“ ist: nur Verspätungen und Baustellen sind nahe an Echtzeit.
+- Über Flowtown: Prototyp von barrierefrAI (Dr. Markus Paulußen), kostenlos, keine offizielle App von moBiel. Zur Beantwortung gehen Fragen an die KI von Mistral, ohne Training mit den Daten. Quellen: Fahrplan von DELFI (Sollfahrplan mit Verspätungen), für Züge teils Echtzeit der DB Station&Service (Timetables, CC BY 4.0), moBiel (Umleitungen), DB (Aufzüge an Bahnhöfen), Bielefeld barrierefrei erleben (Bethel), Stadt Bielefeld (Toiletten, Parkplätze, Baustellen), OpenStreetMap, HERE (Wege und Verkehr). Sag nie, dass alles „in Echtzeit“ ist: nur Verspätungen und Baustellen sind nahe an Echtzeit.
 - Bei Angst, Unruhe oder Unsicherheit zuerst ein ruhiger Satz, dann eine Hilfe. Keine kühlen Absagen: statt „Dazu kann ich nichts sagen“ sag, was die Person stattdessen tun kann.
 - Fragen zum Aufzug an einem bestimmten Bahnhof oder einer Haltestelle: Werkzeug haltestelle (Aufzug vorhanden) und bei Bahnhöfen der DB db_aufzuege_ausser_betrieb. Bestätige nur Orte, die ein Werkzeug findet; ein Ort, den kein Werkzeug kennt, heißt „den Ort kenne ich nicht“. Am Hauptbahnhof gibt es beides: den Status der DB und die Haltestelle der Stadtbahn ohne Live-Status.
 - „Fährt der Bus oder die Bahn noch?“, „Fährt die Linie X?“: Werkzeug abfahrten_in_der_naehe, nicht oepnv_stoerungen. Gibt es die Linie dort nicht, sag, dass du sie nicht findest. Sag „laut Fahrplan“ nur, wenn ein Werkzeug Abfahrten geliefert hat.
@@ -2705,7 +2705,7 @@ async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
       // Echtzeit der ersten Fahrt: DELFI, wenn eindeutig zuzuordnen, sonst die Angabe von HERE (nur gezeigt, nicht eingerechnet, weil unklar ist, ob die Zeiten sie schon enthalten)
       rtWanted = Date.now(); rtTick();
       if (rtRun) await Promise.race([rtRun.catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
-      const rl = (() => { try { return rtLeg(fahrt[0]); } catch (e) { return null; } })();
+      const rl = await rtLegAll(fahrt[0]);
       if (rl && rl.faellt_aus) { o.echtzeit = rl; o.geeignet = false; }
       else if (rl) {
         o.echtzeit = Object.assign({}, rl);
@@ -3389,6 +3389,84 @@ function beispieleFuer(frage, typ) {
     return { b, sc, both };
   }).filter((x) => x.both >= 1 && (x.both >= 2 || w.size <= 3) && x.sc >= 0.15).sort((a, b) => b.sc - a.sc).slice(0, 3).map((x) => x.b);
 }
+// ---------- Echtzeit aus der DB Timetables API (DB Station&Service, Lizenz CC BY 4.0) ----------
+// Zweite Quelle neben DELFI, nur für Züge, nur wenn DB_CLIENT_ID und DB_API_KEY in /etc/flowtown.env stehen. Beta-Dienst der DB, soll durch „OpenBoards“ abgelöst werden.
+// Grenzen der DB: 60 Aufrufe pro Minute; Änderungen alle 30 Sekunden neu, deshalb 30 Sekunden zwischenspeichern; der Sollfahrplan ändert sich nicht.
+const DB_ID = process.env.DB_CLIENT_ID || '', DB_KEY = process.env.DB_API_KEY || '';
+const DB_URL = (process.env.DB_TIMETABLES_URL || 'https://apis.deutschebahn.com/db-api-marketplace/apis/timetables/v1').replace(/\/$/, '');
+const DB_ON = !!(DB_ID && DB_KEY) && process.env.DB_TIMETABLES_ON !== '0';
+const dbCalls = [], dbCache = new Map(), dbStationen = new Map();
+let dbErr = '';
+async function dbGet(pfad) {
+  const jetzt = Date.now(); while (dbCalls.length && jetzt - dbCalls[0] > 60000) dbCalls.shift();
+  if (dbCalls.length >= 50) throw new Error('Limit der DB (60 Aufrufe pro Minute) fast erreicht');
+  dbCalls.push(jetzt);
+  const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 8000);
+  try {
+    const res = await fetch(DB_URL + pfad, { signal: ctrl.signal, headers: { 'DB-Client-ID': DB_ID, 'DB-Api-Key': DB_KEY, Accept: 'application/xml' } });
+    if (!res.ok) throw new Error('DB HTTP ' + res.status);
+    return await res.text();
+  } finally { clearTimeout(timer); }
+}
+async function dbCached(key, ms, hole) {
+  const c = dbCache.get(key); if (c && Date.now() - c.t < ms) return c.v;
+  const v = await hole(); dbCache.set(key, { t: Date.now(), v });
+  if (dbCache.size > 300) dbCache.delete(dbCache.keys().next().value);
+  return v;
+}
+const dbAttr = (a) => { const o = {}; for (const m of String(a).matchAll(/([\w:-]+)="([^"]*)"/g)) o[m[1]] = m[2].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&'); return o; };
+// <s id="…"><tl c="RE" n="12345" …/><ar …/><dp pt="2611131540" l="82" …/></s>
+function dbStops(xml) {
+  const out = [];
+  for (const m of String(xml).matchAll(/<s\b([^>]*?)(?:\/>|>([\s\S]*?)<\/s>)/g)) {
+    const a = dbAttr(m[1]), body = m[2] || '', one = (tag) => { const x = new RegExp('<' + tag + '\\b([^>]*?)\\/?>').exec(body); return x ? dbAttr(x[1]) : null; };
+    out.push({ id: a.id, tl: one('tl'), ar: one('ar'), dp: one('dp') });
+  }
+  return out;
+}
+const dbMin = (z) => Date.UTC(2000 + Number(z.slice(0, 2)), Number(z.slice(2, 4)) - 1, Number(z.slice(4, 6)), Number(z.slice(6, 8)), Number(z.slice(8, 10))) / 60000;   // YYMMddHHmm, nur für Unterschiede
+async function dbStation(muster) {
+  const k = muster.toLowerCase(); if (dbStationen.has(k)) return dbStationen.get(k);
+  const liste = [...(await dbGet('/station/' + encodeURIComponent(muster))).matchAll(/<station\b([^>]*?)\/?>/g)].map((m) => dbAttr(m[1])).filter((a) => a.eva && a.name);
+  dbStationen.set(k, liste); return liste;
+}
+// „Detmold Bahnhof“ → „Detmold“; „Bielefeld Hbf“ → „Bielefeld“. Laut DB gehen Umlaute im Muster nicht: ab dem ersten Umlaut abschneiden.
+function dbMuster(name) {
+  const b = String(name || '').replace(/\([^)]*\)/g, '').replace(/,.*$/, ' ').replace(/\b(Bahnhof|Hauptbahnhof|Hbf|Bf|ZOB|Busbahnhof)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+  const m = b.match(/^[A-Za-z0-9 .\/-]+/); return (m ? m[0] : b).trim();
+}
+function dbWaehle(liste, vonName) {
+  const nrm = (x) => String(x || '').toLowerCase().replace(/hauptbahnhof/g, 'hbf').replace(/bahnhof|bf\b/g, '').replace(/ä/g, 'ae').replace(/ö/g, 'oe').replace(/ü/g, 'ue').replace(/ß/g, 'ss').replace(/[^a-z0-9]/g, '');
+  const ziel = nrm(vonName), genau = liste.filter((a) => nrm(a.name) === ziel);
+  if (genau.length === 1) return genau[0];
+  const mus = nrm(dbMuster(vonName)), beginnt = liste.filter((a) => nrm(a.name) === mus);
+  return beginnt.length === 1 ? beginnt[0] : null;   // lieber keine Station als eine falsche
+}
+const berlinZ = (ts) => { const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts)).map((x) => [x.type, x.value])); return f.year + f.month + f.day + f.hour + f.minute; };
+// Echtzeit der DB für die erste Fahrt einer Verbindung von HERE: Station über den Namen, Fahrt im Sollfahrplan der Stunde über Linie (Kategorie + Linie oder Nummer, ohne Leerzeichen) und geplante Abfahrt (± 2 Minuten), dann die Änderung zu dieser Fahrt.
+// Nur bei genau einem Treffer; sonst null. Keine Änderung gemeldet heißt: „keine Abweichung gemeldet“, nie „pünktlich“.
+async function dbLeg(t) {
+  if (!DB_ON || !t || t.art !== 'zug' || !t.von || !t.linie || !t.ab) return null;
+  const muster = dbMuster(t.von); if (muster.length < 3) return null;
+  const st = dbWaehle(await dbStation(muster), t.von); if (!st) return null;
+  const pt = berlinZ(Date.parse(t.ab));
+  const plan = dbStops(await dbCached(`plan|${st.eva}|${pt.slice(0, 8)}`, 6 * 3600e3, () => dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`)));
+  const lin = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), want = lin(t.linie);
+  const hit = plan.filter((x) => x.dp && x.dp.pt && Math.abs(dbMin(x.dp.pt) - dbMin(pt)) <= 2 && [lin(((x.tl || {}).c || '') + (x.dp.l || '')), lin(((x.tl || {}).c || '') + ((x.tl || {}).n || ''))].includes(want));
+  if (hit.length !== 1) return null;
+  const quelle = 'DB Station&Service';
+  const chg = dbStops(await dbCached('fchg|' + st.eva, 30000, () => dbGet('/fchg/' + st.eva))).find((x) => x.id === hit[0].id);
+  if (!chg || !chg.dp) return { quelle, keine_abweichung: true };
+  if (chg.dp.cs === 'c') return { quelle, faellt_aus: true };
+  if (chg.dp.ct) return { quelle, verspaetung_min: Math.round(dbMin(chg.dp.ct) - dbMin(hit[0].dp.pt)) };
+  return { quelle, keine_abweichung: true };
+}
+// erst DELFI, dann die DB
+async function rtLegAll(t) {
+  let a = null; try { a = rtLeg(t); } catch (e) { a = null; }
+  if (a) return a;
+  try { return await dbLeg(t); } catch (e) { dbErr = e.message; console.error(new Date().toISOString(), 'DB Timetables:', e.message); return null; }
+}
 // Fahrt prüfen: gibt es im Fahrplan eine Fahrt, die am Start hält und danach am Ziel? Nur Fahrplan und Echtzeit, nichts aus Wissen.
 // Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt das Ziel dort, sagt das Werkzeug „nicht prüfbar“.
 function fahrtPruefen(von, nach, art) {
@@ -3819,7 +3897,7 @@ const server = http.createServer(async (req, res) => {
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
     if (p.startsWith('/api/redaktion/')) return await rRoute(req, res, p, url, origin, ip);
-    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, qualitaet: { schreibbar: (() => { try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.accessSync(Q_DIR, fs.constants.W_OK); return true; } catch (e) { return false; } })(), objekte: rKatalog().length, fakten: Object.values(rFakt).reduce((n, o) => n + Object.keys(o).length, 0) }, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen', 'redaktion_fakten'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
+    if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, db_timetables: DB_ON ? (dbErr ? 'an, letzter Fehler: ' + dbErr : 'an') : 'aus', qualitaet: { schreibbar: (() => { try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.accessSync(Q_DIR, fs.constants.W_OK); return true; } catch (e) { return false; } })(), objekte: rKatalog().length, fakten: Object.values(rFakt).reduce((n, o) => n + Object.keys(o).length, 0) }, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen', 'redaktion_fakten'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
     if (req.method === 'GET' && p === '/api/wir') {
       const ids = (url.searchParams.get('s') || '').split(',').filter((s) => /^c\d{1,13}$/.test(s)).slice(0, 400);
@@ -3976,6 +4054,59 @@ if (cli === 'assist-frage') {
   loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
   try { const r = await assist({ frage, kontext: {} }); console.log('Antwort:', r.antwort); console.log('Werkzeuge:', (r.werkzeuge || []).join(', ') || 'keine', (r.werkzeuge || []).includes('quellenpruefung') ? '(Quellenprüfung hat eingegriffen)' : ''); }
   catch (e) { console.error('Fehler:', e.message); }
+  process.exit(0);
+}
+if (cli === 'db-station') {
+  // DB Timetables: Bahnhöfe zu einem Namensanfang. Aufruf: db-station <Muster>   (ohne Umlaute)
+  if (!DB_ON) { console.error('DB_CLIENT_ID und DB_API_KEY fehlen in /etc/flowtown.env'); process.exit(1); }
+  const l = await dbStation(process.argv.slice(3).join(' ')).catch((e) => { console.error('Fehler:', e.message); return []; });
+  console.log(l.length + ' Bahnhöfe:'); l.slice(0, 15).forEach((a) => console.log(`  ${a.eva}  ${a.name}  (${a.ds100 || ''})`));
+  process.exit(0);
+}
+if (cli === 'db-leg') {
+  // Prüft, ob die DB-Echtzeit zu einer Fahrt von HERE passt. Aufruf: db-leg "<Linie>" "<Haltestelle>" <Abfahrt als Datum mit Uhrzeit>
+  const [, , , linie, von, ab] = process.argv;
+  if (!DB_ON) { console.error('DB_CLIENT_ID und DB_API_KEY fehlen in /etc/flowtown.env'); process.exit(1); }
+  if (!linie || !von || !ab || isNaN(Date.parse(ab))) { console.error('Aufruf: node flowtown-server.mjs db-leg "RE 82" "Detmold Bahnhof" 2026-11-13T15:40:00+01:00'); process.exit(1); }
+  try {
+    const lst = await dbStation(dbMuster(von)), st = dbWaehle(lst, von);
+    console.log('Muster:', dbMuster(von), '| Bahnhöfe:', lst.map((a) => a.name).slice(0, 6).join(' / ') || 'keine', '| gewählt:', st ? st.name + ' (' + st.eva + ')' : 'keiner');
+    if (st) {
+      const pt = berlinZ(Date.parse(ab)), plan = dbStops(await dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`));
+      console.log(`Sollfahrplan ${pt.slice(0, 6)} ${pt.slice(6, 8)} Uhr: ${plan.length} Halte; Abfahrten:`);
+      plan.filter((x) => x.dp && x.dp.pt).sort((x, y) => x.dp.pt.localeCompare(y.dp.pt)).slice(0, 14).forEach((x) => console.log(`  ${x.dp.pt.slice(6, 8)}:${x.dp.pt.slice(8)}  ${(x.tl || {}).c || ''} ${x.dp.l || ''} (Nr. ${(x.tl || {}).n || ''}, Betreiber ${(x.tl || {}).o || ''})  nach ${String(x.dp.ppth || '').split('|').pop()}`));
+    }
+    console.log('Ergebnis:', JSON.stringify(await dbLeg({ art: 'zug', von, linie, ab }) || null), '(null = keine eindeutige Zuordnung)');
+  } catch (e) { console.error('Fehler:', e.message); }
+  process.exit(0);
+}
+if (cli === 'db-test') {
+  // Selbsttest mit echten Daten: Fahrten mit gemeldeter Änderung an einem Bahnhof werden wiedergefunden? Aufruf: db-test <Muster>   (zum Beispiel Detmold)
+  if (!DB_ON) { console.error('DB_CLIENT_ID und DB_API_KEY fehlen in /etc/flowtown.env'); process.exit(1); }
+  try {
+    const lst = await dbStation(process.argv.slice(3).join(' ')), st = lst[0];
+    if (!st) { console.log('Kein Bahnhof gefunden.'); process.exit(0); }
+    console.log('Bahnhof:', st.name, st.eva);
+    const chg = dbStops(await dbGet('/fchg/' + st.eva)).filter((x) => x.dp && (x.dp.ct || x.dp.cs === 'c'));
+    console.log(`${chg.length} Abfahrten mit gemeldeter Änderung (Verspätung oder Ausfall). Prüfe bis zu 15:`);
+    let n = 0, ok = 0, nul = 0, falsch = 0;
+    const jetzt = berlinZ(Date.now()), alle = [];
+    for (const k of [0, 1, 2]) { const z = berlinZ(Date.now() + k * 3600e3); alle.push(...dbStops(await dbCached(`plan|${st.eva}|${z.slice(0, 8)}`, 3600e3, () => dbGet(`/plan/${st.eva}/${z.slice(0, 6)}/${z.slice(6, 8)}`)))); }
+    for (const c of chg) {
+      if (n >= 15) break;
+      const p = alle.find((x) => x.id === c.id); if (!p || !p.dp || !p.dp.pt) continue;
+      if (dbMin(p.dp.pt) < dbMin(jetzt) - 2) continue;
+      let ab = null; const d0 = Date.UTC(2000 + Number(p.dp.pt.slice(0, 2)), Number(p.dp.pt.slice(2, 4)) - 1, Number(p.dp.pt.slice(4, 6)), Number(p.dp.pt.slice(6, 8)), Number(p.dp.pt.slice(8, 10)));
+      for (const off of [3600000, 7200000]) if (berlinZ(d0 - off) === p.dp.pt) { ab = new Date(d0 - off).toISOString(); break; }
+      if (!ab) continue;
+      n++;
+      const erw = c.dp.cs === 'c' ? 'faellt_aus' : String(Math.round(dbMin(c.dp.ct) - dbMin(p.dp.pt)));
+      const got = await dbLeg({ art: 'zug', von: st.name, linie: ((p.tl || {}).c || '') + (p.dp.l || (p.tl || {}).n || ''), ab });
+      const gv = got ? (got.faellt_aus ? 'faellt_aus' : got.verspaetung_min != null ? String(got.verspaetung_min) : 'keine') : null;
+      if (gv === erw) ok++; else if (!got) { nul++; console.log(`  nicht gefunden: ${(p.tl || {}).c || ''}${p.dp.l || ''} ${p.dp.pt.slice(6, 8)}:${p.dp.pt.slice(8)} erwartet ${erw}`); } else { falsch++; console.log(`  FALSCH: ${(p.tl || {}).c || ''}${p.dp.l || ''} erwartet ${erw}, Zuordnung ${JSON.stringify(got)}`); }
+    }
+    console.log(`Selbsttest: ${n} geprüft. Richtig: ${ok}. Keine eindeutige Zuordnung (null): ${nul}. Falsche Angabe: ${falsch}. Aufrufe der letzten Minute: ${dbCalls.length}.`);
+  } catch (e) { console.error('Fehler:', e.message); }
   process.exit(0);
 }
 if (cli === 'echtzeit-test') {
