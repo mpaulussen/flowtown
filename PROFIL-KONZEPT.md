@@ -14,8 +14,8 @@ Ein dauerhaftes Profil, das aus drei Teilen besteht und sich auf zwei Wegen fül
 
 ## Erster Start (drei Schritte)
 
-1. **Wer bist du?** Sechs Kacheln, mehrere möglich, oder „Kein besonderes Profil“.
-2. **Wie bist du oft unterwegs?** Verkehrsmittel, Wohnort, oft gefahrene Wege. Man muss nichts eintragen.
+1. **Wer bist du, und womit bist du oft unterwegs?** Sechs Kacheln, mehrere möglich, oder „Kein besonderes Profil“. Darunter die Verkehrsmittel als Knöpfe mit Symbol: Auto, Öffis, Rad, zu Fuß (mehrere möglich).
+2. **Wo lebst du, welche Wege fährst du oft?** Wohnort und oft gefahrene Wege. Man muss nichts eintragen.
 3. **So sieht das für dich aus.** Sofort ein Beispiel: die eigenen Wege mit Meldungen von heute und eine Frage, die zum Profil passt (zum Beispiel Rollstuhl: „Geht der Aufzug am Jahnplatz?“). Ein zweites Beispiel zeigt die ehrliche Antwort „keine Angabe“.
 
 ## Mein Profil (unter Einstellungen)
