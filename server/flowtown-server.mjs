@@ -3449,6 +3449,8 @@ function themenPruefung(antwort, messages) {
   for (const t of Q_THEMEN_PRUEFUNG) if (t.re.test(antwort) && (!t.beleg || !t.beleg.test(roh))) return 'Thema: ' + t.was;
   // Maße (Türbreite 90 cm): die Zahl muss im Ergebnis stehen
   for (const m of antwort.matchAll(/(\d+(?:[.,]\d+)?)\s*(?:cm|zentimeter)\b/gi)) if (!roh.includes(m[1].replace(',', '.')) && !roh.includes(m[1])) return 'Thema: Maß ' + m[0];
+  // Maße in Metern mit Dezimalstelle (1,20 Meter breit): gerundete Entfernungen wie „etwa 200 Meter“ zählen nicht
+  for (const m of antwort.matchAll(/\b(\d[.,]\d{1,2})\s*(?:meter|m)\b/gi)) if (!roh.includes(m[1].replace(',', '.')) && !roh.includes(m[1])) return 'Thema: Maß ' + m[0];
   return null;
 }
 function quellenPruefung(antwort, messages, used) {
