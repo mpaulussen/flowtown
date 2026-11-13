@@ -2337,8 +2337,8 @@ Regeln:
 - Liefert ein Werkzeug nichts, sag „dazu habe ich nichts gefunden“, nie „es gibt keine“ (zum Beispiel keine barrierefreien Restaurants). Nenne einen Ort nur mit dem Typ, der zu seinem Namen passt: eine Staatsanwaltschaft oder ein Gericht ist keine Polizeiwache.
 - „Bahnhof“ ohne Zusatz heißt der Hauptbahnhof (Werkzeuge: „Hauptbahnhof“). Frag nicht nach.
 - Nennt die Person eine neue Strecke („von A nach B“, „ich möchte von A nach B“), ist das eine neue Frage: Ruf fahrt_pruefen (Abfahrten) oder verbindung_suchen („Wie komme ich …“) mit den neuen Orten auf, auch mitten im Gespräch. Antworte nie ohne Werkzeug und nimm nie die alte Strecke.
-- Fahrtdauer mit Bus und Bahn („Wie lange fährt man von A nach B?“): nur aus einem Werkzeug (verbindung_suchen oder vergleich). Ohne Werkzeug nennst du keine Minuten.
-- Jede Fahrt im Ergebnis von fahrt_pruefen hält laut Fahrplan am genannten Ziel. Sag nie „ob er dort hält, weiß ich nicht“.
+- Fahrtdauer mit Bus und Bahn („Wie lange fährt man von A nach B?“): nur aus einem Werkzeug: fahrzeit_min und ankunft_am_ziel in fahrt_pruefen, dauer_min in verbindung_suchen (von Abfahrt bis Ankunft), vergleich. Ohne Werkzeug nennst du keine Minuten. Nenne zur Dauer immer Abfahrt und Ankunft aus demselben Ergebnis.
+- Jede Fahrt im Ergebnis von fahrt_pruefen hält laut Fahrplan am genannten Ziel (halt_am_ziel, ankunft_am_ziel). Nenne die Ankunft und sag nie „ob er dort hält, weiß ich nicht“. Ist die Art nicht die gefragte (zum Beispiel Stadtbahn statt Bus), sag das.
 - Fragen zu einer Linie ohne Start („Hält der RE 82 in Herford?“): Fahrten prüfst du nur zwischen zwei Orten. Frag kurz, von wo aus die Person fährt, und behaupte nichts über die Linie.
 - Hat die Person keinen Ort genannt, aber der Standort ist im Kontext bekannt, nutze ihn (Werkzeuge ohne Ortsangabe). Frag nie nach dem Standort, wenn er bekannt ist. Sag nie, ein Weg oder Radweg sei „sicher“.
 - Bei Bus und Bahn zählt dauer_min im Werkzeug vergleich ab jetzt, also mit Wartezeit bis zur Abfahrt. Sag dann „du bist in etwa X Minuten da“ und nenne die Abfahrtszeit, nie „die Fahrt dauert X Minuten“, wenn Abfahrt und Ankunft eine kürzere Zeit ergeben.
@@ -3610,7 +3610,7 @@ function folgeAufruf(frage, z) {
 const BHF_WORT = '(?:haupt|bus|omnibus)?bahnhof|hbf|bf|zob';
 function ortSchluessel(k, ctx) {
   k = String(k || '').replace(/^(in|am|an der|zum|zur|zu|der|die|das)\s+/, '').trim();
-  const out = [k], stadt = (s) => String(s || '').toLowerCase().replace(/ß/g, 'ss').trim();
+  const out = [k, k.replace(/^uni\b/, 'universität')], stadt = (s) => String(s || '').toLowerCase().replace(/ß/g, 'ss').trim();
   const bhf = (s) => { for (const w of ['hbf', 'hauptbahnhof', 'bahnhof', 'bf', 'zob', 'busbahnhof']) out.push(s + ' ' + w); };
   let m;
   if (new RegExp('^(' + BHF_WORT + ')$').test(k)) bhf(stadt((ctx && ctx.stadt) || 'Bielefeld') || 'bielefeld');
@@ -3634,7 +3634,7 @@ function streckeAufruf(frage) {
   const x = folgeAufruf(rest, { typ: 'fahrt', von: { name: von }, nach: { name: nach } });
   if (x && x.name !== 'fahrt_pruefen' && x.name !== 'verbindung_suchen') return null;
   const args = Object.assign({}, x ? x.args : {}, { von, nach });
-  if (!args.art) { const q = f.toLowerCase(); if (/stadtbahn|straßenbahn/.test(q)) args.art = 'stadtbahn'; else if (/\bbus(?:se)?\b/.test(q) && !/zug|züge|bahn/.test(q)) args.art = 'bus'; else if (/\b(?:zug|züge|regionalzug)\b/.test(q)) args.art = 'zug'; }
+  if (!args.art) { const q = f.toLowerCase(); if (/stadtbahn|straßenbahn/.test(q)) args.art = 'stadtbahn'; else if (/\b(?:zug|züge|regionalzug)\b/.test(q)) args.art = 'zug'; }
   return { name: x ? x.name : 'fahrt_pruefen', args };
 }
 // Fahrt prüfen: gibt es im Fahrplan Fahrten ohne Umstieg, die am Start halten und danach am Ziel (optional „über“ einen Ort), zu einer Zeit, mit Filter nach Art?
@@ -3671,12 +3671,12 @@ async function fahrtPruefen(a, ctx) {
     if (iu.size) viaGefunden = true;
     if (!iv.size || !iz.size || (ku && !iu.size)) continue;
     // Haltefolgen: Halt am Start, danach (falls verlangt der Ort „über“), danach am Ziel; gemerkt wird die Stelle des Halts am Start
-    const ab = new Map();
+    const ab = new Map(), en = new Map();   // Halt am Start je Haltefolge, und der erste Halt am Ziel danach
     d.patterns.forEach((pat, pi) => {
       for (let j = 0; j < pat.length - 1; j++) {
         if (!iv.has(pat[j])) continue;
         const rest = pat.slice(j + 1), k1 = ku ? rest.findIndex((q) => iu.has(q)) : -1;
-        if (ku ? (k1 >= 0 && rest.slice(k1 + 1).some((q) => iz.has(q))) : rest.some((q) => iz.has(q))) { ab.set(pi, j); break; }
+        if (ku ? (k1 >= 0 && rest.slice(k1 + 1).some((q) => iz.has(q))) : rest.some((q) => iz.has(q))) { ab.set(pi, j); en.set(pi, ku ? j + 2 + k1 + rest.slice(k1 + 1).findIndex((q) => iz.has(q)) : j + 1 + rest.findIndex((q) => iz.has(q))); break; }
       }
     });
     for (let ti = 0; ti < d.trips.length; ti++) {
@@ -3686,11 +3686,12 @@ async function fahrtPruefen(a, ctx) {
       if (art === 'nahverkehr' && (kind !== 2 || FERN_LINIE.test(linie))) continue; if (art === 'fernverkehr' && (kind !== 2 || !FERN_LINIE.test(linie))) continue;
       const pat = d.patterns[t[1]], j = ab.get(t[1]), tage_ok = d.services[t[3]] || [];
       let tm = t[4]; for (let q = 0; q < j; q++) tm += t[5][q] || 0;
+      const eZiel = en.get(t[1]); let fz = 0; for (let q = j; q < eZiel; q++) fz += t[5][q] || 0;   // Fahrzeit bis zum Halt am Ziel
       for (const dd of tage) {
         if (!tage_ok.includes(dd)) continue;
         const ts = berlinMitternacht(dd) + tm * 60000;
         if (ts < T0 || ts > T1) continue;
-        fahrten.push(Object.assign({ ts, uhr: hmZ(ts), tag: tagText(ts), in_min: Math.round((ts - jetzt) / 60000), linie, richtung: fpName(d.heads[t[2]], d), halt_am_start: fpName(d.stops[pat[j]][1], d), art: ['Stadtbahn', '', 'Zug', 'Bus'][kind] || 'Bus' }, dd === heute ? rtAt(id, ti, pat, j) || {} : {}));
+        fahrten.push(Object.assign({ ts, uhr: hmZ(ts), tag: tagText(ts), in_min: Math.round((ts - jetzt) / 60000), linie, richtung: fpName(d.heads[t[2]], d), halt_am_start: fpName(d.stops[pat[j]][1], d), halt_am_ziel: fpName(d.stops[pat[eZiel]][1], d), ankunft_am_ziel: hmZ(ts + fz * 60000), fahrzeit_min: fz, art: ['Stadtbahn', '', 'Zug', 'Bus'][kind] || 'Bus' }, dd === heute ? rtAt(id, ti, pat, j) || {} : {}));
       }
     }
   }
@@ -3699,6 +3700,8 @@ async function fahrtPruefen(a, ctx) {
   if (!startGefunden) return { ergebnis: 'nicht prüfbar', hinweis: 'Eine Haltestelle oder einen Ort mit diesem Namen als Start kenne ich im Fahrplan nicht. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de.' };
   if (!zielGefunden) return { ergebnis: 'nicht prüfbar', haltestellen_start: [...halte].slice(0, 4), hinweis: 'Das gefragte Ziel kommt in meinem Fahrplanausschnitt nicht vor (er reicht über Ostwestfalen und die Umgebung von Mönchengladbach, Paderborn und Detmold). Ob dorthin etwas fährt, kann ich nicht prüfen. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de oder die Bahn-App.' };
   if (ku && !viaGefunden) return { ergebnis: 'nicht prüfbar', hinweis: 'Den Ort, über den es gehen soll, kenne ich in meinem Fahrplanausschnitt nicht. Ob eine Fahrt dorthin führt, kann ich nicht prüfen. Sag das offen, nenne keine Linien oder Halte aus deinem Wissen und verweise auf bahn.de.' };
+  // auch ohne Fahrt bleibt die Strecke im Gespräch: „über Lage“, „mit Umstieg“ oder „nur Bus“ beziehen sich darauf
+  if (!fahrten.length && ctx) ctx.neu = { typ: 'fahrt', von: { name: von }, nach: { name: nach }, art, ueber: ueberN || '', ab: '', suche_ab: new Date(T0).toISOString(), wunsch: { max_umstiege: 0, ohne_bus: art === 'zug' || art === 'schiene' || art === 'nahverkehr' || art === 'fernverkehr' || art === 'stadtbahn', nur_regio: art === 'nahverkehr' }, fahrten: [] };
   if (!fahrten.length) return { ergebnis: 'keine Fahrt gefunden', zeitraum, haltestellen_start: [...halte].slice(0, 4), hinweis: 'Im Fahrplan finde ich in diesem Zeitraum keine Fahrt ohne Umstieg, die am Start hält und danach am Ziel (mit den gewählten Wünschen). Sag „dazu finde ich keine Fahrt“, nicht „es gibt keine“. Biete an, eine Verbindung mit Umstieg zu suchen (verbindung_suchen), und verweise auf bahn.de.' };
   const top = fahrten.slice(0, 4);
   // Züge ohne Echtzeit aus DELFI: die DB fragen (nur wenn eingerichtet); nur bei sicherer Zuordnung
@@ -3886,6 +3889,10 @@ function quellenPruefung(antwort, messages, used) {
     for (const m of antwort.matchAll(/\b(\d{1,2}):(\d{2})\b/g)) { const hz = m[1].padStart(2, '0') + ':' + m[2]; if (!rohU.includes(hz)) return 'Uhrzeit ' + hz; }
     // Dauer in Minuten („Die Fahrt dauert 24 Minuten“): die Zahl muss im Ergebnis eines Werkzeugs oder in der Frage stehen, die KI schätzt nicht
     const erlaubt = rohU + ' ' + messages.filter((m) => m.role === 'user').map((m) => m.content).join(' ');
+    // Dauer und genannte Uhrzeiten müssen zusammenpassen („ab 19:01, an 19:27, dauert 53 Minuten“ ist falsch)
+    const zeiten = [...antwort.matchAll(/\b(\d{1,2}):(\d{2})\b/g)].map((m) => +m[1] * 60 + +m[2]);
+    const dm = /(?:dauert|dauer|reise|fahrt|fahrzeit)[^.]{0,30}?(?<![\d:])(\d{1,3})\s*(?:Minuten|Min\.)/i.exec(antwort);
+    if (dm && zeiten.length >= 2 && !zeiten.some((x, i) => zeiten.some((y, j) => i !== j && ((y - x + 1440) % 1440) === +dm[1]))) return 'Dauer ' + dm[1] + ' Minuten passt nicht zu den genannten Zeiten';
     for (const m of antwort.matchAll(/(?<![\d:])(\d{1,3})\s*(?:Minuten|Min\.)/g)) if (!new RegExp('(?<!\\d)(?<!\\d:)' + m[1] + '(?!\\d)(?!:\\d)').test(erlaubt)) return 'Dauer ' + m[1] + ' Minuten';
   }
   if (!Q_FAHRPLAN.test(antwort) || Q_ABSAGE.test(antwort)) return null;   // nichts zu prüfen, oder eine ehrliche Absage
