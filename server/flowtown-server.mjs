@@ -401,10 +401,11 @@ const FAHRPLAN_FILE = path.join(DATA_DIR, 'fahrplan.json');
 // Abschalten oder wählen mit FAHRPLAN_STAEDTE in /etc/flowtown.env (kommagetrennt, leer = nur Bielefeld).
 const STADT_FP = {
   moenchengladbach: { name: 'Mönchengladbach', muster: '*', stadt: '51.10,51.26,6.30,6.58', region: '50.95,51.45,6.00,6.95' },
-  paderborn: { name: 'Paderborn', muster: '*', stadt: '51.68,51.80,8.66,8.86', region: '51.45,52.10,8.10,9.30' }
+  paderborn: { name: 'Paderborn', muster: '*', stadt: '51.68,51.80,8.66,8.86', region: '51.45,52.10,8.10,9.30' },
+  detmold: { name: 'Detmold', muster: '*', stadt: '51.86,52.00,8.74,9.02', region: '51.65,52.25,8.35,9.40' }
 };
 const FP_STAEDTE = [{ id: 'bielefeld', name: 'Bielefeld', file: FAHRPLAN_FILE, muster: FAHRPLAN_AGENCY, stadt: '', region: '', box: [51.90, 52.12, 8.38, 8.70] }]
-  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach,paderborn' : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
+  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach,paderborn,detmold' : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
     .map((id) => Object.assign({ id, file: path.join(DATA_DIR, `fahrplan-${id}.json`), box: STADT_FP[id].stadt.split(',').map(Number) }, STADT_FP[id])));
 let fahrplan = null, fahrplanRun = null, fahrplanTry = 0;   // Bielefeld: { stand, gilt, json (gzip), etag }
 const fahrplaene = {};   // je Stadt dasselbe

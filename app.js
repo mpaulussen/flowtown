@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.106.0';
+  const VERSION = '0.106.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -76,8 +76,8 @@
 
   // ---------- Speicher ----------
   // Städte mit eigenem Fahrplan-Auszug auf dem Server (neben Bielefeld); Rahmen Süd, Nord, West, Ost wie auf dem Server
-  const FP_STAEDTE = [{ id: 'moenchengladbach', name: 'Mönchengladbach', box: [51.10, 51.26, 6.30, 6.58] }, { id: 'paderborn', name: 'Paderborn', box: [51.68, 51.80, 8.66, 8.86] }];
-  const FP_PREFIX = /^(Bielefeld|Mönchengladbach|Paderborn),\s*/;
+  const FP_STAEDTE = [{ id: 'moenchengladbach', name: 'Mönchengladbach', box: [51.10, 51.26, 6.30, 6.58] }, { id: 'paderborn', name: 'Paderborn', box: [51.68, 51.80, 8.66, 8.86] }, { id: 'detmold', name: 'Detmold', box: [51.86, 52.00, 8.74, 9.02] }];
+  const FP_PREFIX = /^(Bielefeld|Mönchengladbach|Paderborn|Detmold),\s*/;
   const store = {
     get(k, d) { try { const v = localStorage.getItem('ww.' + k); return v ? JSON.parse(v) : d; } catch (e) { return d; } },
     set(k, v) { try { localStorage.setItem('ww.' + k, JSON.stringify(v)); return true; } catch (e) { return false; } }
