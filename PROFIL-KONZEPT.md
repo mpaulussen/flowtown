@@ -105,7 +105,7 @@ Die Lage für das Gebiet ist für alle gleich, das Handy filtert selbst: Der Ser
 ### Reihenfolge für die App (M8a)
 
 1. Wege speichern (Ortssuche oder aus Fahrten), nur auf dem Handy. **Ortssuche gebaut in App 0.103.0** (Einstellungen, „Meine Wege“, in der Sicherung enthalten); „aus Fahrten“ folgt mit dem Lernen.
-2. „Dein Weg jetzt“ für Wege im Gebiet der Lage: Meldungen aus `/api/lage`, Quelle und Alter aus der Antwort, 30-Minuten-Regel.
+2. „Dein Weg jetzt“. **Gebaut in App 0.104.0, aber anders als geplant:** Für alle gespeicherten Wege, auch in Bielefeld, über die Streckenabfrage auf Tipp (Start und Ziel auf etwa 1 km gerundet beim Server und HERE), nicht aus `/api/lage` auf dem Handy. Grund: Ein Weg ist nur Start und Ziel. Ohne Strecke lassen sich Meldungen nicht genau genug zuordnen (Luftlinie zu grob), und „lieber keine Angabe als eine falsche“. Folge: **Auch für Wege in Bielefeld sieht der Server Start und Ziel, wenn man tippt.** Das steht auf der Karte und in der Datenschutzerklärung. Quelle und Stand kommen aus der Antwort, die 30-Minuten-Regel gilt (älter: „Keine Angabe“). Noch nicht: Bus und Bahn, Empfehlung „Bahn statt Auto“, automatisches Prüfen beim Öffnen.
 3. Streckenabfrage für Wege außerhalb des Gebiets (Detmold, Mönchengladbach) auf Wunsch, mit Hinweis zu Start und Ziel. Das Gebiet der Lage bleibt vorerst Bielefeld.
 4. Vergleich Auto gegen Bahn über die vorhandenen Abfragen, ohne Empfehlung bei fehlenden Werten.
 5. Gebiet der Lage nach Nachfrage wachsen lassen (Kacheln, siehe oben), wenn die Nutzung es zeigt.

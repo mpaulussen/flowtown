@@ -1637,3 +1637,12 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 #wege-form form{display:flex;flex-direction:column;gap:8px}
 #wege-form .hit small{display:block;font-weight:400;color:var(--muted)}
 #wege-form .field select{font:inherit;min-height:44px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--fg)}
+
+/* Dein Weg jetzt (0.104.0) */
+.nowcard{margin:0 0 12px}
+.nowcard .lw-src,.nowcard .lg-src{margin:0}
+.nowcard .now-btns{display:flex;gap:8px;flex-wrap:wrap}
+.nowcard .now-btns .btn{flex:1 1 140px}
+.nowcard .field select{font:inherit;min-height:44px;padding:6px 10px;border-radius:8px;border:1px solid var(--line);background:var(--surface);color:var(--fg)}
+.nowcard .dot{display:inline-block;width:12px;height:12px;border-radius:50%;flex:none;background:var(--amber)}
+.nowcard .dot.red{background:var(--bad)}
