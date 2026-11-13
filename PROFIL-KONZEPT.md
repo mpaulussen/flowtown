@@ -48,6 +48,22 @@ Entscheidung 13.11.2026: **Jede Empfehlung nennt ihre Quelle und wie alt die Ang
 - **Grund:** Lieber keine Empfehlung als eine falsche. Das passt zum Grundsatz von FAKTEN.md (Quelle, Datum, Frischeklasse).
 - **Offen:** Die 30 Minuten sind ein **Vorschlag**. Für Verkehrslage (ändert sich schnell) sind sie plausibel, für Fahrplan und Aufzugsstatus braucht es andere Grenzen (siehe Frischeklassen A bis D). In der App muss die Grenze je Quelle festgelegt werden.
 
+## Vorlesen beim Öffnen und Morgenmeldung
+
+Im Dummy umgesetzt (Rundgang Schritt 8, in „Mein Profil“ die Karte „Ansagen und Morgenmeldung“). Gedacht vor allem für Menschen mit Sehbehinderung, nutzbar für alle.
+
+1. **Beim Öffnen vorlesen.** Für das Profil „Ich sehe schlecht oder nichts“ standardmäßig an, sonst aus. Flowtown liest „Dein Weg jetzt“ mit Quelle und Alter vor. Auf der Karte gibt es zusätzlich immer den Knopf „Vorlesen“. Ist die Angabe zu alt, wird das vorgelesen statt einer Empfehlung.
+2. **Morgenmeldung.** Aus, bis die Person sie einschaltet. Uhrzeit wählbar (Mo bis Fr). Eine Benachrichtigung mit einem kurzen, für sich verständlichen Text; der Screenreader (VoiceOver, TalkBack) liest sie vor. Bei alten Angaben steht dort „Angaben zu alt, keine Empfehlung“.
+3. **Ansagen unterwegs** gibt es schon in der Navigation.
+
+**Datenschutz-Entwurf:** Der Server erfährt nur „sende um 7:00 eine Meldung an dieses Gerät“, nicht den Weg. Das Handy holt beim Eintreffen die Lage für den gespeicherten Weg selbst. Das passt zu „Lernen nur auf dem Handy“.
+
+**Grenzen:**
+- Nicht möglich: ungefragte Sprachausgabe im Hintergrund. Browser und installierte Web-App können nicht von sich aus sprechen.
+- Benachrichtigungen brauchen die installierte App (auf dem iPhone: zum Home-Bildschirm hinzugefügt) und eine **Push-Funktion am Server, die es noch nicht gibt.**
+- **Nicht mit Screenreadern und nicht mit Betroffenen getestet.** Der Dummy zeigt nur Text und nutzt die Sprachausgabe des Browsers.
+- Die 30-Minuten-Regel (siehe oben) gilt auch hier. Die Meldung um 7:00 ist nur so gut wie der Stand der Daten um diese Zeit.
+
 ## Mein Profil (unter Einstellungen)
 
 Alle Einträge sind als **„von dir“** oder **„gelernt aus deinen Fahrten“** gekennzeichnet.
