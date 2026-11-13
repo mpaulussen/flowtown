@@ -180,15 +180,10 @@
     </header>
     <div class="talk-hero" id="talk-hero" hidden>
       <button type="button" class="talk-btn" id="talk-btn"><span class="tb-ic" aria-hidden="true"><svg class="ic"><use href="#i-mic"/></svg></span><span class="tb-tx"><b>Sprich mit Flowtown</b><small>Frag oder sag, wohin du willst.</small></span></button>
-      <div class="talk-ex" role="group" aria-label="Beispielfragen">
-        <button type="button" class="ask-ex-chip" data-askex="Wann fährt die Stadtbahn von der Universität zum Hauptbahnhof?">Stadtbahn zum Hauptbahnhof</button>
-        <button type="button" class="ask-ex-chip" data-askex="Ist der Aufzug am Hauptbahnhof in Betrieb?">Aufzug am Hauptbahnhof?</button>
-        <button type="button" class="ask-ex-chip" data-askex="Gibt es einen Zug von Bielefeld nach Herford?">Zug nach Herford</button>
-      </div>
     </div>
     <section class="entry plan-card" id="plan-card" aria-labelledby="h-plan">
       <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-route"/></svg></span><div><h3 id="h-plan" class="go-h">Wohin?</h3><p class="go-sub">Plane deinen Weg.</p></div></div>
-      <form id="plan-form" class="vf-form plan-form" role="search"><label class="sr-only" for="plan-q">Wohin? Ort, Adresse oder Einrichtung</label><input id="plan-q" type="search" placeholder="Wohin möchtest du?" autocomplete="off" enterkeyhint="search"><button class="btn plan-search" type="submit">Suchen</button><button type="button" class="plan-mic" id="plan-mic" aria-label="Ziel sprechen" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button></form>
+      <form id="plan-form" class="vf-form plan-form" role="search" hidden><label class="sr-only" for="plan-q">Wohin? Ort, Adresse oder Einrichtung</label><input id="plan-q" type="search" placeholder="Wohin möchtest du?" autocomplete="off" enterkeyhint="search"><button class="btn plan-search" type="submit">Suchen</button><button type="button" class="plan-mic" id="plan-mic" aria-label="Ziel sprechen" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button></form>
       <p class="small plan-note">Ziel und ungefährer Standort gehen an den Flowtown-Server und an HERE. Gespeichert wird nichts.</p>
       <div id="plan-teaser"></div>
       <button id="btn-plan" class="btn big plan-go quiet-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>

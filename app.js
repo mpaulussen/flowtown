@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.7';
+  const VERSION = '0.111.8';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2067,7 +2067,6 @@
       settings.assist = 2; store.set('settings', settings);
     }
     assistBusy = true;
-    settings.assistUsed = (settings.assistUsed || 0) + 1; store.set('settings', settings);
     showAssist(shown, null);
     if (spoken) setTimeout(() => { if (assistBusy) say('Einen Moment.'); }, 500);   // erst, wenn das Mikrofon frei ist
     else say('Einen Moment.');
@@ -4287,7 +4286,6 @@
     const hm = $('#btn-mic'); if (hm) hm.hidden = true;
     const fm = $('#fab-mic'); if (fm) fm.hidden = !apiBase();
     const th = $('#talk-hero'); if (th) th.hidden = !(apiBase() && name === 'start');
-    const tx = $('.talk-ex'); if (tx) tx.hidden = (settings.assistUsed || 0) >= 3;   // Beispielfragen nur für den Anfang, danach genügen deine Ziele
   }
   function showView(name) {
     if (name !== 'map') stopMyLocation();
@@ -4420,9 +4418,9 @@
   let planList = null, planMsg = '', planFromBest = false;
   function renderPlanTeaser() {
     const el = $('#plan-teaser');
-    $('#plan-form').hidden = !apiBase();
+    $('#plan-form').hidden = true;   // Heute hat kein eigenes Wohin-Feld mehr: Sprechknopf oben, ein Ziel tippt man unter „Weg planen“
     $('#plan-mic').hidden = !SR;
-    $('#btn-plan').hidden = !!apiBase() && !settings.ziele.length;   // mit Server und ohne gespeicherte Ziele genügt das Feld
+    $('#btn-plan').hidden = false;
     if (planMsg || planList) {
       el.innerHTML = (planMsg ? `<p class="small muted" role="status">${esc(planMsg)}</p>` : '')
         + (planList ? (planList.length ? `<ul class="vf-orte">${planList.map((o, i) => `<li><button type="button" class="vf-ort" data-plan-ort="${i}"><b>${esc(o.name)}</b>${o.sub ? `<span class="small muted">${esc(o.sub)}</span>` : ''}</button></li>`).join('')}</ul>` : '<p class="small muted">Nichts gefunden. Versuch es mit Ort und Straße.</p>') : '');
@@ -7090,7 +7088,6 @@
   $('#talk-btn').addEventListener('click', () => { unlockSpeech(); openAssistEmpty({ big: true }); });
   // Solange der große Sprechknopf im Bild ist, braucht es den schwebenden Mikrofonknopf nicht (er verdeckte auch das Mikro im Wohin-Feld)
   if ('IntersectionObserver' in window) new IntersectionObserver((es) => { document.body.classList.toggle('talk-in-view', es.some((e) => e.isIntersecting)); }, { threshold: 0.6 }).observe($('#talk-btn'));
-  $('#talk-hero').addEventListener('click', (ev) => { const b = ev.target.closest('[data-askex]'); if (b) { unlockSpeech(); askAssist(b.dataset.askex, false); } });
   $('#plan-mic').addEventListener('click', () => { unlockSpeech(); startIntent('weg'); });
   // Beispielfragen auf Heute: ein Tipp stellt die Frage
   $('#ask-hero').addEventListener('click', (ev) => {
