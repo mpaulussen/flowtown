@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.10';
+  const VERSION = '0.111.11';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1831,11 +1831,11 @@
     // (sonst wechselt „Bus“ das Verkehrsmittel, und im Chat erscheint nichts). Nur Abschluss, Notfall, Ansagen und Steuerung der Fahrt bleiben feste Befehle.
     const c0 = cmdNorm(alts[0]), chatOffen = !$('#assist').hidden && apiBase() && (callLog.length || assistZustand);
     if (chatOffen && !KEEP_CMD.test(c0)) { askAssist(alts[0], true); return; }
-    // Feste Befehle antworten nur mit Sprache: Ist der Chat offen, steht das Gesagte und die Antwort auch dort als Text
+    // Feste Befehle antworten nur mit Sprache: Ist der Chat offen oder läuft eine Aufzeichnung (Fahren), steht das Gesagte und die Antwort auch als Text im Chat
     const vorher = lastSpoken;
     for (const a of alts) if (await runCommand(cmdNorm(a))) {
       const el = $('#assist');
-      if (el && !el.hidden && lastSpoken && lastSpoken !== vorher) { assistAct = null; assistLast = lastSpoken; showAssist(alts[0], lastSpoken); }
+      if (el && (!el.hidden || rec) && lastSpoken && lastSpoken !== vorher) { assistAct = null; assistLast = lastSpoken; showAssist(alts[0], lastSpoken); }
       return;
     }
     if (apiBase()) { askAssist(alts[0], true); return; }   // kein fester Befehl: freie Frage an die Assistenz
