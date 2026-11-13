@@ -2284,7 +2284,7 @@ Regeln:
 - Notfall, Sturz, Verletzung: zuerst „Ruf sofort den Notruf 112 an“, dazu, dass das rote Plus oben in Flowtown den Notruf öffnet und die App nora hilft, wenn Sprechen nicht geht. Keine medizinischen Ratschläge.
 - Fahrplan-Aussagen kommen ausschließlich aus Werkzeugen, nie aus deinem Wissen. „Hält der Zug nach X in Y?“, „Fährt von Y ein Zug nach X?“, „Kommt man mit dem Zug von Y nach X?“: Werkzeug fahrt_pruefen mit von (Y) und nach (X). Sag nur „ja“, wenn das Werkzeug Fahrten liefert, und nenne dann Linie und Uhrzeit daraus. Liefert es keine Fahrten oder meldet es, dass Start oder Ziel im Fahrplan nicht vorkommen, sag: „Das kann ich nicht sicher sagen, im Fahrplan, den ich kenne, finde ich dazu keine Fahrt. Bitte prüf es auf bahn.de oder in der Bahn-App.“ Nenne nie Linien, Halte oder Ziele, die nicht im Ergebnis stehen, und rate nicht anhand von Streckenverläufen, die du kennst.
 - Folgefragen und Wünsche bei Zug und Bus: Das Gespräch merkt sich Start, Ziel und die zuletzt genannte Abfahrt; bei Folgefragen lässt du von und nach weg. „Eine Stunde später“: versatz_min 60 (früher: negativ). „Der nächste Zug“, „eine Bahn später“, „und danach?“: danach true. „Um 18 Uhr“: ab „18:00“; „morgen früh um 8“: tag „morgen“, ab „08:00“. „Ohne Umstieg“, „direkt“: fahrt_pruefen. „Mit Umstieg“, „höchstens ein Umstieg“, „wie komme ich hin“: verbindung_suchen mit max_umstiege. „Über Hannover“: ueber „Hannover“ (verbindung_suchen erkennt nur Umstiegsorte). „Nur Regionalverkehr“, „keine ICE“: art „nahverkehr“ oder nur_regio true. „Keine Busse“: art „zug“ oder ohne_bus true. Nenne nur Zeiten, Linien und Orte aus dem Ergebnis und rechne nie selbst mit Uhrzeiten. Liefert ein Werkzeug nichts oder „nicht prüfbar“, sag das offen.
-- „Gibt es Verspätung?“, „Ist der Zug pünktlich?“, „Fährt der noch?“ zur Fahrt im Gespräch: Werkzeug verspaetung_pruefen. „Schaffe ich den Anschluss?“, „Reicht die Umsteigezeit?“: Werkzeug anschluss_pruefen. Nenne Umsteigezeit und Verspätungen aus dem Ergebnis; „knapp“, „ausreichend“ oder „nicht erreichbar“ nur mit der Zahl, als Richtwert von Flowtown, nie als Zusage. Bei Rollstuhl, Rollator oder Sehbehinderung rate zu mehr Zeit. Fehlt die Echtzeit, sag, dass nur die geplante Zeit bekannt ist. Setzt die Frage eine Fahrt im Gespräch voraus und es gibt keine, frag kurz, von wo nach wo.
+- „Gibt es Verspätung?“, „Ist der Zug pünktlich?“, „Fährt der noch?“ zur Fahrt im Gespräch: Werkzeug verspaetung_pruefen. „Schaffe ich den Anschluss?“, „Reicht die Umsteigezeit?“: Werkzeug anschluss_pruefen. Nenne Umsteigezeit und Verspätungen aus dem Ergebnis; anschluss_pruefen und verspaetung_pruefen liefern fertige Sätze (satz): Sag sie vollständig, ohne Zahlen wegzulassen. „knapp“, „ausreichend“ oder „nicht erreichbar“ nur mit der Zahl, als Richtwert von Flowtown, nie als Zusage. Bei Rollstuhl, Rollator oder Sehbehinderung rate zu mehr Zeit. Fehlt die Echtzeit, sag, dass nur die geplante Zeit bekannt ist. Setzt die Frage eine Fahrt im Gespräch voraus und es gibt keine, frag kurz, von wo nach wo.
 - „Wann fährt die nächste Bahn oder der nächste Bus?“ ohne Haltestelle: Werkzeug abfahrten_in_der_naehe, nicht nachfragen.
 - Universität, Hauptbahnhof, Rathaus, Jahnplatz, Kunsthalle, Stadttheater und alle Haltestellennamen sind eindeutige Ziele. Frag nur nach, wenn ein Werkzeug „mehrdeutig“ oder „auswahl“ meldet oder kein Ziel genannt ist.
 - Fehlt der Standort (Werkzeug meldet „Kein Standort“), frag nach dem Start: Haltestelle, Straße oder Adresse.
@@ -3470,6 +3470,9 @@ async function dbFinde(name) {
   return { st: null, lst: letzte, muster: letztesMuster };
 }
 const berlinZ = (ts) => { const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', year: '2-digit', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(ts)).map((x) => [x.type, x.value])); return f.year + f.month + f.day + f.hour + f.minute; };
+// Fernzüge (ICE, IC, EC, FLX …) haben in den DB-Daten keine Linie, nur eine Zugnummer, HERE nennt eine Liniennummer („ICE 19“): Dort zählt die Kategorie, die genaue Zeit und das Ziel entscheiden
+const DB_FERN = new Set(['ICE', 'IC', 'EC', 'ECE', 'FLX', 'TGV', 'RJ', 'RJX', 'NJ', 'EN']);
+const dbPasst = (x, ev, want) => { if (dbLinien(x, ev).includes(want)) return true; const kat = String(want || '').replace(/[0-9]+/g, ''), c = String((x.tl || {}).c || '').toUpperCase().replace(/[^A-Z0-9]/g, ''); return !!kat && DB_FERN.has(kat) && c === kat; };
 // So schreibt die DB eine Linie, je nach Betreiber: Kategorie „RE“ mit Linie „82“, oder (eurobahn) Kategorie „ERB“ mit der ganzen Linie „RE82“; Fernzüge haben oft nur Kategorie und Nummer („ICE“, „543“)
 function dbLinien(x, ev) {
   const lin = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), e = x[ev || 'dp'], c = lin((x.tl || {}).c), l = lin(e && e.l), n = lin((x.tl || {}).n), out = new Set();
@@ -3487,7 +3490,7 @@ async function dbLeg(t) {
   const pt = berlinZ(Date.parse(t.ab));
   const plan = dbStops(await dbCached(`plan|${st.eva}|${pt.slice(0, 8)}`, 6 * 3600e3, () => dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`)));
   const lin = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), want = lin(t.linie);
-  const hit = plan.filter((x) => x.dp && x.dp.pt && Math.abs(dbMin(x.dp.pt) - dbMin(pt)) <= 2 && dbLinien(x).includes(want));
+  const hit = plan.filter((x) => x.dp && x.dp.pt && Math.abs(dbMin(x.dp.pt) - dbMin(pt)) <= 2 && dbPasst(x, 'dp', want));
   // mehrere Treffer (RB72 um 17:01 nach Herford und um 17:02 nach Paderborn): erst die genaueste Zeit, dann das Fahrtziel
   const ziel = (x) => String(x || '').toLowerCase().replace(/hauptbahnhof/g, 'hbf').replace(/[^a-z0-9äöüß]/g, '');
   if (hit.length > 1) {
@@ -3727,7 +3730,7 @@ async function dbEreignis(t, welches) {
   const st = (await dbFinde(name)).st; if (!st) return null;
   const pt = berlinZ(Date.parse(zeit)), lin = (v) => String(v || '').toUpperCase().replace(/[^A-Z0-9]/g, ''), want = lin(t.linie);
   const plan = dbStops(await dbCached(`plan|${st.eva}|${pt.slice(0, 8)}`, 6 * 3600e3, () => dbGet(`/plan/${st.eva}/${pt.slice(0, 6)}/${pt.slice(6, 8)}`)));
-  let hit = plan.filter((x) => x[welches] && x[welches].pt && Math.abs(dbMin(x[welches].pt) - dbMin(pt)) <= 2 && dbLinien(x, welches).includes(want));
+  let hit = plan.filter((x) => x[welches] && x[welches].pt && Math.abs(dbMin(x[welches].pt) - dbMin(pt)) <= 2 && dbPasst(x, welches, want));
   if (hit.length > 1) { const b = Math.min(...hit.map((x) => Math.abs(dbMin(x[welches].pt) - dbMin(pt)))); hit = hit.filter((x) => Math.abs(dbMin(x[welches].pt) - dbMin(pt)) === b); }
   if (hit.length > 1 && welches === 'dp' && t.ziel) {
     const zz = (x) => String(x || '').toLowerCase().replace(/hauptbahnhof/g, 'hbf').replace(/[^a-z0-9äöüß]/g, ''), hz = zz(t.ziel);
@@ -3750,9 +3753,17 @@ async function verspaetungPruefen(a, ctx) {
   for (const l of v.legs) {
     if (l.art !== 'zug') { aus.push({ linie: l.linie, art: l.art === 'bus' ? 'Bus' : 'Stadtbahn', von: l.von, ab: hmZ(Date.parse(l.ab)), echtzeit: 'keine Angabe (für Bus und Stadtbahn habe ich hier keine Echtzeit)' }); continue; }
     let ez = null; try { ez = await rtLegAll({ art: 'zug', von: l.von, vonPos: l.vonPos, linie: l.linie, ab: l.ab, ziel: l.ziel }); } catch (e) { ez = null; }
-    aus.push({ linie: l.linie, art: 'Zug', von: l.von, ab: hmZ(Date.parse(l.ab)), nach: l.nach, an: hmZ(Date.parse(l.an)), echtzeit: ez ? (ez.faellt_aus ? { faellt_aus: true, quelle: ez.quelle } : ez.verspaetung_min != null ? { verspaetung_min: ez.verspaetung_min, quelle: ez.quelle } : { keine_abweichung_gemeldet: true, quelle: ez.quelle }) : 'keine Angabe' });
+    const ezText = ez ? (ez.faellt_aus ? `fällt laut Echtzeit aus (${ez.quelle})` : ez.verspaetung_min != null ? `${ez.verspaetung_min} Minuten Verspätung laut Echtzeit (${ez.quelle})` : `laut ${ez.quelle} keine Abweichung gemeldet`) : 'dazu habe ich keine Echtzeit';
+    aus.push({ satz: `${l.linie} ab ${l.von} um ${hmZ(Date.parse(l.ab))}: ${ezText}.`, linie: l.linie, art: 'Zug', von: l.von, ab: hmZ(Date.parse(l.ab)), nach: l.nach, an: hmZ(Date.parse(l.an)), echtzeit: ez ? (ez.faellt_aus ? { faellt_aus: true, quelle: ez.quelle } : ez.verspaetung_min != null ? { verspaetung_min: ez.verspaetung_min, quelle: ez.quelle } : { keine_abweichung_gemeldet: true, quelle: ez.quelle }) : 'keine Angabe' });
   }
-  return { ergebnis: 'Echtzeit zur Verbindung im Gespräch', verbindung_nr: v.nr, abschnitte: aus, hinweis: 'Nenne nur Verspätungen und Ausfälle, die im Ergebnis stehen, mit Quelle. „keine Angabe“ heißt: Verspätungen kenne ich dafür nicht, nie „pünktlich“. keine_abweichung_gemeldet heißt „laut Quelle keine Abweichung gemeldet“.' };
+  return { ergebnis: 'Echtzeit zur Verbindung im Gespräch', verbindung_nr: v.nr, abschnitte: aus, hinweis: 'Sag je Abschnitt den Satz aus satz (bei Bus und Stadtbahn die Angabe „keine Angabe“). Nenne nur Verspätungen und Ausfälle, die im Ergebnis stehen, mit Quelle. „keine Angabe“ heißt: Verspätungen kenne ich dafür nicht, nie „pünktlich“. keine_abweichung_gemeldet heißt „laut Quelle keine Abweichung gemeldet“.' };
+}
+// fertige Sätze, damit die Antwort vollständig ist (geplant, aktuell, Verspätungen, Einschätzung) und die KI nichts weglässt oder dazuerfindet
+function anschlussSatz(o, A, B, ea, eb) {
+  const teilA = ea ? (ea.faellt_aus ? `${A.linie} fällt laut Echtzeit aus` : ea.abweichung_min > 0 ? `${A.linie} kommt ${ea.abweichung_min} Minuten später an (geplant ${o.ankunft_geplant})` : ea.abweichung_min < 0 ? `${A.linie} kommt ${-ea.abweichung_min} Minuten früher an (geplant ${o.ankunft_geplant})` : `${A.linie} kommt laut DB planmäßig um ${o.ankunft_geplant} an`) : `${A.linie} kommt planmäßig um ${o.ankunft_geplant} an, Echtzeit dazu habe ich nicht`;
+  const teilB = eb ? (eb.faellt_aus ? `${B.linie} fällt laut Echtzeit aus` : eb.abweichung_min > 0 ? `${B.linie} fährt ${eb.abweichung_min} Minuten später ab (geplant ${o.abfahrt_geplant})` : `${B.linie} fährt laut DB planmäßig um ${o.abfahrt_geplant} ab`) : `${B.linie} fährt planmäßig um ${o.abfahrt_geplant} ab, Echtzeit dazu habe ich nicht`;
+  const zeit = o.aktuelle_umsteigezeit_min != null ? `Die geplante Umsteigezeit in ${o.umstieg_in} beträgt ${o.geplante_umsteigezeit_min} Minuten, aktuell sind es ${o.aktuelle_umsteigezeit_min} Minuten: ${o.einschaetzung}.` : `Die geplante Umsteigezeit in ${o.umstieg_in} beträgt ${o.geplante_umsteigezeit_min} Minuten (${o.einschaetzung}).`;
+  return `${teilA}; ${teilB}. ${zeit}`;
 }
 // „Schaffe ich den Anschluss?“: geplante und aktuelle Umsteigezeit je Umstieg der Verbindung im Gespräch
 async function anschlussPruefen(a, ctx) {
@@ -3765,7 +3776,7 @@ async function anschlussPruefen(a, ctx) {
     const o = { umstieg_in: B.von, von_linie: A.linie, nach_linie: B.linie, ankunft_geplant: hmZ(Date.parse(A.an)), abfahrt_geplant: hmZ(Date.parse(B.ab)), geplante_umsteigezeit_min: geplant, gleis_abfahrt: B.gleis || undefined };
     let ea = null, eb = null;
     if (A.art === 'zug' && B.art === 'zug') { try { ea = await dbEreignis({ art: 'zug', nach: A.nach, an: A.an, linie: A.linie }, 'ar'); eb = await dbEreignis({ art: 'zug', von: B.von, ab: B.ab, linie: B.linie, ziel: B.ziel }, 'dp'); } catch (e) { dbErr = e.message; } }
-    if ((ea && ea.faellt_aus) || (eb && eb.faellt_aus)) { o.einschaetzung = (ea && ea.faellt_aus ? 'der erste Zug fällt laut Echtzeit aus' : 'der Anschlusszug fällt laut Echtzeit aus'); o.quelle = (ea || eb).quelle; umst.push(o); continue; }
+    if ((ea && ea.faellt_aus) || (eb && eb.faellt_aus)) { o.einschaetzung = (ea && ea.faellt_aus ? 'der erste Zug fällt laut Echtzeit aus' : 'der Anschlusszug fällt laut Echtzeit aus'); o.quelle = (ea || eb).quelle; o.satz = anschlussSatz(o, A, B, ea, eb); umst.push(o); continue; }
     if (ea) o.verspaetung_ankunft_min = ea.abweichung_min;
     if (eb) o.verspaetung_abfahrt_min = eb.abweichung_min;
     if (ea || eb) {
@@ -3774,9 +3785,9 @@ async function anschlussPruefen(a, ctx) {
       if (!ea || !eb) o.annahme = ea ? 'Der Anschlusszug fährt planmäßig (keine Echtzeit zu ihm).' : 'Der erste Zug kommt planmäßig an (keine Echtzeit zu ihm).';
       o.einschaetzung = aktuell <= 0 ? 'nicht erreichbar: Der Anschlusszug fährt laut Echtzeit vor oder bei der Ankunft ab' : aktuell <= 5 ? 'knapp' : 'ausreichend nach Richtwert';
     } else o.einschaetzung = 'ohne Echtzeit nicht einschätzbar: nur die geplante Umsteigezeit ist bekannt' + (geplant <= 5 ? ' und die ist schon planmäßig knapp' : '');
-    umst.push(o);
+    o.satz = anschlussSatz(o, A, B, ea, eb); umst.push(o);
   }
-  return { ergebnis: 'Umstiege geprüft', verbindung_nr: v.nr, umstiege: umst, hinweis: 'Nenne die Zahlen aus dem Ergebnis. „knapp“ (bis 5 Minuten) und „ausreichend“ (ab 6 Minuten) sind Richtwerte von Flowtown, keine Zusage: Wie viel Zeit der Weg am Bahnhof braucht, weiß die Person selbst. Bei Rollstuhl, Rollator oder Sehbehinderung rate zu mehr Zeit. Ohne Echtzeit sag, dass nur die geplante Zeit bekannt ist.' };
+  return { ergebnis: 'Umstiege geprüft', verbindung_nr: v.nr, umstiege: umst, hinweis: 'Sag je Umstieg den Satz aus satz vollständig (er enthält geplante und aktuelle Zeiten, Verspätungen und die Einschätzung) und ergänze nur das Gleis, wenn gleis_abfahrt da ist; erfinde nichts dazu. Nenne die Zahlen aus dem Ergebnis. „knapp“ (bis 5 Minuten) und „ausreichend“ (ab 6 Minuten) sind Richtwerte von Flowtown, keine Zusage: Wie viel Zeit der Weg am Bahnhof braucht, weiß die Person selbst. Bei Rollstuhl, Rollator oder Sehbehinderung rate zu mehr Zeit. Ohne Echtzeit sag, dass nur die geplante Zeit bekannt ist.' };
 }
 // Quellenprüfung: Antworten zu Bus und Bahn dürfen nur enthalten, was die Werkzeuge geliefert haben. Gibt den Grund zurück, wenn etwas nicht belegt ist.
 const Q_FAHRPLAN = /\b(zug|züge|bahn|stadtbahn|bus|busse|linie|gleis|abfahrt|abfahrten|fährt|fahren|hält|halten|verbindung|umstieg|umsteigen)\b/i;
