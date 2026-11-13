@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.5';
+  const VERSION = '0.111.7';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2067,6 +2067,7 @@
       settings.assist = 2; store.set('settings', settings);
     }
     assistBusy = true;
+    settings.assistUsed = (settings.assistUsed || 0) + 1; store.set('settings', settings);
     showAssist(shown, null);
     if (spoken) setTimeout(() => { if (assistBusy) say('Einen Moment.'); }, 500);   // erst, wenn das Mikrofon frei ist
     else say('Einen Moment.');
@@ -2179,7 +2180,8 @@
     const logHtml = assistBig ? (prev.length ? `<button type="button" class="log-jump" data-assist="logjump" aria-label="Früheren Chatverlauf anzeigen oder wieder zur neuesten Frage">${ic('list')}Chatverlauf (${prev.length}) ↑↓</button>${logOl}` : '') : !prev.length ? '' : `<details class="assist-log"><summary>Bisheriges Gespräch (${prev.length} ${prev.length === 1 ? 'Frage' : 'Fragen'})</summary>${logOl}</details>`;
     const ctxHtml = ctxT ? `<div class="assist-ctx" id="assist-ctx"><span class="ctx-t"><span class="ctx-l">Gespräch über:</span> <b>${esc(ctxT)}</b></span><button type="button" class="btn quiet ctx-x" data-assist="neu">Neues Thema</button></div>` : '';
     const qHtml = frage ? `<p class="assist-q">${assistBig ? 'Du: ' : ''}${esc(frage)}</p>` : '';
-    const aHtml = `<p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}`;
+    const hint = assistBig && !frage && antwort === CALL_HELLO ? '<p class="call-hint">Du kannst nachfragen: „Eine Stunde später“, „ohne Umstieg“, „schaffe ich den Anschluss?“</p>' : '';
+    const aHtml = `<p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${hint}${act}`;
     const fbHtml = assistFb ? `<div class="assist-fb" id="assist-fb" role="group" aria-label="War die Antwort richtig?"><span>War das richtig?</span><button type="button" class="btn quiet" data-assist="fb-gut">Stimmt</button><button type="button" class="btn quiet" data-assist="fb-falsch">Stimmt nicht</button><button type="button" class="btn quiet" data-assist="fb-veraltet">Veraltet</button></div><p class="small muted" id="assist-fb-note">Bei „Stimmt nicht“ und „Veraltet“ gehen Frage und Antwort an die Redaktion.</p>` : '';
     const formHtml = `<form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>`;
     const note = '<p class="small muted call-note">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>';
@@ -4285,6 +4287,7 @@
     const hm = $('#btn-mic'); if (hm) hm.hidden = true;
     const fm = $('#fab-mic'); if (fm) fm.hidden = !apiBase();
     const th = $('#talk-hero'); if (th) th.hidden = !(apiBase() && name === 'start');
+    const tx = $('.talk-ex'); if (tx) tx.hidden = (settings.assistUsed || 0) >= 3;   // Beispielfragen nur für den Anfang, danach genügen deine Ziele
   }
   function showView(name) {
     if (name !== 'map') stopMyLocation();

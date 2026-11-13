@@ -1722,3 +1722,15 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 @media (max-width:360px){.talk-btn .tb-tx small{display:none}.talk-btn{min-height:68px}}
 
 body.talk-in-view .fab-mic{display:none}
+
+/* Heute schlanker: kleinere Überschrift (zwei Zeilen), Ziele in einer Zeile, Hinweis auf Nachfragen im Sprachmodus */
+#view-start .hero-wohin #h-start{font-size:clamp(28px,8.8vw,36px);line-height:1.08}
+#view-start .hero-wohin .claim{padding-right:0}
+#view-start .hero-wohin .claim .eyebrow{padding-right:56px}
+#view-start .hero-wohin #plan-teaser .vf-chips{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px}
+#view-start .hero-wohin #plan-teaser .vf-chips::-webkit-scrollbar{display:none}
+#view-start .hero-wohin #plan-teaser .vf-chip{flex:none}
+.talk-btn{min-height:68px}
+.call-hint{margin:0;font-size:16px;line-height:1.4;color:var(--muted)}
+
+.talk-ex[hidden]{display:none}
