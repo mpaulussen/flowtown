@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.109.2';
+  const VERSION = '0.110.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1940,6 +1940,7 @@
   }
   // ---------- Assistenz (Stufe 3): freie Fragen, Antwort aus den Flowtown-Daten ----------
   let assistHist = [], assistAct = null, assistBusy = false, assistLast = '', assistEinfach = false;
+  let assistZustand = null;   // die zuletzt genannte Strecke und Abfahrt (vom Server), damit „eine Stunde später“ und „der nächste Zug“ verstanden werden; bleibt nur im Arbeitsspeicher
   // gesprochene Fragen werden immer laut beantwortet, getippte, wenn die Ansagen an sind
   // ---------- Eine Fahrt genau beschreiben: für „Wie lange habe ich bei der letzten Fahrt gestanden?“ ----------
   // Dieselben Zahlen wie in der Fahrtbilanz; Zeiten in Worten, damit nichts umgerechnet oder gerundet werden muss
@@ -2049,8 +2050,9 @@
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
       const kontext = { pos: pos ? pos.map((x) => Math.round(x * 100000) / 100000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '', vorrang: vorrangSchnell() ? 'schnell' : '',
-        unterwegs: !!rec, einfach: assistEinfach, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null };
+        unterwegs: !!rec, einfach: assistEinfach, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null, zustand: assistZustand };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
+      if (r.zustand !== undefined) assistZustand = r.zustand;
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
       assistAct = r.aktion || null;
       showAssist(shown, r.antwort, { frage: shown, antwort: r.antwort, werkzeuge: r.werkzeuge || [] });
@@ -4199,7 +4201,7 @@
   function openAssistEmpty(opts) {
     unlockSpeech(); pendingIntent = null; assistAct = null;
     assistBig = !!(opts && opts.big) || !!settings.sprechGross;
-    callLog = [];
+    callLog = []; assistZustand = null;   // neues Gespräch: nichts von der letzten Strecke
     showAssist('', assistBig ? CALL_HELLO : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
     const ex = askExamples('start').ex, form = $('#assist .assist-form');
     if (form && ex.length) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Beispielfragen">${ex.map((x) => `<button type="button" class="vf-chip" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('')}</div>`);
