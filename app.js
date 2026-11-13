@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.11';
+  const VERSION = '0.111.12';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1785,7 +1785,7 @@
       micUI(false);
       if ($('#mic-status').textContent === prompt) micStatus('');
       if (!patient || !mine) return;
-      if (finals.length) { handleCommand([finals.map((f) => f[0]).join(' ')]); return; }
+      if (finals.length) { handleCommand(finals.length === 1 ? finals[0] : [finals.map((f) => f[0]).join(' ')]); return; }   // ein Satz: alle Hörvarianten behalten
       // nichts gesagt: bis zu 30 Sekunden weiter zuhören, außer jemand hat aufgelegt oder den Knopf getippt
       if (!r0.userAbort && !$('#assist').hidden && Date.now() - t0 < PATIENT_MS) setTimeout(() => { if (!recog && !$('#assist').hidden) listen({ auto: true, restart: true, t0, prompt }); }, 120);
     };
@@ -1826,11 +1826,11 @@
   const KEEP_CMD = /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b|notfall|notruf|krise|krisendienst|rettungsdienst|\bhilfe hilfe|verlaufen|nicht (mehr )?weiter|brauche (jemanden|hilfe von|videohilfe)|be my eyes|ansagen (aus|stopp|stop|an|ein)|sei (still|leise)|ruhe bitte|^(wiederhol|nochmal|noch mal|noch einmal|wie bitte|was hast du gesagt)|losfahren|fahrt (starten|beenden|beende|stoppen)|aufzeichnung|angekommen|ich bin da\b|ausgestiegen|eingestiegen/;
   async function handleCommand(alts) {
     micStatus('Verstanden: „' + alts[0] + '“');
-    if (pendingIntent && apiBase()) { askAssist(alts[0], true); return; }
+    if (pendingIntent && apiBase()) { askAssist(alts[0], true, alts.slice(1)); return; }
     // Läuft schon ein Gespräch mit der Assistenz, sind „Und der Bus?“, „Nur Stadtbahn“ oder „Und danach?“ Folgefragen und keine App-Befehle
     // (sonst wechselt „Bus“ das Verkehrsmittel, und im Chat erscheint nichts). Nur Abschluss, Notfall, Ansagen und Steuerung der Fahrt bleiben feste Befehle.
     const c0 = cmdNorm(alts[0]), chatOffen = !$('#assist').hidden && apiBase() && (callLog.length || assistZustand);
-    if (chatOffen && !KEEP_CMD.test(c0)) { askAssist(alts[0], true); return; }
+    if (chatOffen && !KEEP_CMD.test(c0)) { askAssist(alts[0], true, alts.slice(1)); return; }
     // Feste Befehle antworten nur mit Sprache: Ist der Chat offen oder läuft eine Aufzeichnung (Fahren), steht das Gesagte und die Antwort auch als Text im Chat
     const vorher = lastSpoken;
     for (const a of alts) if (await runCommand(cmdNorm(a))) {
@@ -1838,7 +1838,7 @@
       if (el && (!el.hidden || rec) && lastSpoken && lastSpoken !== vorher) { assistAct = null; assistLast = lastSpoken; showAssist(alts[0], lastSpoken); }
       return;
     }
-    if (apiBase()) { askAssist(alts[0], true); return; }   // kein fester Befehl: freie Frage an die Assistenz
+    if (apiBase()) { askAssist(alts[0], true, alts.slice(1)); return; }   // kein fester Befehl: freie Frage an die Assistenz
     speak('Das habe ich nicht verstanden. Sag zum Beispiel: Losfahren, Zur Uni, Nächste Bahn ab Jahnplatz, oder Hilfe.', { now: true, force: true });
   }
   // ---------- „Wo bin ich?“: Adresse, Blickrichtung, nächste Ampel und Haltestelle mit Ausstattung, zum Vorlesen ----------
@@ -2049,7 +2049,7 @@
     }
     return null;
   }
-  async function askAssist(frage, spoken) {
+  async function askAssist(frage, spoken, varianten) {   // varianten: andere Hörergebnisse der Spracherkennung für dieselbe Äußerung
     const say = (t, o) => { if (spoken || voiceOn()) speak(t, Object.assign({ now: true, force: true }, o || {})); };
     frage = String(frage || '').trim();
     if (!frage || assistBusy) return;
@@ -2077,7 +2077,7 @@
       const ziele = settings.ziele.filter((z) => k.includes(stemKey(z.name))).map((z) => ({ name: z.name, lat: z.lat, lon: z.lon }));
       const L = rec && rec.ln;
       const kontext = { pos: pos ? pos.map((x) => Math.round(x * 100000) / 100000) : null, verkehrsmittel: rec ? (rec.transfer ? 'fuss' : rec.curMode) : selectedMode(), profil: settings.access.on ? ACCESS_LABEL[settings.access.type] : '', profil_typ: settings.access.on ? settings.access.type : '', vorrang: vorrangSchnell() ? 'schnell' : '',
-        unterwegs: !!rec, einfach: assistEinfach, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null, zustand: assistZustand };
+        unterwegs: !!rec, einfach: assistEinfach, haltestelle: L && L.seq.length ? L.seq[L.seq.length - 1] : '', ziele, auswertung: settings.assistStats ? assistStats() : null, zustand: assistZustand, varianten: (varianten || []).filter((v) => v && v !== frage).slice(0, 2) };
       const r = await postJson('/api/assist', { frage, kontext, verlauf: assistHist });
       if (r.zustand !== undefined) assistZustand = r.zustand;
       assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: r.antwort }]).slice(-6);   // drei Fragen und Antworten, damit Rückfragen nichts wiederholen
