@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.104.0';
+  const VERSION = '0.105.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6578,62 +6578,74 @@
   });
   $('#box-wege').addEventListener('submit', (ev) => { if (ev.target.closest('[data-weg-search]')) { ev.preventDefault(); wegSearch($('#wege-q').value); } });
   renderWege();
-  // ---------- Dein Weg jetzt: ein gespeicherter Weg, auf Tipp geprüft (0.104.0) ----------
-  // Geprüft wird nur auf Tipp: Dann gehen Start und Ziel des Wegs, auf etwa 1 km gerundet, an den Server und HERE.
+  // ---------- Dein Weg jetzt: ein gespeicherter Weg, auf Tipp geprüft und verglichen (0.105.0) ----------
+  // Geprüft wird nur auf Tipp: Dann gehen Start und Ziel des Wegs (auf etwa 100 m genau) und, falls gewählt, das Profil an den Server und HERE.
+  // Verglichen werden Auto (mit Verkehr), Bus und Bahn (Fahrplan), Rad und zu Fuß. Eine Empfehlung gibt es nur, wenn mindestens zwei Möglichkeiten berechnet wurden.
   // Das Ergebnis ist nur kurz gültig: Was älter ist als WEG_ALT_MIN Minuten, zeigt Flowtown nicht mehr als Angabe.
   var nowReady = false;
-  const WEG_ALT_MIN = 30, NOW_MODE = { auto: 'mit dem Auto', rad: 'mit dem Rad', fuss: 'zu Fuß' };
-  let nowId = null; const nowRes = {};   // Weg-Nummer → { loading } | { error } | { t, data, group }
+  const WEG_ALT_MIN = 30, NOW_NAME = { auto: 'Auto', oepnv: 'Bus und Bahn', rad: 'Rad', fuss: 'Zu Fuß' };
+  let nowId = null; const nowRes = {};   // Weg-Nummer → { loading } | { error } | { t, data }
   const nowList = () => wege().filter(wegOk).sort((x, y) => WEG_FREQ.indexOf(x.freq) - WEG_FREQ.indexOf(y.freq));
-  const r2 = (x) => Math.round(x * 100) / 100;
-  const nowAge = (res) => Math.max(0, Math.round((Date.now() - Math.min((res.data && res.data.t) || res.t, res.t)) / 60000));
-  const nowStamp = (res) => { const m = nowAge(res); return `Stand ${clock(Math.min((res.data && res.data.t) || res.t, res.t))} Uhr, ${m < 1 ? 'gerade eben' : `vor ${m} Minute${m === 1 ? '' : 'n'}`}`; };
+  const nowAge = (res) => Math.max(0, Math.round((Date.now() - res.t) / 60000));
+  const nowStamp = (res) => { const m = nowAge(res); return `Stand ${res.data && res.data.jetzt ? res.data.jetzt : clock(res.t)} Uhr, ${m < 1 ? 'gerade eben' : `vor ${m} Minute${m === 1 ? '' : 'n'}`}`; };
+  const nowVm = (o) => (o.verkehrsmittel === 'oepnv' ? 'oepnv' : o.verkehrsmittel);
+  function nowRows(d) {
+    return (d.optionen || []).filter((o) => NOW_NAME[nowVm(o)]).map((o) => {
+      const vm = nowVm(o), best = !!d.empfehlung && d.empfehlung.verkehrsmittel === vm && (d.optionen || []).filter((x) => NOW_NAME[nowVm(x)]).length > 1;
+      const det = [];
+      if (vm === 'auto') { if (o.verzoegerung_min >= 2) det.push(`+${o.verzoegerung_min} min durch Verkehr`); if (o.parken) det.push('mit etwa 5 min Parken (geschätzt)'); }
+      if (vm === 'oepnv') { det.push(`ab ${o.ab}`); det.push(o.umstiege ? `${o.umstiege} Umstieg${o.umstiege === 1 ? '' : 'e'}` : 'ohne Umstieg'); if (o.linien && o.linien.length) det.push(o.linien.join(', ')); det.push('nach Fahrplan'); }
+      if ((vm === 'rad' || vm === 'fuss') && o.km) det.push(`${String(o.km).replace('.', ',')} km`);
+      if (o.geeignet === false) det.push('für dein Profil nicht empfohlen');
+      return { vm, best, name: NOW_NAME[vm], min: o.dauer_min, an: o.ankunft, det, meld: vm === 'auto' ? (o.meldungen || []) : [] };
+    });
+  }
   function nowSummary(w, res) {
-    const d = res.data, min = Math.round(d.dauer / 60), delay = Math.max(0, Math.round((d.dauer - d.basis) / 60)), n = (d.items || []).length;
-    return `Dein Weg ${w.von.name} nach ${w.nach.name} ${NOW_MODE[res.group]}: etwa ${min} Minuten${delay >= 2 ? `, davon ${delay} Minuten mehr wegen Verkehr` : ''}. ${n ? `${n} Meldung${n === 1 ? '' : 'en'} auf der Strecke: ${d.items.slice(0, 3).map((it) => `${LAGE_LABEL[it.art] || 'Hinweis'} ${it.titel}`).join(', ')}.` : 'Keine Meldungen auf der Strecke.'} ${nowStamp(res)}.`;
+    const d = res.data, rows = nowRows(d), e = d.empfehlung;
+    const rec = rows.length > 1 && e ? `Am besten ${GROUP_WITH[e.verkehrsmittel] || ''}: ${String(e.grund).replace(/;/g, ',')}.` : 'Es konnte nur eine Möglichkeit berechnet werden, deshalb gibt es keine Empfehlung.';
+    return `Dein Weg ${w.von.name} nach ${w.nach.name}. ${rec} ${rows.map((r) => `${r.name}: ${r.min} Minuten, Ankunft gegen ${r.an}${r.det.length ? ', ' + r.det.join(', ') : ''}.`).join(' ')} ${nowStamp(res)}. Bus und Bahn nach Fahrplan, Verspätungen sind nicht eingerechnet.`;
   }
   function renderNow() {
     const el = $('#nowcard'); if (!el) return;
     const list = nowList(); el.hidden = !list.length;
     if (!list.length) return;
     const w = list.find((x) => x.id === nowId) || list[0]; nowId = w.id;
-    const g = MODE_GROUP[selectedMode()], res = nowRes[w.id];
-    const ok = res && res.data && res.group === g;
-    const stale = ok && nowAge(res) > WEG_ALT_MIN;
+    const res = nowRes[w.id], ok = res && res.data, stale = ok && nowAge(res) > WEG_ALT_MIN;
     let state = 'grey', badge = '', body = '', btn = 'Weg jetzt prüfen';
-    if (g === 'oepnv') body = '<p class="small">Für Bus und Bahn gibt es diese Prüfung noch nicht. Schau bei den Abfahrten.</p>';
-    else if (res && res.loading) { body = '<p class="small" role="status">Weg wird geprüft …</p>'; badge = 'lädt …'; }
+    if (res && res.loading) { body = '<p class="small" role="status">Weg wird geprüft und verglichen …</p>'; badge = 'lädt …'; }
     else if (res && res.error) body = `<p class="small" role="status">${esc(res.error)}</p>`;
     else if (ok && stale) {
       badge = 'zu alt';
-      body = `<p class="lw-ok small"><b>Keine Angabe: Die Daten sind zu alt.</b> Flowtown zeigt Fahrzeit und Meldungen nur, wenn sie höchstens ${WEG_ALT_MIN} Minuten alt sind.</p><p class="small muted lg-src">${nowStamp(res)}</p>`; btn = 'Neu prüfen';
+      body = `<p class="lw-ok small"><b>Keine Empfehlung: Die Angaben sind zu alt.</b> Flowtown zeigt Zeiten und Meldungen nur, wenn sie höchstens ${WEG_ALT_MIN} Minuten alt sind.</p><p class="small muted lg-src">${nowStamp(res)}</p>`; btn = 'Neu prüfen';
     } else if (ok) {
-      const d = res.data, items = (d.items || []).slice(0, 3), delay = Math.max(0, Math.round((d.dauer - d.basis) / 60));
-      const red = items.some((it) => LAGE_CLS[it.art] === 'red');
-      state = red ? 'red' : items.length || delay >= 3 ? 'amber' : 'green'; badge = items.length ? `${(d.items || []).length} Meldung${(d.items || []).length === 1 ? '' : 'en'}` : 'frei';
-      const nums = [[`${Math.round(d.dauer / 60)} min`, 'Fahrzeit jetzt']].concat(delay >= 2 ? [[`+${delay} min`, 'durch Verkehr']] : [], [[`${String(d.km).replace('.', ',')} km`, 'Strecke']]);
-      const srcs = Array.from(new Set(['HERE'].concat((d.items || []).map((it) => it.quelle).filter(Boolean))));
-      body = `<div class="lw-nums">${nums.map(([v, l]) => `<span><b>${v}</b><span>${l}</span></span>`).join('')}</div>`
-        + (items.length ? `<ul class="lw-list">${items.map((it) => `<li><span class="dot${LAGE_CLS[it.art] === 'red' ? ' red' : ''}"></span><span class="lw-name"><b>${esc(LAGE_LABEL[it.art] || 'Hinweis')}</b> · ${esc(it.titel)}</span>${it.delay ? `<span class="lw-right">${esc(delayText(it.delay))}</span>` : ''}</li>`).join('')}</ul>` : '<p class="lw-ok small">Keine Meldungen auf der Strecke.</p>')
-        + `<p class="small muted lg-src">Quelle: Streckenabfrage mit Verkehrslage (${esc(lageSrc(srcs))}) · ${nowStamp(res)}</p>`;
+      const d = res.data, rows = nowRows(d), e = d.empfehlung, auto = rows.find((r) => r.vm === 'auto');
+      const meld = auto ? auto.meld : [];
+      state = meld.length || (auto && auto.det.some((x) => /durch Verkehr/.test(x))) ? 'amber' : 'green';
+      badge = rows.length > 1 && e ? 'verglichen' : 'ohne Vergleich';
+      const g = e && rows.length > 1 ? String(e.grund).split(';').map((x) => x.trim()).filter(Boolean) : [];
+      body = (g.length ? `<p class="rec"><b>Am besten ${esc(GROUP_WITH[e.verkehrsmittel] || '')}</b>: ${esc(g[0])}</p>${g.length > 1 ? `<p class="small muted">${esc(g.slice(1).join(' · '))}</p>` : ''}`
+        : `<p class="lw-ok small"><b>Keine Empfehlung:</b> ${rows.length ? 'Es konnte nur eine Möglichkeit berechnet werden.' : 'Für diesen Weg gab es keine Strecke.'}</p>`)
+        + (rows.length ? `<ul class="lw-list">${rows.map((r) => `<li><span class="dot${r.best ? ' best' : ''}" aria-hidden="true"></span><span class="lw-name"><b>${esc(r.name)}${r.best ? ' (empfohlen)' : ''}</b> · ${esc(String(r.min))} min, Ankunft ${esc(r.an)}${r.det.length ? `<small class="muted"> ${esc(r.det.join(' · '))}</small>` : ''}</span></li>`).join('')}</ul>` : '')
+        + (meld.length ? `<p class="small"><b>Auf der Strecke mit dem Auto:</b> ${meld.map(esc).join('; ')}</p>` : '')
+        + (!rows.some((r) => r.vm === 'oepnv') ? '<p class="small muted">Für Bus und Bahn wurde keine Verbindung gefunden.</p>' : '')
+        + `<p class="small muted lg-src">Quelle: Strecke und Verkehrslage von HERE (dort auch Fahrplan für Bus und Bahn, Verspätungen nicht eingerechnet), Meldungen der Autobahn GmbH, von Straßen.NRW und der Stadt · ${nowStamp(res)}</p>`;
       btn = 'Neu prüfen';
-    } else body = `<p class="small">${esc(w.von.name)} → ${esc(w.nach.name)}, ${esc(w.freq)}. Tippe, dann prüft Flowtown, wie der Weg ${NOW_MODE[g] || ''} gerade aussieht.</p>`;
+    } else body = `<p class="small">${esc(w.von.name)} → ${esc(w.nach.name)}, ${esc(w.freq)}. Tippe, dann vergleicht Flowtown Auto, Bus und Bahn, Rad und zu Fuß für diesen Weg.</p>`;
     el.className = 'lw nowcard ' + state;
     el.innerHTML = `<div class="lw-head"><h3 class="lw-title" id="h-now">Dein Weg jetzt</h3>${badge ? `<span class="lw-badge">${badge}</span>` : ''}</div>`
-      + (list.length > 1 ? `<label class="field" for="now-sel">Weg<select id="now-sel">${list.map((x) => `<option value="${esc(x.id)}"${x.id === w.id ? ' selected' : ''}>${esc(x.von.name)} → ${esc(x.nach.name)}</option>`).join('')}</select></label>` : `<p class="small"><b>${esc(w.von.name)} → ${esc(w.nach.name)}</b>${g !== 'oepnv' && NOW_MODE[g] ? ' · ' + NOW_MODE[g] : ''}</p>`)
+      + (list.length > 1 ? `<label class="field" for="now-sel">Weg<select id="now-sel">${list.map((x) => `<option value="${esc(x.id)}"${x.id === w.id ? ' selected' : ''}>${esc(x.von.name)} → ${esc(x.nach.name)}</option>`).join('')}</select></label>` : `<p class="small"><b>${esc(w.von.name)} → ${esc(w.nach.name)}</b></p>`)
       + body
-      + (g === 'oepnv' ? '' : `<div class="now-btns"><button type="button" class="btn" data-now="check"${res && res.loading ? ' disabled' : ''}>${btn}</button>${ok && !stale ? `<button type="button" class="btn quiet" data-now="say">${ic('sound')}Vorlesen</button>` : ''}</div>`
-        + '<p class="small muted">Dafür schickt Flowtown Start und Ziel dieses Wegs, auf etwa 1 km gerundet, an den Server und HERE. Sonst bleibt der Weg auf dem Handy. Die Strecke und Zeit können deshalb um einige Minuten abweichen.</p>');
+      + `<div class="now-btns"><button type="button" class="btn" data-now="check"${res && res.loading ? ' disabled' : ''}>${btn}</button>${ok && !stale ? `<button type="button" class="btn quiet" data-now="say">${ic('sound')}Vorlesen</button>` : ''}</div>`
+      + '<p class="small muted">Dafür schickt Flowtown Start und Ziel dieses Wegs (auf etwa 100 m genau) und, falls gewählt, dein Profil an den Server und HERE. Sonst bleibt der Weg auf dem Handy.</p>';
   }
   async function checkWeg(w) {
-    const g = MODE_GROUP[selectedMode()];
-    if (!w || g === 'oepnv') return;
+    if (!w) return;
     nowRes[w.id] = { loading: true }; renderNow();
     try {
-      const data = await api(`/api/ziel?from=${r2(w.von.lat)},${r2(w.von.lon)}&to=${r2(w.nach.lat)},${r2(w.nach.lon)}&mode=${g}`);
-      nowRes[w.id] = { t: Date.now(), data, group: g };
+      const q = new URLSearchParams({ from: `${w.von.lat.toFixed(4)},${w.von.lon.toFixed(4)}`, to: `${w.nach.lat.toFixed(4)},${w.nach.lon.toFixed(4)}`, profil: settings.access.on ? settings.access.type : '', name: w.nach.name, vorrang: vorrangSchnell() ? 'schnell' : '' });
+      nowRes[w.id] = { t: Date.now(), data: await api('/api/vergleich?' + q) };
     } catch (e) {
-      nowRes[w.id] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : /keine weiteren/i.test(e.message) ? e.message : 'Der Weg konnte gerade nicht geprüft werden.' };
+      nowRes[w.id] = { error: e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : /keine weiteren|keine Strecke|HERE-Schl/i.test(e.message) ? e.message : 'Der Weg konnte gerade nicht geprüft werden.' };
     }
     renderNow();
   }
