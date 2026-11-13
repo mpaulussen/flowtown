@@ -3523,7 +3523,7 @@ function zeitStart(a, z) {
     const m = /^(\d{1,2})[:.](\d{2})(?:\s*uhr)?$/i.exec(txt) || /^(\d{1,2})\s*uhr$/i.exec(txt);
     if (m) { const h = +m[1], mi = +(m[2] || 0); if (h < 24 && mi < 60) { T = berlinMitternacht(ymdPlus(heute, add)) + (h * 60 + mi) * 60000; if (!add && T < jetzt - 5 * 60000) T = berlinMitternacht(ymdPlus(heute, 1)) + (h * 60 + mi) * 60000; } }
     else if (!isNaN(Date.parse(txt))) T = Math.floor(Date.parse(txt) / 60000) * 60000;
-  } else if (a.versatz_min != null || a.danach) T = (ref || jetzt) + (Number(a.versatz_min) || 0) * 60000 + (a.danach ? 60000 : 0);
+  } else if (a.versatz_min != null || a.danach) T = (ref || jetzt) + (Number(a.versatz_min) || 0) * 60000 + (a.danach && a.versatz_min == null ? 60000 : 0);
   else if (add) T = berlinMitternacht(ymdPlus(heute, add)) + 5 * 3600000;   // nur „morgen“: ab früh am Tag
   else if (z && z.suche_ab && !isNaN(Date.parse(z.suche_ab))) T = Date.parse(z.suche_ab);   // keine Zeitangabe (nur ein neuer Wunsch): bei der zuletzt gefragten Zeit bleiben
   return Math.max(T == null ? jetzt : T, jetzt);   // in die Vergangenheit fragt niemand nach Abfahrten
@@ -3533,10 +3533,47 @@ function zustandClean(z) {
   if (!z || typeof z !== 'object') return null;
   const s = (x, n) => clip(String(x == null ? '' : x), n || 60), iso = (x) => (typeof x === 'string' && !isNaN(Date.parse(x)) ? new Date(Date.parse(x)).toISOString() : '');
   const typ = z.typ === 'verbindung' ? 'verbindung' : z.typ === 'fahrt' ? 'fahrt' : null; if (!typ) return null;
-  const o = { typ, von: { name: s(z.von && z.von.name) }, nach: { name: s(z.nach && z.nach.name) }, art: s(z.art, 12), ueber: s(z.ueber), ab: iso(z.ab), suche_ab: iso(z.suche_ab) };
+  const o = { typ, von: { name: s(z.von && z.von.name) }, nach: { name: s(z.nach && z.nach.name) }, art: s(z.art, 12), ueber: s(z.ueber), ab: iso(z.ab), suche_ab: iso(z.suche_ab), wunsch: { max_umstiege: z.wunsch && isFinite(z.wunsch.max_umstiege) && z.wunsch.max_umstiege !== null ? Number(z.wunsch.max_umstiege) : null, ohne_bus: !!(z.wunsch && z.wunsch.ohne_bus), nur_regio: !!(z.wunsch && z.wunsch.nur_regio) } };
   if (typ === 'fahrt') o.fahrten = (Array.isArray(z.fahrten) ? z.fahrten : []).slice(0, 4).map((f) => ({ linie: s(f && f.linie, 20), ab: iso(f && f.ab), von: s(f && f.von), ziel: s(f && f.ziel) }));
   else o.verbindungen = (Array.isArray(z.verbindungen) ? z.verbindungen : []).slice(0, 3).map((v) => ({ legs: (Array.isArray(v && v.legs) ? v.legs : []).slice(0, 6).map((l) => ({ art: s(l && l.art, 8), linie: s(l && l.linie, 20), von: s(l && l.von, 50), nach: s(l && l.nach, 50), ab: iso(l && l.ab), an: iso(l && l.an), ziel: s(l && l.ziel, 40), gleis: s(l && l.gleis, 8), vonPos: l && Array.isArray(l.vonPos) && l.vonPos.length === 2 && l.vonPos.every((n) => isFinite(n)) ? l.vonPos.map(Number) : undefined })) }));
   return o;
+}
+// Kurze Folgefragen zu einer Fahrt im Gespräch („Und der nächste?“, „Nur Regionalverkehr“, „Über Hannover“, „Eine Stunde später“) erkennt der Server selbst und ruft das Werkzeug vorab auf:
+// Die KI ruft bei so kurzen Fragen sonst oft kein Werkzeug auf und rät. Gibt null zurück, wenn es keine Folgefrage ist (neue Strecke, kein Gespräch, nichts erkannt).
+function folgeAufruf(frage, z) {
+  if (!z || !z.von || !z.von.name || !z.nach || !z.nach.name) return null;
+  const f = String(frage || '').trim(), q = f.toLowerCase();
+  if (/\bvon\s+[A-ZÄÖÜ][\wäöüß-]+.*\bnach\s+[A-ZÄÖÜ]/.test(f) || /\bnach\s+[A-ZÄÖÜ][\wäöüß-]+/.test(f)) return null;   // eine neue Strecke ist keine Folgefrage
+  if (f.length > 70 || /\b(richtung|zum|zur|bei|am|an der)\b/.test(q)) return null;   // lange Fragen oder mit eigener Ortsangabe: die KI entscheidet
+  if (/anschluss|umsteigezeit|(schaff|reich|klappt).*umsteig|umsteig.*(schaff|reich|klappt)/.test(q)) return { name: 'anschluss_pruefen', args: {} };
+  if (/verspät|pünktlich|fällt .*aus|ausfall|fährt (der|die|das|er|sie|es) (noch|trotzdem)/.test(q)) return { name: 'verspaetung_pruefen', args: {} };
+  const a = {}; let direkt = false, mitUmstieg = false, erkannt = false;
+  // Zeit relativ: „eine Stunde später“, „30 Minuten früher“, „eine halbe Stunde später“; ohne Menge: „später“ = die nächste, „früher“ = eine Stunde früher
+  const mz = /\b(?:(halbe|viertel)\s*stunde|(\d{1,3})\s*min(?:ute[n]?)?|(\d{1,2}|eine|ein|zwei|drei)\s*stunden?)\s*(später|früher|danach|davor|vorher)\b/.exec(q);
+  if (mz) { const n = mz[1] ? (mz[1] === 'halbe' ? 30 : 15) : mz[2] ? Number(mz[2]) : ({ eine: 1, ein: 1, zwei: 2, drei: 3 }[mz[3]] || Number(mz[3])) * 60; a.versatz_min = /früher|davor|vorher/.test(mz[4]) ? -n : n; erkannt = true; }
+  else if (/\bfrüher\b/.test(q)) { a.versatz_min = -60; erkannt = true; }
+  else if (/\b(?:der|die|das)?\s*nächste[nrs]?\b|\bund danach\b|\bdie danach\b|\bnoch (?:eine|einen|eins)\b|\bweitere[nrs]? (?:zug|bahn|verbindung|bus)|\b(?:eine|einen|ein)\s+\w+\s+später\b|\bspäter\b/.test(q)) { a.danach = true; erkannt = true; }
+  // Uhrzeit und Tag
+  const mu = /\b(?:um|ab|gegen|nach)\s+(\d{1,2})(?::(\d{2})|\s*uhr(?:\s*(\d{2}))?)/.exec(q);
+  if (mu && Number(mu[1]) < 24) { a.ab = String(mu[1]).padStart(2, '0') + ':' + (mu[2] || mu[3] || '00'); erkannt = true; }
+  if (/\bübermorgen\b/.test(q)) { a.tag = 'übermorgen'; erkannt = true; } else if (/\bmorgen\b/.test(q)) { a.tag = 'morgen'; erkannt = true; } else if (/\bheute\b/.test(q) && a.ab) a.tag = 'heute';
+  // Arten und Wünsche
+  if (/auch mit (dem )?bus|mit bussen|alle verkehrsmittel|egal womit|doch mit bus/.test(q)) { a.art = 'alle'; a.ohne_bus = false; a.nur_regio = false; erkannt = true; }
+  else {
+    if (/regionalverkehr|nahverkehr|regionalzüge?|nur (?:regional|rb|re)\b|keine?n? (?:ice|ic|fernzüge?|fernverkehr)|ohne (?:ice|ic|fernverkehr)/.test(q)) { a.art = 'nahverkehr'; a.nur_regio = true; erkannt = true; }
+    else if (/nur (?:ice|ic|fernverkehr|fernzüge?)|fernverkehr bitte/.test(q)) { a.art = 'fernverkehr'; erkannt = true; }
+    else if (/keine?n? busse?|ohne busse?|nicht mit dem bus|nur (?:zug|züge|bahn)\b/.test(q)) { a.art = 'zug'; a.ohne_bus = true; erkannt = true; }
+  }
+  if (/ohne umstieg|ohne umsteigen|\bdirekt(?:e[nrs]?)?\b|durchgehend|umsteigefrei/.test(q)) { direkt = true; erkannt = true; }
+  const mm = /(?:höchstens|maximal|max\.?|nur)\s+(ein|einen|einem|1|zwei|2)\s+umstieg|(?:mit\s+)?(einem|einen|1)\s+umstieg|einmal umsteigen/.exec(q);
+  if (mm) { a.max_umstiege = /zwei|2/.test(mm[1] || '') ? 2 : 1; mitUmstieg = true; erkannt = true; }
+  else if (/mit umstieg|mit umsteigen|umsteigen ist ok|auch mit umsteigen/.test(q)) { mitUmstieg = true; erkannt = true; }
+  const mo = /\b[Üü]ber\s+([A-ZÄÖÜ][\wäöüß.-]*(?:\s+[A-ZÄÖÜ][\wäöüß.-]*)?)/.exec(f);
+  if (mo) { a.ueber = mo[1]; erkannt = true; }
+  if (!erkannt) return null;
+  if (direkt) return { name: 'fahrt_pruefen', args: a };
+  if (mitUmstieg || z.typ === 'verbindung') return { name: 'verbindung_suchen', args: a };
+  return { name: 'fahrt_pruefen', args: a };
 }
 // Fahrt prüfen: gibt es im Fahrplan Fahrten ohne Umstieg, die am Start halten und danach am Ziel (optional „über“ einen Ort), zu einer Zeit, mit Filter nach Art?
 // Nur Fahrplan und Echtzeit, nichts aus Wissen. Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt ein Ort dort, sagt das Werkzeug „nicht prüfbar“.
@@ -3546,13 +3583,16 @@ async function fahrtPruefen(a, ctx) {
   // Haltestellenname und Frage gleich schreiben; ein Treffer gilt nur, wenn der Name mit dem Gefragten beginnt und dort ein Wort endet:
   // „Detmold“ trifft „Detmold, Bahnhof“, aber nicht „Detmolder Straße“ in Steinheim und nicht „Höv-Riege, Detmolder Straße“
   const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim();
-  const kv = wort(von), kn = wort(nach), ku = wort(a.ueber);
+  const ueberN = a.ueber !== undefined ? a.ueber : (z.ueber || '');
+  const kv = wort(von), kn = wort(nach), ku = wort(ueberN);
   const trifft = (name, k) => { const n = wort(name); return n.startsWith(k) && !/[a-zäöü]/.test(n.charAt(k.length) || ' '); };
   if (kv.length < 3 || kn.length < 3) return { fehler: 'Start und Ziel fehlen. Frag kurz, von wo nach wo.' };
   rtWanted = Date.now(); rtTick();
   const jetzt = Math.floor(Date.now() / 60000) * 60000, heute = ymdVon(jetzt);
   const T0 = zeitStart(a, z), fh = Math.min(12, Math.max(1, Number(a.fenster_h) || 6)), T1 = T0 + fh * 3600000;
-  const art = ['zug', 'bus', 'nahverkehr', 'fernverkehr', 'alle'].includes(a.art) ? a.art : 'alle';
+  // Wünsche aus dem Gespräch gelten weiter, solange sie nicht überschrieben werden („nur Regionalverkehr“, dann „über Lage“)
+  const artWunsch = a.art || z.art || (z.wunsch && z.wunsch.nur_regio ? 'nahverkehr' : z.wunsch && z.wunsch.ohne_bus ? 'zug' : 'alle');
+  const art = ['zug', 'bus', 'nahverkehr', 'fernverkehr', 'alle'].includes(artWunsch) ? artWunsch : 'alle';
   const tage = []; for (let dd = ymdPlus(ymdVon(T0), -1); dd <= ymdVon(T1); dd = ymdPlus(dd, 1)) tage.push(dd);
   let startGefunden = false, zielGefunden = false, viaGefunden = !ku; const halte = new Set(), fahrten = [];
   for (const id of Object.keys(fahrplaene)) {
@@ -3606,7 +3646,7 @@ async function fahrtPruefen(a, ctx) {
       } catch (e) { dbErr = e.message; }
     }
   }
-  if (ctx) ctx.neu = { typ: 'fahrt', von: { name: von }, nach: { name: nach }, art, ueber: a.ueber || '', ab: new Date(top[0].ts).toISOString(), suche_ab: new Date(T0).toISOString(), fahrten: top.map((f) => ({ linie: f.linie, ab: new Date(f.ts).toISOString(), von: f.halt_am_start, ziel: f.richtung })) };
+  if (ctx) ctx.neu = { typ: 'fahrt', von: { name: von }, nach: { name: nach }, art, ueber: ueberN || '', ab: new Date(top[0].ts).toISOString(), suche_ab: new Date(T0).toISOString(), wunsch: { max_umstiege: 0, ohne_bus: art === 'zug' || art === 'nahverkehr' || art === 'fernverkehr', nur_regio: art === 'nahverkehr' }, fahrten: top.map((f) => ({ linie: f.linie, ab: new Date(f.ts).toISOString(), von: f.halt_am_start, ziel: f.richtung })) };
   return { ergebnis: 'Fahrten gefunden', zeitraum, wunsch: { art, ueber: !!ku }, haltestellen_start: [...halte].slice(0, 4), fahrten: top.map(({ ts, ...rest }) => rest), hinweis: 'Fahrten ohne Umstieg laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden; bei keine_abweichung_gemeldet sag „laut DB keine Abweichung gemeldet“ (nie „pünktlich“). Nenne nur diese Linien und Uhrzeiten, rechne nie selbst mit Uhrzeiten. Für „später“ oder „der nächste“ ruf das Werkzeug mit versatz_min oder danach noch einmal auf.' };
 }
 // Verbindungen mit Umstiegen von HERE (Fahrplan), mit Uhrzeit und Filtern. Echtzeit nur für die erste Fahrt (DELFI oder DB), Anschlüsse prüft anschluss_pruefen.
@@ -3621,19 +3661,38 @@ async function verbindungSuchen(a, ctx) {
   let list, zeitGesetzt = mitZeit;
   try { list = (await hereTransit(o1.pos, o2.pos, mitZeit ? { ab: new Date(T).toISOString() } : {})).list; }
   catch (e) { if (mitZeit && /HTTP 400/.test(e.message)) { zeitGesetzt = false; list = (await hereTransit(o1.pos, o2.pos, {})).list; } else throw e; }
-  const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim(), kuz = wort(a.ueber);
+  const ueberN = a.ueber !== undefined ? a.ueber : (z.ueber || '');
+  const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim(), kuz = wort(ueberN);
   const FERN_MODUS = /^(highSpeedTrain|intercityTrain)$/;
-  const maxU = a.max_umstiege != null && isFinite(a.max_umstiege) ? Number(a.max_umstiege) : null;
+  const zw = (z && z.wunsch) || {};
+  const maxU = a.max_umstiege != null && isFinite(a.max_umstiege) ? Number(a.max_umstiege) : (z.typ === 'verbindung' && zw.max_umstiege != null ? Number(zw.max_umstiege) : null);
+  const ohneBus = a.ohne_bus != null ? !!a.ohne_bus : (a.art === 'zug' || (z.typ === 'verbindung' ? !!zw.ohne_bus : z.art === 'zug' || z.art === 'nahverkehr' || z.art === 'fernverkehr'));
+  const nurRegio = a.nur_regio != null ? !!a.nur_regio : (a.art === 'nahverkehr' || (z.typ === 'verbindung' ? !!zw.nur_regio : z.art === 'nahverkehr'));
   const nach_zeit = list.filter((c) => !mitZeit || Date.parse(c.ab) >= T - 60000);
   if (mitZeit && !nach_zeit.length && list.length) return { ergebnis: 'Zeit nicht umsetzbar', hinweis: 'Für diese Uhrzeit liefert die Verbindungssuche keine Verbindungen, nur frühere. Sag das offen: Zu dieser Uhrzeit kann ich keine Verbindung nennen. Verweise auf bahn.de oder die Bahn-App.' };
-  let teil = nach_zeit.filter((c) => (maxU == null || c.umstiege <= maxU)
-    && (!a.ohne_bus || !c.teile.some((l) => l.art === 'bus'))
-    && (!a.nur_regio || !c.teile.some((l) => FERN_MODUS.test(l.modus || '')))
-    && (!kuz || c.teile.some((l) => l.art !== 'fuss' && [l.von, l.nach].some((n) => { const w = wort(n); return w.startsWith(kuz) && !/[a-zäöü]/.test(w.charAt(kuz.length) || ' '); }))));
+  const wunschOk = (c) => (!ohneBus || !c.teile.some((l) => l.art === 'bus')) && (!nurRegio || !c.teile.some((l) => FERN_MODUS.test(l.modus || '')));
+  const ueberOk = (c) => c.teile.some((l) => l.art !== 'fuss' && [l.von, l.nach].some((n) => { const w = wort(n); return w.startsWith(kuz) && !/[a-zäöü]/.test(w.charAt(kuz.length) || ' '); }));
+  let kandidaten = nach_zeit.filter((c) => wunschOk(c) && (!kuz || ueberOk(c)));
+  // „über X“: zusätzlich zwei Abschnitte suchen (Start → X, dann X → Ziel ab der Ankunft plus 4 Minuten), denn die Verbindungssuche liefert nicht jede Route
+  if (kuz) {
+    try {
+      const ov = await assistOrt(ueberN, ctx || {});
+      if (ov && !ov.auswahl) {
+        const teilA = (await hereTransit(o1.pos, ov.pos, mitZeit ? { ab: new Date(T).toISOString() } : {})).list.filter((c) => (!mitZeit || Date.parse(c.ab) >= T - 60000) && wunschOk(c)).sort((x, y) => Date.parse(x.ab) - Date.parse(y.ab)).slice(0, 3);
+        for (const ca of teilA) {
+          const tB = Date.parse(ca.an) + 4 * 60000;
+          let lb = []; try { lb = (await hereTransit(ov.pos, o2.pos, { ab: new Date(tB).toISOString() })).list; } catch (e) { lb = []; }
+          const cb = lb.filter((c) => Date.parse(c.ab) >= tB - 60000 && wunschOk(c)).sort((x, y) => Date.parse(x.ab) - Date.parse(y.ab))[0];
+          if (cb) kandidaten.push({ ab: ca.ab, an: cb.an, umstiege: ca.umstiege + cb.umstiege + 1, teile: ca.teile.concat(cb.teile) });
+        }
+      }
+    } catch (e) { /* dann nur, was die direkte Suche geliefert hat */ }
+  }
+  let teil = kandidaten.filter((c) => maxU == null || c.umstiege <= maxU);
   teil = teil.sort((x, y) => Date.parse(x.ab) - Date.parse(y.ab));
   const seen = new Set(); teil = teil.filter((c) => { const k = c.ab + c.an; if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 3);
-  const wunsch = { max_umstiege: maxU, ohne_bus: !!a.ohne_bus, nur_regio: !!a.nur_regio, ueber: !!kuz };
-  if (!teil.length) return { ergebnis: 'keine Verbindung gefunden', wunsch, zeit_gesetzt: zeitGesetzt, hinweis: 'Mit diesen Wünschen finde ich keine Verbindung unter den Ergebnissen der Verbindungssuche. Das heißt nicht, dass es keine gibt. Sag „dazu finde ich keine Verbindung“, nicht „es gibt keine“' + (kuz ? '; bei „über“ erkenne ich nur Umstiegsorte, nicht Halte unterwegs' : '') + '. Verweise auf bahn.de oder die Bahn-App.' };
+  const wunsch = { max_umstiege: maxU, ohne_bus: ohneBus, nur_regio: nurRegio, ueber: !!kuz };
+  if (!teil.length) return { ergebnis: 'keine Verbindung gefunden', wunsch, zeit_gesetzt: zeitGesetzt, hinweis: 'Mit diesen Wünschen finde ich keine Verbindung unter den Ergebnissen der Verbindungssuche. Das heißt nicht, dass es keine gibt. Sag „dazu finde ich keine Verbindung“, nicht „es gibt keine“' + (kuz ? '; bei „über“ suche ich Verbindungen mit Umstieg dort oder getrennt bis dorthin und von dort, Halte unterwegs ohne Umstieg erkenne ich nicht' : '') + '. Verweise auf bahn.de oder die Bahn-App.' };
   const aus = [];
   for (const c of teil) {
     const fahrt = c.teile.filter((l) => l.art !== 'fuss'), erste = fahrt[0];
@@ -3642,7 +3701,7 @@ async function verbindungSuchen(a, ctx) {
       abschnitte: fahrt.map((l) => ({ art: l.art === 'zug' ? 'Zug' : l.art === 'bus' ? 'Bus' : l.art === 'bahn' ? 'Stadtbahn' : l.art, linie: l.linie, von: l.von, ab: hmZ(Date.parse(l.ab)), nach: l.nach, an: hmZ(Date.parse(l.an)), gleis: l.gleis })),
       echtzeit_erste_fahrt: ez ? (ez.faellt_aus ? { faellt_aus: true, quelle: ez.quelle } : ez.verspaetung_min != null ? { verspaetung_min: ez.verspaetung_min, quelle: ez.quelle } : { keine_abweichung_gemeldet: true, quelle: ez.quelle }) : undefined });
   }
-  if (ctx) ctx.neu = { typ: 'verbindung', von: { name: vonN }, nach: { name: nachN }, art: '', ueber: a.ueber || '', ab: new Date(Date.parse(teil[0].ab)).toISOString(), suche_ab: mitZeit || (z && z.suche_ab) ? new Date(T).toISOString() : '',
+  if (ctx) ctx.neu = { typ: 'verbindung', von: { name: vonN }, nach: { name: nachN }, art: '', ueber: ueberN || '', wunsch: { max_umstiege: maxU, ohne_bus: ohneBus, nur_regio: nurRegio }, ab: new Date(Date.parse(teil[0].ab)).toISOString(), suche_ab: mitZeit || (z && z.suche_ab) ? new Date(T).toISOString() : '',
     verbindungen: teil.map((c) => ({ legs: c.teile.filter((l) => l.art !== 'fuss').map((l) => ({ art: l.art, linie: l.linie, von: l.von, nach: l.nach, ab: new Date(Date.parse(l.ab)).toISOString(), an: new Date(Date.parse(l.an)).toISOString(), ziel: l.ziel, gleis: l.gleis, vonPos: l.vonPos })) })) };
   return { ergebnis: 'Verbindungen gefunden', zeit_gesetzt: zeitGesetzt, wunsch, verbindungen: aus,
     hinweis: 'Verbindungen laut Fahrplan von HERE' + (mitZeit && !zeitGesetzt ? ' (die Uhrzeit konnte nicht gesetzt werden: sag, dass die Zeiten ab jetzt gelten)' : '') + '. Echtzeit nur für die erste Fahrt, wenn echtzeit_erste_fahrt da ist; sonst „Verspätungen nicht bekannt“. Ob Umstiege reichen, prüft anschluss_pruefen. Nenne nur diese Zeiten und Linien, rechne nie selbst mit Uhrzeiten.' };
@@ -3733,6 +3792,11 @@ function themenPruefung(antwort, messages) {
 function quellenPruefung(antwort, messages, used) {
   const th = themenPruefung(antwort, messages);
   if (th) return th;
+  // jede Uhrzeit (17:01) muss im Ergebnis eines Werkzeugs stehen, auch wenn die Antwort kein Bahn-Wort enthält („Um 21:01.“)
+  if (!Q_ABSAGE.test(antwort)) {
+    const rohU = messages.filter((m) => m.role === 'tool').map((m) => m.content).join(' ');
+    for (const m of antwort.matchAll(/\b(\d{1,2}):(\d{2})\b/g)) { const hz = m[1].padStart(2, '0') + ':' + m[2]; if (!rohU.includes(hz)) return 'Uhrzeit ' + hz; }
+  }
   if (!Q_FAHRPLAN.test(antwort) || Q_ABSAGE.test(antwort)) return null;   // nichts zu prüfen, oder eine ehrliche Absage
   if (!used.some((n) => Q_FAHRPLAN_TOOLS.has(n))) return 'ohne Fahrplan-Werkzeug';
   const tools = messages.filter((m) => m.role === 'tool');
@@ -3809,8 +3873,18 @@ async function assist(body) {
   const act = {}, used = [];
   ctx.used = used;
   ctx.zustand = zustandClean(k.zustand);   // die zuletzt genannte Strecke und Abfahrt, von der App mitgeschickt; ctx.neu setzen die Werkzeuge
+  const folge = folgeAufruf(frage, ctx.zustand);
+  if (folge) {
+    try {
+      const out = await assistTool(folge.name, folge.args, ctx, act);
+      used.push(folge.name);
+      if (process.env.DEBUG_ASSIST) console.error('Werkzeug vorab:', folge.name, JSON.stringify(folge.args));
+      messages.push({ role: 'assistant', content: '', tool_calls: [{ id: 'vorab1', type: 'function', function: { name: folge.name, arguments: JSON.stringify(folge.args) } }] });
+      messages.push({ role: 'tool', name: folge.name, tool_call_id: 'vorab1', content: JSON.stringify(out).slice(0, 4000) });
+    } catch (e) { /* dann die KI wie sonst */ }
+  }
   // Nennt die Frage ein Ziel oder ein Thema mit Werkzeug, muss die erste Runde nachschlagen (sonst fragt Mistral oft unnötig nach)
-  const zwingen = !/gestürzt|notfall|unfall|verletzt|hilfe!|wetter|grün/i.test(frage) && (/\b(zu|zum|zur|nach|bei|über|am|an der|ins)\s+[A-ZÄÖÜ]/.test(frage) || /nächste[nr]?\s+(bahn|bus|stadtbahn|abfahrt)|störung|umleitung|aufz[uü]g|park\s*\+?\s*ride|toilette|\bwc\b|tonsignal|hochbahnsteig|haltestelle in meiner nähe/i.test(frage));
+  const zwingen = !folge && !/gestürzt|notfall|unfall|verletzt|hilfe!|wetter|grün/i.test(frage) && (/\b(zu|zum|zur|nach|bei|über|am|an der|ins)\s+[A-ZÄÖÜ]/.test(frage) || /nächste[nr]?\s+(bahn|bus|stadtbahn|abfahrt)|störung|umleitung|aufz[uü]g|park\s*\+?\s*ride|toilette|\bwc\b|tonsignal|hochbahnsteig|haltestelle in meiner nähe/i.test(frage));
   for (let round = 0; round < 4; round++) {
     let m = await mistralChat(messages, false, round === 0 && zwingen);
     const gueltig = (x) => (x.tool_calls || []).filter((c) => c && c.function && TOOL_NAMES.has(c.function.name));
@@ -3832,6 +3906,7 @@ async function assist(body) {
       let args = {};
       try { args = typeof c.function.arguments === 'string' ? JSON.parse(c.function.arguments) : c.function.arguments || {}; } catch (e) { args = {}; }
       let out;
+      if (process.env.DEBUG_ASSIST) console.error('Werkzeug:', c.function.name, JSON.stringify(args));
       try { out = await assistTool(c.function.name, args, ctx, act); } catch (e) { out = { fehler: clip(e.message, 120) }; }
       used.push(c.function.name);
       messages.push({ role: 'tool', name: c.function.name, tool_call_id: c.id, content: JSON.stringify(out).slice(0, c.function.name === 'ort_barrierefreiheit' ? 9000 : 4000) });
@@ -4294,8 +4369,9 @@ if (cli === 'db-station') {
 }
 if (cli === 'db-leg') {
   // Prüft, ob die DB-Echtzeit zu einer Fahrt von HERE passt. Aufruf: db-leg "<Linie>" "<Haltestelle>" <Abfahrt als Datum mit Uhrzeit>
-  const [, , , linie, von, ab] = process.argv;
+  const [, , , linie, von, ab, welches] = process.argv;
   if (!DB_ON) { console.error('DB_CLIENT_ID und DB_API_KEY fehlen in /etc/flowtown.env'); process.exit(1); }
+  if (welches === 'ar') { const e = await dbEreignis({ art: 'zug', nach: von, an: ab, linie }, 'ar').catch((x) => ({ fehler: x.message })); console.log('Ankunft', linie, 'in', von, ab, '→', JSON.stringify(e || null), '(null = keine eindeutige Zuordnung)'); process.exit(0); }
   if (!linie || !von || !ab || isNaN(Date.parse(ab))) { console.error('Aufruf: node flowtown-server.mjs db-leg "RE 82" "Detmold Bahnhof" 2026-11-13T15:40:00+01:00'); process.exit(1); }
   try {
     const lst = await dbStation(dbMuster(von)), st = dbWaehle(lst, von);
