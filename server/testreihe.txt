@@ -1,0 +1,135 @@
+## Testreihe für die Sprachassistenz: Fragen und Folgefragen.
+## Gespräche stehen durch Leerzeilen getrennt. „=> Werkzeug“ hinter einer Frage: dieses Werkzeug wird erwartet; „=> -“: kein Vorabaufruf des Servers.
+## Offline (ohne KI, ohne Netz):  node flowtown-server.mjs folge-test
+## Mit KI (Mistral, Quellenprüfung):  node flowtown-server.mjs assist-testreihe [Datei] [Nummern]
+
+# Zeit relativ: später
+Fährt von Detmold ein Zug nach Herford?
+Eine Stunde später => fahrt_pruefen
+Eine halbe Stunde später => fahrt_pruefen
+20 Minuten später => fahrt_pruefen
+Zwei Stunden später => fahrt_pruefen
+Später => fahrt_pruefen
+
+# Zeit relativ: früher
+Wann fährt von Detmold ein Zug nach Herford?
+Eine Stunde früher => fahrt_pruefen
+30 Minuten früher => fahrt_pruefen
+Früher => fahrt_pruefen
+
+# Der Nächste
+Gibt es einen Zug von Detmold nach Herford?
+Und der nächste? => fahrt_pruefen
+Der nächste Zug => fahrt_pruefen
+Eine Bahn später => fahrt_pruefen
+Und danach? => fahrt_pruefen
+Noch eine => fahrt_pruefen
+Gibt es noch einen weiteren Zug? => fahrt_pruefen
+
+# Uhrzeiten und Tage
+Wann fährt von Detmold ein Zug nach Herford?
+Um 18 Uhr => fahrt_pruefen
+Ab 19:30 => fahrt_pruefen
+Morgen früh um 8 Uhr => fahrt_pruefen
+Übermorgen => fahrt_pruefen
+Heute Abend um 21 Uhr => fahrt_pruefen
+Gegen 7 Uhr => fahrt_pruefen
+
+# Filter: Art des Verkehrs
+Fährt von Detmold ein Zug nach Herford?
+Nur Regionalverkehr => fahrt_pruefen
+Keine ICE => fahrt_pruefen
+Ohne Fernverkehr => fahrt_pruefen
+Nur ICE => fahrt_pruefen
+Keine Busse => fahrt_pruefen
+Ohne Busse bitte => fahrt_pruefen
+Nur Bus => fahrt_pruefen
+Nur Stadtbahn => fahrt_pruefen
+Auch mit dem Bus => fahrt_pruefen
+
+# Filter: Umstiege (Verbindung)
+Wie komme ich von Detmold nach Herford?
+Ohne Umstieg => fahrt_pruefen
+Direkt => fahrt_pruefen
+Höchstens ein Umstieg => verbindung_suchen
+Mit einem Umstieg => verbindung_suchen
+Einmal umsteigen ist ok => verbindung_suchen
+Nur zwei Umstiege => verbindung_suchen
+
+# Filter: über einen Ort
+Fährt von Detmold ein Zug nach Hannover?
+Über Herford => fahrt_pruefen
+Über Hannover => fahrt_pruefen
+Über Bad Salzuflen => fahrt_pruefen
+Über Lage => fahrt_pruefen
+
+# Verspätung
+Wann fährt von Detmold ein Zug nach Herford?
+Gibt es Verspätung? => verspaetung_pruefen
+Ist der pünktlich? => verspaetung_pruefen
+Fährt der noch? => verspaetung_pruefen
+Fällt der aus? => verspaetung_pruefen
+Ist ein Ausfall gemeldet? => verspaetung_pruefen
+
+# Anschluss [verbindung]
+Wie komme ich von Detmold nach Herford?
+Schaffe ich den Anschluss? => anschluss_pruefen
+Reicht die Umsteigezeit? => anschluss_pruefen
+Klappt das Umsteigen? => anschluss_pruefen
+Gibt es Verspätung? => verspaetung_pruefen
+
+# Gesprächskette: mehrere Folgen hintereinander
+Fährt von Detmold ein Zug nach Herford?
+Eine Stunde später => fahrt_pruefen
+Nur Regionalverkehr => fahrt_pruefen
+Über Lage => fahrt_pruefen
+Und der nächste? => fahrt_pruefen
+Gibt es Verspätung? => verspaetung_pruefen
+
+# Ortsvarianten: Bahnhof allein
+Wann fährt ein Zug vom Bahnhof nach Detmold?
+Wann fährt ein Zug vom Hauptbahnhof nach Herford?
+Fährt vom Hbf ein Zug nach Hannover?
+Fährt von Bahnhof Detmold ein Zug nach Bielefeld?
+Fährt vom Detmolder Bahnhof ein Zug nach Herford?
+Wann fährt von Hauptbahnhof Bielefeld ein Zug nach Paderborn?
+Fährt vom Busbahnhof Herford ein Bus nach Bielefeld?
+Wann fährt die Stadtbahn von der Uni zum Hauptbahnhof?
+Wann fährt die Stadtbahn vom Hbf zur Universität?
+Wann fährt ein Bus vom Jahnplatz zum Rathaus?
+
+# Orte in anderen Städten
+Fährt von Mönchengladbach Hauptbahnhof ein Zug nach Düsseldorf?
+Fährt von Paderborn Hbf ein Zug nach Bielefeld?
+Wann fährt von Detmold ein Zug nach Paderborn?
+Hält der Zug nach Osnabrück in Detmold?
+Fährt von Bielefeld ein Zug nach Köln?
+
+# Orte außerhalb des Fahrplans (soll ehrlich absagen)
+Wann fährt von Hamburg Hbf ein Zug nach Kiel?
+Gibt es einen Zug von Bielefeld nach München?
+Fährt von Münster ein Zug nach Osnabrück?
+
+# Formulierungen
+Wann fährt der nächste Zug von Bielefeld nach Herford?
+Gibt es einen Zug von Bielefeld nach Herford?
+Fährt gleich ein Zug von Bielefeld nach Herford?
+Hält die RB 72 in Lage?
+Hält der RE 82 in Herford?
+Welcher Zug fährt von Detmold nach Bielefeld?
+Wie lange fährt man von Detmold nach Bielefeld?
+Ich möchte von Detmold nach Bielefeld, was gibt es da?
+
+# Stadtbahn und Bus in Bielefeld
+Wann fährt die Stadtbahn von der Universität zum Hauptbahnhof?
+Und die nächste? => fahrt_pruefen
+Nur Stadtbahn => fahrt_pruefen
+Ohne Bus => fahrt_pruefen
+Gibt es Verspätung? => verspaetung_pruefen
+Eine halbe Stunde später => fahrt_pruefen
+
+# Fragen ohne Gesprächsbezug (kein Vorabaufruf, die KI antwortet oder sagt offen, was sie nicht weiß)
+Wie ist das Wetter?
+Gibt es am Hauptbahnhof einen Aufzug?
+Wann hat das Rathaus auf?
+Danke!

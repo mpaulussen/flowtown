@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.110.0';
+  const VERSION = '0.111.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -1516,6 +1516,13 @@
     voiceDe = (want && voicesDe.find((v) => v.voiceURI === want || v.name === want)) || voicesDe.find((v) => voiceQuality(v) >= 0) || voicesDe[0] || null;
     renderVoiceSet();
   }
+  // englische Stimme für Eigennamen wie „Flowtown“ (de-DE spricht es sonst deutsch aus)
+  function voiceEn() {
+    if (!canSpeak) return null;
+    const vs = speechSynthesis.getVoices().filter((v) => /^en[-_](US|GB)/i.test(v.lang));
+    if (!vs.length) return null;
+    return vs.sort((x, y) => (voiceQuality(y) * 10 + (/^en[-_]US/i.test(y.lang) ? 2 : 0) + (y.localService ? 1 : 0)) - (voiceQuality(x) * 10 + (/^en[-_]US/i.test(x.lang) ? 2 : 0) + (x.localService ? 1 : 0)))[0];
+  }
   function renderVoiceSet() {
     const sel = document.getElementById('set-voice-name');
     if (!sel) return;
@@ -1601,10 +1608,19 @@
     if (!opts.force && sayLast[t] && now - sayLast[t] < 20000) return;   // nichts doppelt hintereinander
     sayLast[t] = now;
     if (opts.now) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(t);
-    u.lang = 'de-DE';
-    if (voiceDe) u.voice = voiceDe;
-    u.rate = (settings.voice && settings.voice.rate) || 1;
+    const rate = (settings.voice && settings.voice.rate) || 1;
+    // „Flowtown“ wird englisch gesprochen, der Rest deutsch: eigene Äußerung mit englischer Stimme
+    const parts = t.split(/(flowtown)/i).filter((p) => p !== '');
+    const en = parts.length > 1 || /flowtown/i.test(t) ? voiceEn() : null;
+    const us = parts.map((p) => {
+      const isName = /^flowtown$/i.test(p);
+      const u = new SpeechSynthesisUtterance(isName && !en ? 'Floh-taun' : p);
+      u.rate = rate;
+      if (isName && en) { u.lang = en.lang || 'en-US'; u.voice = en; }
+      else { u.lang = 'de-DE'; if (voiceDe) u.voice = voiceDe; }
+      return u;
+    });
+    const u = us[us.length - 1];
     if (opts.onend) {
       // onend kommt nicht auf jedem Gerät zuverlässig: dann nach der geschätzten Dauer, sobald nichts mehr gesprochen wird
       let done = false, poll = null;
@@ -1614,7 +1630,7 @@
       const check = () => { if (done) return; if (!speechSynthesis.speaking || Date.now() > until) fin(); else poll = setTimeout(check, 400); };
       poll = setTimeout(check, Math.min(30000, 1500 + t.length * 75 / ((settings.voice && settings.voice.rate) || 1)));
     }
-    speechSynthesis.speak(u);
+    us.forEach((x) => speechSynthesis.speak(x));
     return true;
   }
   const roundM = (m) => (m < 100 ? Math.max(10, Math.round(m / 10) * 10) : Math.round(m / 50) * 50);
@@ -2101,7 +2117,25 @@
     };
   }
   let assistBig = false, assistTick = null, assistT0 = 0;
-  let callLog = [];   // bisheriges Gespräch im großen Sprachmodus: { q, a }, damit nichts verschwindet, wenn die nächste Antwort kommt
+  let callLog = [];   // bisheriges Gespräch: { q, a }, damit nichts verschwindet, wenn die nächste Antwort kommt
+  const assistReset = () => { callLog = []; assistZustand = null; assistHist = []; };   // neues Gespräch: nichts von der letzten Strecke, Zeit oder den Wünschen
+  // Worüber das Gespräch gerade geht (vom Server gemerkt), als lesbare Zeile: so sieht man, was „eine Stunde später“ oder „nur Regionalverkehr“ meint
+  const ZART = { zug: 'nur Züge', bus: 'nur Busse', stadtbahn: 'nur Stadtbahn', nahverkehr: 'nur Regionalverkehr', fernverkehr: 'nur Fernverkehr', oepnv: 'Stadtbahn und Bus' };
+  function kontextText(z) {
+    if (!z || !z.von || !z.nach || !z.von.name || !z.nach.name) return '';
+    const p = [`${z.von.name} → ${z.nach.name}`], t = z.ab || z.suche_ab, d = t ? new Date(t) : null;
+    if (d && !isNaN(d)) {
+      const ymd = (x) => x.toLocaleDateString('de-DE', { timeZone: 'Europe/Berlin' }), jetzt = Date.now();
+      const tag = ymd(d) === ymd(new Date(jetzt)) ? '' : ymd(d) === ymd(new Date(jetzt + 864e5)) ? ' (morgen)' : ' (' + ymd(d) + ')';
+      p.push('ab ' + d.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit', timeZone: 'Europe/Berlin' }) + tag);
+    }
+    const w = z.wunsch || {};
+    if (ZART[z.art]) p.push(ZART[z.art]);
+    else { if (w.nur_regio) p.push('nur Regionalverkehr'); if (w.ohne_bus) p.push('ohne Busse'); }
+    if (z.ueber) p.push('über ' + z.ueber);
+    if (w.max_umstiege === 0) p.push('ohne Umstieg'); else if (w.max_umstiege > 0) p.push('höchstens ' + w.max_umstiege + ' Umstieg' + (w.max_umstiege > 1 ? 'e' : ''));
+    return p.join(' · ');
+  }
   const CALL_HELLO = 'Hallo, ich bin Flowtown. Wohin möchtest du, oder was möchtest du wissen?';
   // Großer Sprachmodus wie ein Anruf: Zustand (zuhören, nachdenken, sprechen), Gesprächszeit, roter Hörer zum Auflegen
   function assistLoop() {
@@ -2122,14 +2156,17 @@
   function showAssist(frage, antwort, fb) {
     assistFb = antwort && fb ? fb : null;
     const el = $('#assist');
-    const done = assistBig && !!antwort && !!frage;
+    const done = !!antwort && !!frage;
     if (done && !(callLog.length && callLog[callLog.length - 1].a === antwort)) callLog.push({ q: frage, a: antwort });
-    const prev = assistBig ? (done ? callLog.slice(0, -1) : callLog).slice(-3) : [];
+    const prev = (done ? callLog.slice(0, -1) : callLog).slice(-(assistBig ? 3 : 6));
+    const ctxT = kontextText(assistZustand);
     el.classList.toggle('big', assistBig);
     el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
     const head = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>`;
-    const logHtml = prev.length ? `<ol class="call-log" aria-label="Bisheriges Gespräch">${prev.map((t) => `<li><span class="cl-q">Du: ${esc(t.q)}</span><span class="cl-a">Flowtown: ${esc(t.a)}</span></li>`).join('')}</ol>` : '';
+    const logOl = prev.length ? `<ol class="call-log" aria-label="Bisheriges Gespräch">${prev.map((t) => `<li><span class="cl-q">Du: ${esc(t.q)}</span><span class="cl-a">Flowtown: ${esc(t.a)}</span></li>`).join('')}</ol>` : '';
+    const logHtml = assistBig || !prev.length ? logOl : `<details class="assist-log"><summary>Bisheriges Gespräch (${prev.length} ${prev.length === 1 ? 'Frage' : 'Fragen'})</summary>${logOl}</details>`;
+    const ctxHtml = ctxT ? `<div class="assist-ctx" id="assist-ctx"><span class="ctx-t"><span class="ctx-l">Gespräch über:</span> <b>${esc(ctxT)}</b></span><button type="button" class="btn quiet ctx-x" data-assist="neu">Neues Thema</button></div>` : '';
     const qHtml = frage ? `<p class="assist-q">${assistBig ? 'Du: ' : ''}${esc(frage)}</p>` : '';
     const aHtml = `<p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}`;
     const fbHtml = assistFb ? `<div class="assist-fb" id="assist-fb" role="group" aria-label="War die Antwort richtig?"><span>War das richtig?</span><button type="button" class="btn quiet" data-assist="fb-gut">Stimmt</button><button type="button" class="btn quiet" data-assist="fb-falsch">Stimmt nicht</button><button type="button" class="btn quiet" data-assist="fb-veraltet">Veraltet</button></div><p class="small muted" id="assist-fb-note">Bei „Stimmt nicht“ und „Veraltet“ gehen Frage und Antwort an die Redaktion.</p>` : '';
@@ -2138,12 +2175,12 @@
     if (assistBig) {
       // vier feste Bereiche, damit sich nichts überlagert: Kopf und Zustand oben, der Gesprächstext in der Mitte (scrollt), live Gesagtes und Knöpfe unten
       el.innerHTML = `${head}<div class="call-status"><p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
-        <div class="call-body" tabindex="-1">${logHtml}${qHtml}${aHtml}${fbHtml}${note}</div>
+        ${ctxHtml}<div class="call-body" tabindex="-1">${logHtml}${qHtml}${aHtml}${fbHtml}${note}</div>
         <p class="call-heard" id="call-heard" aria-live="off"></p>
         <div class="call-actions">${formHtml}<button type="button" class="hangup" data-assist="close" aria-label="Auflegen und Gespräch beenden">${ic('handset')}<span>Auflegen</span></button></div>`;
       const body = el.querySelector('.call-body'), qe = el.querySelector('.call-body .assist-q'); if (body) body.scrollTop = qe ? qe.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 : 0;   // die neue Frage oben, die Antwort darunter von Anfang an
     } else {
-      el.innerHTML = `${head}\n      ${qHtml}\n      ${aHtml}\n      ${fbHtml}\n      ${formHtml}\n      ${note}`;
+      el.innerHTML = `${head}\n      ${ctxHtml}${logHtml}\n      ${qHtml}\n      ${aHtml}\n      ${fbHtml}\n      ${formHtml}\n      ${note}`;
     }
     el.hidden = false;
     if (assistBig && !assistTick) assistLoopStart();
@@ -2154,7 +2191,7 @@
     if (!c) return false;
     if (merkVoice(c)) return true;
     if (!$('#assist').hidden && /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b/.test(c)) {
-      $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
+      assistReset(); $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
     }
     if (/verlaufen|nicht (mehr )?weiter|brauche (jemanden|hilfe von|videohilfe)|be my eyes|ich weiß nicht (mehr )?wo/.test(c) && !/notfall|unfall|gestürzt/.test(c)) {
       speak('Sprich Passanten an, sie helfen meist gern. Oder nutze die kostenlose App Be My Eyes: Dort hilft dir ein Mensch per Videoanruf. Bei Gefahr wähle 112. Frag mich gern nach Hilfe am Bahnhof.', { now: true, force: true });
@@ -4201,7 +4238,7 @@
   function openAssistEmpty(opts) {
     unlockSpeech(); pendingIntent = null; assistAct = null;
     assistBig = !!(opts && opts.big) || !!settings.sprechGross;
-    callLog = []; assistZustand = null;   // neues Gespräch: nichts von der letzten Strecke
+    assistReset();   // neues Gespräch
     showAssist('', assistBig ? CALL_HELLO : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
     const ex = askExamples('start').ex, form = $('#assist .assist-form');
     if (form && ex.length) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Beispielfragen">${ex.map((x) => `<button type="button" class="vf-chip" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('')}</div>`);
@@ -7003,7 +7040,13 @@
     const b = ev.target.closest('[data-assist]');
     if (!b || b.tagName === 'FORM') return;
     const a = b.dataset.assist;
-    if (a === 'close') { pendingIntent = null; assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog) { recog.userAbort = true; recog.abort(); } micStatus(''); }
+    if (a === 'close') { pendingIntent = null; assistReset(); assistBig = false; $('#assist').hidden = true; $('#assist').classList.remove('big'); if (canSpeak) speechSynthesis.cancel(); if (recog) { recog.userAbort = true; recog.abort(); } micStatus(''); }
+    else if (a === 'neu') {
+      unlockSpeech(); assistReset(); assistAct = null; if (recog) { recog.userAbort = true; recog.abort(); }
+      const msg = 'Neues Thema. Was möchtest du wissen?';
+      showAssist('', msg); assistLast = msg;
+      speak(msg, { now: true, force: true, onend: assistBig ? () => { if (!$('#assist').hidden) listenAfter('Ich höre zu …'); } : undefined });
+    }
     else if (a === 'mic') { unlockSpeech(); listen(); }
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }
     else if (/^fb-(gut|falsch|veraltet)$/.test(a) && assistFb) {

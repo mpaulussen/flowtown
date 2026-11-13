@@ -1688,3 +1688,14 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .assist.big.nosr .hangup{align-self:center}
 @media (max-height:480px){.assist.big .call-status{min-height:28px}.assist.big .call-bars{height:20px}}
 @media (max-height:480px){.assist.big .call-heard{max-height:14vh;font-size:18px}.assist.big .assist-mic{width:68px;height:68px}}
+
+/* Gespräch sichtbar: worüber es gerade geht, mit Knopf für ein neues Thema; bisheriges Gespräch klappt auf */
+.assist-ctx{flex:none;display:flex;align-items:center;gap:8px;justify-content:space-between;margin:0 0 8px;padding:8px 10px;border-radius:12px;background:var(--tint);font-size:14px;line-height:1.3;border:1px solid var(--line,transparent)}
+.assist-ctx .ctx-t{min-width:0;overflow-wrap:anywhere}
+.assist-ctx .ctx-l{color:var(--muted)}
+.assist-ctx .ctx-x{flex:none;min-height:44px;padding:6px 12px;font-size:14px}
+.assist.big .assist-ctx{margin:0;font-size:14px;max-height:30vh;overflow:auto}
+.assist-log{margin:0 0 8px}
+.assist-log summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--muted)}
+.assist-log .call-log{max-height:34vh}
+@media (max-height:480px){.assist.big .assist-ctx .ctx-l{display:none}.assist.big .assist-ctx .ctx-x{min-height:36px}}

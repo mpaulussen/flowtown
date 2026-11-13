@@ -3580,7 +3580,7 @@ function folgeAufruf(frage, z) {
   // Uhrzeit und Tag
   const mu = /\b(?:um|ab|gegen|nach)\s+(\d{1,2})(?::(\d{2})|\s*uhr(?:\s*(\d{2}))?)/.exec(q);
   if (mu && Number(mu[1]) < 24) { a.ab = String(mu[1]).padStart(2, '0') + ':' + (mu[2] || mu[3] || '00'); erkannt = true; }
-  if (/\bübermorgen\b/.test(q)) { a.tag = 'übermorgen'; erkannt = true; } else if (/\bmorgen\b/.test(q)) { a.tag = 'morgen'; erkannt = true; } else if (/\bheute\b/.test(q) && a.ab) a.tag = 'heute';
+  if (/(?:^|[^a-zäöüß])übermorgen(?![a-zäöüß])/.test(q)) { a.tag = 'übermorgen'; erkannt = true; } else if (/\bmorgen\b/.test(q)) { a.tag = 'morgen'; erkannt = true; } else if (/\bheute\b/.test(q) && a.ab) a.tag = 'heute';
   // Arten und Wünsche
   if (/auch mit (dem )?bus|mit bussen|alle verkehrsmittel|egal womit|doch mit bus/.test(q)) { a.art = 'alle'; a.ohne_bus = false; a.nur_regio = false; erkannt = true; }
   else {
@@ -3588,18 +3588,31 @@ function folgeAufruf(frage, z) {
     else if (/nur (?:ice|ic|fernverkehr|fernzüge?)|fernverkehr bitte/.test(q)) { a.art = 'fernverkehr'; erkannt = true; }
     else if (/nur (?:die |mit der |mit )?(?:stadtbahn|straßenbahn|strassenbahn)/.test(q)) { a.art = 'stadtbahn'; a.ohne_bus = true; erkannt = true; }
     else if (/nur (?:mit dem |mit )?bus(?:se|sen)?\b|nur busse/.test(q)) { a.art = 'bus'; erkannt = true; }
-    else if (/keine?n? busse?|ohne busse?|nicht mit dem bus|nur (?:zug|züge|bahn)\b/.test(q)) { a.art = 'zug'; a.ohne_bus = true; erkannt = true; }
+    else if (/keine?n? bus(?:se|sen)?\b|ohne bus(?:se|sen)?\b|nicht mit dem bus|nur (?:zug|züge|bahn)\b/.test(q)) { a.art = 'zug'; a.ohne_bus = true; erkannt = true; }
   }
   if (/ohne umstieg|ohne umsteigen|\bdirekt(?:e[nrs]?)?\b|durchgehend|umsteigefrei/.test(q)) { direkt = true; erkannt = true; }
   const mm = /(?:höchstens|maximal|max\.?|nur)\s+(ein|einen|einem|1|zwei|2)\s+umstieg|(?:mit\s+)?(einem|einen|1)\s+umstieg|einmal umsteigen/.exec(q);
   if (mm) { a.max_umstiege = /zwei|2/.test(mm[1] || '') ? 2 : 1; mitUmstieg = true; erkannt = true; }
   else if (/mit umstieg|mit umsteigen|umsteigen ist ok|auch mit umsteigen/.test(q)) { mitUmstieg = true; erkannt = true; }
-  const mo = /\b[Üü]ber\s+([A-ZÄÖÜ][\wäöüß.-]*(?:\s+[A-ZÄÖÜ][\wäöüß.-]*)?)/.exec(f);
+  const mo = /(?:^|[\s,.])[Üü]ber\s+([A-ZÄÖÜ][\wäöüß.-]*(?:\s+[A-ZÄÖÜ][\wäöüß.-]*)?)/.exec(f);
   if (mo) { a.ueber = mo[1]; erkannt = true; }
   if (!erkannt) return null;
   if (direkt) return { name: 'fahrt_pruefen', args: a };
   if (mitUmstieg || z.typ === 'verbindung') return { name: 'verbindung_suchen', args: a };
   return { name: 'fahrt_pruefen', args: a };
+}
+// Schreibweisen eines Orts im Fahrplan: „Bahnhof“ allein = Hauptbahnhof der Stadt, in der man ist (Standard Bielefeld);
+// „Bahnhof Detmold“, „Detmold Hbf“, „Detmold, Bahnhof“ und „Hauptbahnhof Detmold“ finden denselben Halt
+const BHF_WORT = '(?:haupt|bus|omnibus)?bahnhof|hbf|bf|zob';
+function ortSchluessel(k, ctx) {
+  k = String(k || '').replace(/^(in|am|an der|zum|zur|zu|der|die|das)\s+/, '').trim();
+  const out = [k], stadt = (s) => String(s || '').toLowerCase().replace(/ß/g, 'ss').trim();
+  const bhf = (s) => { for (const w of ['hbf', 'hauptbahnhof', 'bahnhof', 'bf', 'zob', 'busbahnhof']) out.push(s + ' ' + w); };
+  let m;
+  if (new RegExp('^(' + BHF_WORT + ')$').test(k)) bhf(stadt((ctx && ctx.stadt) || 'Bielefeld') || 'bielefeld');
+  else if ((m = k.match(new RegExp('^(?:' + BHF_WORT + ')\\s+(.+)$')))) bhf(m[1].replace(/^in\s+/, ''));
+  else if ((m = k.match(new RegExp('^(.+?)\\s+(?:' + BHF_WORT + ')$')))) bhf(m[1]);
+  return [...new Set(out)];
 }
 // Fahrt prüfen: gibt es im Fahrplan Fahrten ohne Umstieg, die am Start halten und danach am Ziel (optional „über“ einen Ort), zu einer Zeit, mit Filter nach Art?
 // Nur Fahrplan und Echtzeit, nichts aus Wissen. Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt ein Ort dort, sagt das Werkzeug „nicht prüfbar“.
@@ -3612,8 +3625,10 @@ async function fahrtPruefen(a, ctx) {
   const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim();
   const ueberN = a.ueber !== undefined ? a.ueber : (z.ueber || '');
   const kv = wort(von), kn = wort(nach), ku = wort(ueberN);
+  // Ortsvarianten: „Bahnhof“, „Hbf“, „Hauptbahnhof“ (die Stadt, in der man ist), „Bahnhof Detmold“, „Detmold Hbf“, „Busbahnhof Herford“
+  const kvs = ortSchluessel(kv, ctx), kns = ortSchluessel(kn, ctx), kus = ku ? ortSchluessel(ku, ctx) : [];
   // in Bielefeld heißen Haltestellen im Fahrplan „Bielefeld, Jahnplatz“: auch ohne den Stadtnamen davor finden
-  const trifft = (name, k, d) => { for (const roh of [name, d ? fpName(name, d) : name]) { const n = wort(roh); if (n.startsWith(k) && !/[a-zäöü]/.test(n.charAt(k.length) || ' ')) return true; } return false; };
+  const trifft = (name, ks, d) => { for (const roh of [name, d ? fpName(name, d) : name]) { const n = wort(roh); for (const k of ks) if (n.startsWith(k) && !/[a-zäöü]/.test(n.charAt(k.length) || ' ')) return true; } return false; };
   if (kv.length < 3 || kn.length < 3) return { fehler: 'Start und Ziel fehlen. Frag kurz, von wo nach wo.' };
   rtWanted = Date.now(); rtTick();
   if (rtRun) await Promise.race([rtRun.catch(() => {}), new Promise((r) => setTimeout(r, 4000))]);   // beim ersten Mal die Echtzeit kurz abwarten
@@ -3627,7 +3642,7 @@ async function fahrtPruefen(a, ctx) {
   for (const id of Object.keys(fahrplaene)) {
     const d = fpData(id); if (!d) continue;
     const iv = new Set(), iz = new Set(), iu = new Set();
-    d.stops.forEach((st, i) => { if (trifft(st[1], kv, d)) iv.add(i); if (trifft(st[1], kn, d)) iz.add(i); if (ku && trifft(st[1], ku, d)) iu.add(i); });
+    d.stops.forEach((st, i) => { if (trifft(st[1], kvs, d)) iv.add(i); if (trifft(st[1], kns, d)) iz.add(i); if (ku && trifft(st[1], kus, d)) iu.add(i); });
     if (iv.size) { startGefunden = true; iv.forEach((i) => halte.add(String(d.stops[i][1]))); }
     if (iz.size) zielGefunden = true;
     if (iu.size) viaGefunden = true;
@@ -4380,6 +4395,69 @@ if (cli === 'fahrt-pruefen') {
   if (!von || !nach) { console.error('Aufruf: node flowtown-server.mjs fahrt-pruefen Detmold Osnabrück [zug|nahverkehr|fernverkehr|bus|alle] [HH:MM] [über-Ort]'); process.exit(1); }
   loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
   console.log(JSON.stringify(await fahrtPruefen({ von, nach, art, ab, ueber }, {}), null, 1));
+  process.exit(0);
+}
+// Testreihe: viele Fragen und Folgefragen aus einer Datei (server/testreihe.txt). Gespräche stehen durch Leerzeilen getrennt, „# Titel“ benennt sie
+// („# Titel [verbindung]“ lässt den Offline-Test mit einer Verbindung als Gesprächsstand laufen). Hinter einer Frage steht optional „=> Werkzeug“ (erwartet) oder „=> -“ (kein Vorabaufruf).
+function testreiheLesen(datei) {
+  const text = fs.readFileSync(datei || path.join(path.dirname(new URL(import.meta.url).pathname), 'testreihe.txt'), 'utf8');
+  const gespraeche = []; let g = null;
+  for (const roh of text.split(/\r?\n/)) {
+    const zeile = roh.trim();
+    if (!zeile) { g = null; continue; }
+    if (zeile.startsWith('##')) continue;   // Kommentar
+    if (zeile.startsWith('#')) { g = { titel: zeile.replace(/^#\s*/, ''), fragen: [] }; gespraeche.push(g); continue; }
+    if (!g) { g = { titel: 'Gespräch ' + (gespraeche.length + 1), fragen: [] }; gespraeche.push(g); }
+    const [frage, erw] = zeile.split(/\s*=>\s*/);
+    g.fragen.push({ frage, erwartet: erw ? erw.trim() : '' });
+  }
+  return gespraeche;
+}
+if (cli === 'folge-test') {
+  // Ohne KI und ohne Netz: Was ruft der Server bei einer Folgefrage vorab auf? Aufruf: folge-test [Datei]
+  const gs = testreiheLesen(process.argv[3]); let n = 0, ok = 0, abw = 0;
+  for (const g of gs) {
+    const z = { typ: /\[verbindung\]/i.test(g.titel) ? 'verbindung' : 'fahrt', von: { name: 'Detmold' }, nach: { name: 'Herford' } };
+    console.log('\n# ' + g.titel);
+    g.fragen.forEach((q, i) => {
+      if (i === 0) { console.log('  ' + q.frage + '\n     (erste Frage: die KI entscheidet)'); return; }
+      const r = folgeAufruf(q.frage, z), ist = r ? r.name : '-';
+      const args = r ? Object.entries(r.args).map(([k, v]) => k + '=' + v).join(' ') : '';
+      n++;
+      let bew = '';
+      if (q.erwartet) { const soll = q.erwartet.split(/\s+/)[0]; if (soll === ist) ok++; else { abw++; bew = '   ✗ erwartet ' + q.erwartet; } }
+      console.log('  ' + q.frage + '\n     → ' + ist + (args ? ' ' + args : '') + bew);
+    });
+  }
+  console.log(`\n${n} Folgefragen, ${ok} wie erwartet, ${abw} abweichend.`);
+  process.exit(abw ? 1 : 0);
+}
+if (cli === 'assist-testreihe') {
+  // Alle Gespräche aus der Datei durch die echte Assistenz (Mistral, Quellenprüfung, Werkzeuge). Aufruf: assist-testreihe [Datei] [Nummern, z. B. 1,4,7]
+  const gs = testreiheLesen(process.argv[3] && !/^[\d,]+$/.test(process.argv[3]) ? process.argv[3] : undefined);
+  const nur = (process.argv.slice(3).find((x) => /^[\d,]+$/.test(x)) || '').split(',').filter(Boolean).map(Number);
+  loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
+  const sum = { fragen: 0, ohneWerkzeug: 0, quellenpruefung: 0, absagen: 0, fehler: 0, abweichung: 0 };
+  for (let gi = 0; gi < gs.length; gi++) {
+    if (nur.length && !nur.includes(gi + 1)) continue;
+    const g = gs[gi]; let zustand = null; const verlauf = [];
+    console.log(`\n=== ${gi + 1}. ${g.titel} ===`);
+    for (const q of g.fragen) {
+      sum.fragen++;
+      try {
+        const r = await assist({ frage: q.frage, kontext: { zustand }, verlauf: verlauf.slice(-6) });
+        if (r.zustand !== undefined) zustand = r.zustand;
+        verlauf.push({ role: 'user', content: q.frage }, { role: 'assistant', content: r.antwort });
+        const w = r.werkzeuge || [], marken = [];
+        if (!w.length) { sum.ohneWerkzeug++; marken.push('keine Werkzeuge'); }
+        if (w.includes('quellenpruefung')) { sum.quellenpruefung++; marken.push('Quellenprüfung eingegriffen'); }
+        if (/keine Angabe aus einer sicheren Quelle|nicht prüfbar|kenne ich (nicht|im Fahrplan nicht)|finde ich keine Fahrt/i.test(r.antwort)) { sum.absagen++; marken.push('Absage'); }
+        if (q.erwartet && q.erwartet !== '-' && !w.includes(q.erwartet.split(/\s+/)[0])) { sum.abweichung++; marken.push('erwartet ' + q.erwartet); }
+        console.log('\nDu:  ' + q.frage + '\nBot: ' + r.antwort + '\n     (' + (w.join(', ') || 'keine Werkzeuge') + (zustand ? '; merkt sich ' + zustand.typ + ' ' + zustand.von.name + ' → ' + zustand.nach.name : '') + ')' + (marken.length ? '   ⚠ ' + marken.join(', ') : ''));
+      } catch (e) { sum.fehler++; console.log('\nDu:  ' + q.frage + '\n     ⚠ Fehler: ' + e.message); }
+    }
+  }
+  console.log(`\nZusammenfassung: ${sum.fragen} Fragen · ohne Werkzeug ${sum.ohneWerkzeug} · Quellenprüfung eingegriffen ${sum.quellenpruefung} · Absagen ${sum.absagen} · Fehler ${sum.fehler} · weicht von der Erwartung ab ${sum.abweichung}`);
   process.exit(0);
 }
 if (cli === 'assist-gespraech') {
