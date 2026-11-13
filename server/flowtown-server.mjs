@@ -3856,6 +3856,17 @@ if (cli === 'echtzeit-leg') {
   if (rtRun) await rtRun.catch(() => {});
   console.log('Fahrplan-Auszüge:', Object.keys(fahrplaene).join(', ') || 'keine', '(die Haltestelle wird in allen gesucht, Umkreis 150 m)');
   console.log('Echtzeit frisch:', rtFresh(), rtErr ? '(Fehler: ' + rtErr + ')' : '');
+  // was der Fahrplan an dieser Stelle hergibt: Haltestellen im Umkreis und ihre Abfahrten in den nächsten 3 Stunden mit Echtzeit
+  let gefunden = false;
+  for (const id of Object.keys(fahrplaene)) {
+    const dd = fpData(id); if (!dd) continue;
+    const nm = new Set(); for (const st of dd.stops) if (mAbs([Number(lat), Number(lon)], [st[2], st[3]]) <= 150) nm.add(fpName(st[1], dd));
+    if (!nm.size) continue;
+    gefunden = true; console.log(`Haltestellen im Umkreis (Auszug ${id}):`, [...nm].join(' | '));
+    for (const n of nm) { const ab = serverDepartures(n, null, dd, 180, 25); console.log(`  ${n}: ${ab.length} Abfahrten in 3 Stunden`); ab.forEach((x) => console.log(`    ${x.uhr}  ${x.linie}  nach ${x.richtung}  ${x.faellt_aus ? 'FÄLLT AUS' : x.verspaetung_min == null ? '(keine Echtzeit)' : '+' + x.verspaetung_min + ' min'}`)); }
+    break;
+  }
+  if (!gefunden) console.log('In keinem Fahrplan-Auszug gibt es eine Haltestelle im Umkreis von 150 m.');
   console.log('Ergebnis:', JSON.stringify(rtLeg({ vonPos: [Number(lat), Number(lon)], linie, ab }) || null), '(null = keine eindeutige Zuordnung)');
   process.exit(0);
 }
