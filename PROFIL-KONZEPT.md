@@ -39,6 +39,15 @@ Ein dauerhaftes Profil aus drei Teilen, das sich auf zwei Wegen füllt: von Hand
 
 Der Dummy zeigt den Zusammenhang: Wer beim Lernmoment „Öffis ergänzen“ bestätigt, sieht die Empfehlung auf Heute sofort von Auto auf Bahn wechseln.
 
+## Quelle und Alter bei jeder Empfehlung
+
+Entscheidung 13.11.2026: **Jede Empfehlung nennt ihre Quelle und wie alt die Angabe ist.** Im Dummy umgesetzt (Rundgang Schritte 6 und 7).
+
+- **Immer sichtbar:** unter „Dein Weg jetzt“, in „Dein Weg heute“ und in der Antwort auf „Wie ist mein Weg heute?“ steht zum Beispiel: „Quelle: Verkehrslage (HERE), Meldungen von moBiel · Stand 07:05 Uhr, vor 8 Minuten“. Im Dummy zusätzlich „Beispielwerte“.
+- **Zu alt:** Ist der Stand älter als **30 Minuten**, gibt Flowtown **keine Empfehlung** mehr. Die Karte sagt: „Keine Empfehlung: Die Angaben sind zu alt.“, die Zeile zeigt „–“ statt Minuten, und „Neu laden“ ist als Knopf da. Auch die Antwort im Assistenten nennt das und verweist auf die Bahn-App.
+- **Grund:** Lieber keine Empfehlung als eine falsche. Das passt zum Grundsatz von FAKTEN.md (Quelle, Datum, Frischeklasse).
+- **Offen:** Die 30 Minuten sind ein **Vorschlag**. Für Verkehrslage (ändert sich schnell) sind sie plausibel, für Fahrplan und Aufzugsstatus braucht es andere Grenzen (siehe Frischeklassen A bis D). In der App muss die Grenze je Quelle festgelegt werden.
+
 ## Mein Profil (unter Einstellungen)
 
 Alle Einträge sind als **„von dir“** oder **„gelernt aus deinen Fahrten“** gekennzeichnet.
