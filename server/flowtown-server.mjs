@@ -2503,6 +2503,33 @@ function serverDepartures(name, kind, d, span, lim) {
   }
   return out.sort((a, b) => a.in_min - b.in_min).slice(0, lim || 6);
 }
+// Echtzeit (DELFI) für die erste Fahrt einer Verbindung von HERE. Nur wenn Linie (gleiche Schreibweise ohne Leerzeichen) und
+// geplante Abfahrtszeit (± 2 Minuten) an einer Haltestelle des Fahrplans im Umkreis von 150 m zu genau einer Fahrt passen;
+// sonst null (lieber keine Angabe als eine falsche). Liefert { quelle, verspaetung_min } oder { quelle, faellt_aus }.
+function rtLeg(t) {
+  if (!t || !Array.isArray(t.vonPos) || !t.linie || !t.ab) return null;
+  // in welchem Fahrplan-Auszug liegt die Haltestelle? Auch Züge nach Detmold stehen im Auszug von Bielefeld, obwohl Detmold außerhalb von dessen Stadtrahmen liegt
+  let d = null; const names = new Set();
+  for (const id of Object.keys(fahrplaene)) {
+    const dd = fpData(id); if (!dd) continue;
+    for (const st of dd.stops) if (mAbs(t.vonPos, [st[2], st[3]]) <= 150) names.add(fpName(st[1], dd));
+    if (names.size) { d = dd; break; }
+  }
+  if (!d) return null;
+  const f = Object.fromEntries(new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Berlin', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(Date.parse(t.ab))).map((x) => [x.type, x.value]));
+  const abMin = Number(f.hour) * 60 + Number(f.minute), { min } = berlinNow();
+  const span = Math.max(10, abMin - min + 10), lin = (x) => String(x || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const plus = Number(t.plus) || 0, hit = [];
+  for (const nm of names) {
+    for (const x of serverDepartures(nm, null, d, span, 200)) {
+      const um = Number(x.uhr.slice(0, 2)) * 60 + Number(x.uhr.slice(3));
+      if (lin(x.linie) === lin(t.linie) && (Math.abs(um - abMin) <= 2 || (plus && Math.abs(um - (abMin - plus)) <= 2))) hit.push(x);
+    }
+  }
+  const sig = (x) => (x.faellt_aus ? 'aus' : x.verspaetung_min == null ? '?' : String(x.verspaetung_min));
+  if (!hit.length || new Set(hit.map(sig)).size !== 1 || sig(hit[0]) === '?') return null;
+  return hit[0].faellt_aus ? { quelle: 'DELFI', faellt_aus: true } : { quelle: 'DELFI', verspaetung_min: hit[0].verspaetung_min };
+}
 // ---------- Weg-Check auf dem Server, wie in der App: Stufen, Belag, Steigung, Bordsteine, Gleise, Ampeln mit Tonsignal ----------
 // Grundlage sind dieselben Kacheln aus OpenStreetMap wie für die App (fussnetz). Fehlt eine Kachel, wird sie geholt; dauert das
 // zu lange, antwortet der Check mit dem, was da ist, und sagt es.
@@ -2671,6 +2698,16 @@ async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
     if (c) {
       const fahrt = c.teile.filter((x) => x.art !== 'fuss');
       const o = { verkehrsmittel: 'oepnv', ab: uhr(Date.parse(c.ab)), an: uhr(Date.parse(c.an)), ankunft: Date.parse(c.an), dauer_min: Math.round((Date.parse(c.an) - now) / 60000), umstiege: c.umstiege, linien: fahrt.map((x) => x.linie + (x.von ? ' ab ' + x.von : '')).slice(0, 3), geeignet: true };
+      // Echtzeit der ersten Fahrt: DELFI, wenn eindeutig zuzuordnen, sonst die Angabe von HERE (nur gezeigt, nicht eingerechnet, weil unklar ist, ob die Zeiten sie schon enthalten)
+      rtWanted = Date.now(); rtTick();
+      if (rtRun) await Promise.race([rtRun.catch(() => {}), new Promise((r) => setTimeout(r, 5000))]);
+      const rl = (() => { try { return rtLeg(fahrt[0]); } catch (e) { return null; } })();
+      if (rl && rl.faellt_aus) { o.echtzeit = rl; o.geeignet = false; }
+      else if (rl) {
+        o.echtzeit = Object.assign({}, rl);
+        // nur bei durchgehender Fahrt und wenn HERE keine eigene Verspätung nennt (sonst doppelt gezählt)
+        if (rl.verspaetung_min > 0 && !fahrt[0].plus && c.umstiege === 0) { o.ankunft += rl.verspaetung_min * 60000; o.dauer_min += rl.verspaetung_min; o.an = uhr(o.ankunft); o.echtzeit.eingerechnet = true; }
+      } else if (fahrt[0] && fahrt[0].plus) o.echtzeit = { quelle: 'HERE', verspaetung_min: fahrt[0].plus };
       // Strecke für die Schätzung: wie mit dem Auto, sonst wie zu Fuß
       const km = ra.status === 'fulfilled' ? ra.value.km : rf.status === 'fulfilled' ? rf.value.km : 0;
       o.co2_g = Math.round(km * (fahrt.some((x) => x.art === 'bus') ? CO2_G.bus : CO2_G.bahn));
@@ -2701,6 +2738,7 @@ async function vergleichZiel(from, to, typ, vorrang, zuFuss) {
   if (spart) grund += `; spart etwa ${kgText(spart)} CO₂ gegenüber dem Auto`;
   if (best.verkehrsmittel === 'auto') { const eco = pool.filter((o) => o.verkehrsmittel !== 'auto').sort((a, b) => a.ankunft - b.ankunft)[0]; if (eco) grund += `; ${NAME[eco.verkehrsmittel]} wärst du ${Math.round((eco.ankunft - best.ankunft) / 60000)} min länger unterwegs`; }
   if (best.verkehrsmittel === 'oepnv' && best.stufenlos) grund += `; stufenlos: ${best.stufenlos}`;
+  if (best.verkehrsmittel === 'oepnv' && best.echtzeit && best.echtzeit.verspaetung_min >= 3) grund += `; mit ${best.echtzeit.verspaetung_min} min Verspätung laut Echtzeit${best.echtzeit.eingerechnet ? ' (eingerechnet)' : ' (in der Ankunft nicht eingerechnet)'}`;
   if (best.verkehrsmittel === 'auto' && best.verzoegerung_min >= 5) grund += `; trotz ${best.verzoegerung_min} min Stau`;
   if (typ && opt.some((o) => !o.geeignet)) grund += `; nicht empfohlen für dein Profil: ${opt.filter((o) => !o.geeignet).map((o) => NAME[o.verkehrsmittel]).join(', ')}`;
   return { jetzt: uhr(now), profil: typ || 'kein Profil', vorrang: vorrang === 'schnell' ? 'schnell ankommen' : 'umweltfreundlich, wenn kaum langsamer',
@@ -3808,6 +3846,17 @@ if (cli === 'redaktion-code') {
   if (!R_ROLLEN.includes(rolle) || !name) { console.error('Aufruf: node flowtown-server.mjs redaktion-code <redaktion|mitwirkend> <Name>'); process.exit(1); }
   console.log(`${rNeuerCode(rolle, name)}   (${rolle}, ${name})`);
   console.log('Den Code nur der Person geben. Der Server speichert nur einen Hash. Danach: sudo chown -R flowtown: /var/lib/flowtown');
+  process.exit(0);
+}
+if (cli === 'echtzeit-leg') {
+  // Prüft, ob die Echtzeit zu einer Fahrt von HERE passt. Aufruf: echtzeit-leg "<Linie>" <Breite> <Länge> <Abfahrt als Datum mit Uhrzeit, z. B. 2026-11-13T07:12:00+01:00>
+  const [, , , linie, lat, lon, ab] = process.argv;
+  if (!linie || !isFinite(lat) || !isFinite(lon) || !ab || isNaN(Date.parse(ab))) { console.error('Aufruf: node flowtown-server.mjs echtzeit-leg "RE 82" 51.9387 8.8742 2026-11-13T07:12:00+01:00'); process.exit(1); }
+  loadFahrplan(); rtWanted = Date.now(); rtTick();
+  if (rtRun) await rtRun.catch(() => {});
+  console.log('Fahrplan-Auszüge:', Object.keys(fahrplaene).join(', ') || 'keine', '(die Haltestelle wird in allen gesucht, Umkreis 150 m)');
+  console.log('Echtzeit frisch:', rtFresh(), rtErr ? '(Fehler: ' + rtErr + ')' : '');
+  console.log('Ergebnis:', JSON.stringify(rtLeg({ vonPos: [Number(lat), Number(lon)], linie, ab }) || null), '(null = keine eindeutige Zuordnung)');
   process.exit(0);
 }
 if (cli === 'redaktion-satz') {

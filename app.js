@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.105.0';
+  const VERSION = '0.106.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6594,7 +6594,7 @@
       const vm = nowVm(o), best = !!d.empfehlung && d.empfehlung.verkehrsmittel === vm && (d.optionen || []).filter((x) => NOW_NAME[nowVm(x)]).length > 1;
       const det = [];
       if (vm === 'auto') { if (o.verzoegerung_min >= 2) det.push(`+${o.verzoegerung_min} min durch Verkehr`); if (o.parken) det.push('mit etwa 5 min Parken (geschätzt)'); }
-      if (vm === 'oepnv') { det.push(`ab ${o.ab}`); det.push(o.umstiege ? `${o.umstiege} Umstieg${o.umstiege === 1 ? '' : 'e'}` : 'ohne Umstieg'); if (o.linien && o.linien.length) det.push(o.linien.join(', ')); det.push('nach Fahrplan'); }
+      if (vm === 'oepnv') { det.push(`ab ${o.ab}`); det.push(o.umstiege ? `${o.umstiege} Umstieg${o.umstiege === 1 ? '' : 'e'}` : 'ohne Umstieg'); if (o.linien && o.linien.length) det.push(o.linien.join(', ')); const ez = o.echtzeit; det.push(!ez ? 'nach Fahrplan, Verspätungen nicht bekannt' : ez.faellt_aus ? 'fällt laut Echtzeit aus' : ez.verspaetung_min > 0 ? `${ez.verspaetung_min} min Verspätung laut Echtzeit (${ez.quelle})${ez.eingerechnet ? ', in der Ankunft eingerechnet' : ', in der Ankunft nicht eingerechnet'}` : `laut Echtzeit pünktlich (${ez.quelle})`); }
       if ((vm === 'rad' || vm === 'fuss') && o.km) det.push(`${String(o.km).replace('.', ',')} km`);
       if (o.geeignet === false) det.push('für dein Profil nicht empfohlen');
       return { vm, best, name: NOW_NAME[vm], min: o.dauer_min, an: o.ankunft, det, meld: vm === 'auto' ? (o.meldungen || []) : [] };
@@ -6603,7 +6603,7 @@
   function nowSummary(w, res) {
     const d = res.data, rows = nowRows(d), e = d.empfehlung;
     const rec = rows.length > 1 && e ? `Am besten ${GROUP_WITH[e.verkehrsmittel] || ''}: ${String(e.grund).replace(/;/g, ',')}.` : 'Es konnte nur eine Möglichkeit berechnet werden, deshalb gibt es keine Empfehlung.';
-    return `Dein Weg ${w.von.name} nach ${w.nach.name}. ${rec} ${rows.map((r) => `${r.name}: ${r.min} Minuten, Ankunft gegen ${r.an}${r.det.length ? ', ' + r.det.join(', ') : ''}.`).join(' ')} ${nowStamp(res)}. Bus und Bahn nach Fahrplan, Verspätungen sind nicht eingerechnet.`;
+    return `Dein Weg ${w.von.name} nach ${w.nach.name}. ${rec} ${rows.map((r) => `${r.name}: ${r.min} Minuten, Ankunft gegen ${r.an}${r.det.length ? ', ' + r.det.join(', ') : ''}.`).join(' ')} ${nowStamp(res)}. Bus und Bahn nach Fahrplan von HERE; Echtzeit nur, wo sie genannt ist.`;
   }
   function renderNow() {
     const el = $('#nowcard'); if (!el) return;
@@ -6628,7 +6628,7 @@
         + (rows.length ? `<ul class="lw-list">${rows.map((r) => `<li><span class="dot${r.best ? ' best' : ''}" aria-hidden="true"></span><span class="lw-name"><b>${esc(r.name)}${r.best ? ' (empfohlen)' : ''}</b> · ${esc(String(r.min))} min, Ankunft ${esc(r.an)}${r.det.length ? `<small class="muted"> ${esc(r.det.join(' · '))}</small>` : ''}</span></li>`).join('')}</ul>` : '')
         + (meld.length ? `<p class="small"><b>Auf der Strecke mit dem Auto:</b> ${meld.map(esc).join('; ')}</p>` : '')
         + (!rows.some((r) => r.vm === 'oepnv') ? '<p class="small muted">Für Bus und Bahn wurde keine Verbindung gefunden.</p>' : '')
-        + `<p class="small muted lg-src">Quelle: Strecke und Verkehrslage von HERE (dort auch Fahrplan für Bus und Bahn, Verspätungen nicht eingerechnet), Meldungen der Autobahn GmbH, von Straßen.NRW und der Stadt · ${nowStamp(res)}</p>`;
+        + `<p class="small muted lg-src">Quelle: Strecke und Verkehrslage von HERE, Meldungen der Autobahn GmbH, von Straßen.NRW und der Stadt. Bus und Bahn: Fahrplan von HERE, Echtzeit von DELFI nur für die erste Fahrt und nur, wenn sie sicher zuzuordnen ist · ${nowStamp(res)}</p>`;
       btn = 'Neu prüfen';
     } else body = `<p class="small">${esc(w.von.name)} → ${esc(w.nach.name)}, ${esc(w.freq)}. Tippe, dann vergleicht Flowtown Auto, Bus und Bahn, Rad und zu Fuß für diesen Weg.</p>`;
     el.className = 'lw nowcard ' + state;
