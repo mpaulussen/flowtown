@@ -64,6 +64,70 @@ Im Dummy umgesetzt (Rundgang Schritt 8, in „Mein Profil“ die Karte „Ansage
 - **Nicht mit Screenreadern und nicht mit Betroffenen getestet.** Der Dummy zeigt nur Text und nutzt die Sprachausgabe des Browsers.
 - Die 30-Minuten-Regel (siehe oben) gilt auch hier. Die Meldung um 7:00 ist nur so gut wie der Stand der Daten um diese Zeit.
 
+## Wie echte Daten in „Dein Weg jetzt“ einfließen
+
+Stand 13.11.2026, nach Durchsicht von `server/flowtown-server.mjs`, `server/README.md` und `app.js`. Geprüft ist der Code, nicht der laufende Server. Alle Zahlen im Dummy sind Beispiele.
+
+### Bausteine: was es schon gibt, was fehlt
+
+| Baustein im Dummy | Echte Quelle | Bielefeld | Detmold → Bielefeld | Bielefeld ↔ Mönchengladbach |
+| --- | --- | --- | --- | --- |
+| **Stau, Störung, Baustelle auf dem Weg (Auto)** | `/api/lage`: HERE, Autobahn GmbH (A2, A33, A44), Straßen.NRW, Baustellen der Stadt. Die App prüft auf dem Handy, was den eigenen Weg betrifft. | **Da.** | **Teilweise.** Das Gebiet der Lage ist ein Rahmen um Bielefeld (8,38 bis 8,70 Ost, 51,90 bis 52,12 Nord). Nach meiner Kenntnis der Koordinaten liegt Detmold östlich davon. Das Gebiet müsste nach Osten wachsen. | **Fehlt** außer der A2 im Rahmen. Der Rest der Strecke geht nur über die Streckenabfrage (nächste Zeile). |
+| **Zeit mit dem Auto im Stau** | `/api/ziel` und `/api/vergleich`: Strecke von HERE mit Störungen auf genau dieser Strecke. Braucht den HERE-Schlüssel, hat ein Tageslimit je Gerät. | **Da.** | **Da.** | **Da.** Die Testfahrt Bielefeld – Mönchengladbach (TODO F1) hat die Stauvorhersage auf der A2 richtig getroffen. |
+| **Bahn pünktlich? Zeit mit der Bahn** | Fahrplan von DELFI und Echtzeit (GTFS-RT, Mobilithek), nur für Fahrten in den Fahrplan-Auszügen. Verbindungen sonst über HERE Transit. | **Da** (moBiel und Züge mit Halt in Bielefeld). | **Wahrscheinlich.** Es gibt keinen Auszug für Detmold. Die Züge Detmold – Bielefeld stehen vermutlich im Bielefelder Auszug („Züge mit Halten in Ostwestfalen“). **Nicht geprüft**, Befehl unten. | **Teilweise.** Es gibt Auszüge für beide Städte, die Fahrten dazwischen sind nicht durchgehend drin. Ob HERE Transit Verspätungen kennt, ist **nicht geprüft**. |
+| **Meldungen von moBiel** | `/api/oepnv` liest die öffentliche Seite von moBiel. | **Da.** | Nur für den Teil in Bielefeld. | **Nein**, in Mönchengladbach fährt ein anderer Betreiber. Eine Quelle dafür ist nicht angebunden. |
+| **Zeile zum Bedarf** (Aufzug, Bank, Ampel mit Ton) | Aufzugsstatus der DB (SIRI FM, Mobilithek), Fakten aus der Redaktions-App, OpenStreetMap | **Teilweise.** DB-Bahnhöfe live, moBiel-Aufzüge offen (E2), Redaktionsfakten erst nach der ersten Erfassungsrunde. | OpenStreetMap, sonst nichts. | OpenStreetMap, sonst nichts. |
+| **Der Weg selbst** | Ortssuche `/api/ort` (HERE). Wiederkehrende Wege erkennt die App schon aus den Fahrten (`findRoutes`). | **Da.** | **Da.** | **Da.** |
+| **Quelle und Alter** | `/api/lage` liefert für jede Quelle den Stand. Quellen älter als 30 Minuten (Baustellen der Stadt: 6 Stunden) lässt der Server schon heute weg. | **Da.** | **Da.** | **Da.** |
+| **Morgenmeldung** | Push vom Server | **Fehlt** (neu zu bauen). | **Fehlt.** | Nicht vorgesehen, der Weg ist selten. |
+
+**Folgerungen**
+- Die 30-Minuten-Regel entspricht dem, was der Server heute schon tut. Sie lässt sich in der App ohne neue Daten umsetzen.
+- Die Quellenzeile darf nur Quellen nennen, die wirklich zum Weg beigetragen haben. „Meldungen von moBiel“ auf einem Weg nach Detmold oder Mönchengladbach wäre falsch. Im Dummy steht sie noch für alle Wege. Das muss in der App aus den echten Quellen der Antwort gebildet werden.
+- Die Empfehlung „Bahn statt Auto“ hat im Dummy feste Texte. Echt entsteht sie aus dem Vergleich Auto (HERE mit Verkehr) gegen Bahn (Fahrplan plus Echtzeit). Wo einer der beiden Werte fehlt, gibt es **keine Empfehlung**, nur die vorhandenen Angaben und den Hinweis, was fehlt.
+
+### Datenschutz-Zielkonflikt
+
+Die Lage für das Gebiet ist für alle gleich, das Handy filtert selbst: Der Server erfährt keinen Weg. Die Streckenabfrage (Zeit im Stau, Verbindung) verrät dem Server Start und Ziel, gerundet auf etwa 1 km. Das ist heute schon so und in der Datenschutzerklärung beschrieben, wenn jemand ein Ziel prüft.
+
+Vorschlag:
+- **Detmold → Bielefeld (täglich):** Gebiet der Lage nach Osten erweitern, dann bleibt alles auf dem Handy. Auch die Morgenmeldung kann das: Der Server weckt das Handy zur Uhrzeit, das Handy holt die Lage und prüft selbst.
+- **Bielefeld ↔ Mönchengladbach (selten):** nur auf Wunsch („Weg jetzt prüfen“) über die Streckenabfrage, mit dem Hinweis, dass der Server Start und Ziel auf etwa 1 km sieht. Keine Morgenmeldung dafür.
+
+### Was zu entscheiden ist
+
+1. **Gebiet der Lage erweitern?** Der Aufwand bei HERE wächst mit der Fläche. Wie viel das kostet oder ob das Kontingent reicht, hängt vom HERE-Vertrag ab, den ich nicht kenne.
+2. **Streckenabfrage auf Wunsch für Wege außerhalb:** einverstanden mit „Start und Ziel auf etwa 1 km sichtbar“?
+
+### Reihenfolge für die App (M8a)
+
+1. Wege speichern (Ortssuche oder aus Fahrten), nur auf dem Handy.
+2. „Dein Weg jetzt“ für Wege im Gebiet der Lage: Meldungen aus `/api/lage`, Quelle und Alter aus der Antwort, 30-Minuten-Regel.
+3. Gebiet der Lage erweitern (Detmold), falls entschieden.
+4. Vergleich Auto gegen Bahn über die vorhandenen Abfragen, ohne Empfehlung bei fehlenden Werten.
+5. Wege außerhalb auf Wunsch über die Streckenabfrage.
+6. Vorlesen beim Öffnen (nur App, keine neue Datenquelle nötig).
+7. Morgenmeldung (braucht Push am Server und die Datenschutzerklärung).
+
+### Zwei Prüfungen auf dem Server (noch offen)
+
+Ob die Züge nach Detmold im Bielefelder Auszug stehen und ob der Auszug für Mönchengladbach Bielefeld kennt:
+
+```bash
+grep -o 'Detmold[^"]*' /var/lib/flowtown/fahrplan.json | sort -u | head
+grep -o 'Bielefeld[^"]*' /var/lib/flowtown/fahrplan-moenchengladbach.json | sort -u | head
+```
+
+Kommt nichts, fehlt der Halt im Auszug. Dann wäre ein Eintrag „Detmold“ in `STADT_FP` nötig (Stadtrahmen und Regionsrahmen), wie für Paderborn.
+
+### Was ich nicht geprüft habe
+
+- die Lage der Koordinaten von Detmold gegenüber dem Rahmen (aus dem Gedächtnis),
+- Kosten und Limits des HERE-Vertrags,
+- ob GTFS-RT Verspätungen für alle Züge nach Detmold liefert,
+- ob HERE Transit Echtzeit kennt,
+- wer in Mönchengladbach Meldungen zu Bus und Bahn veröffentlicht und ob es eine offene Schnittstelle gibt.
+
 ## Mein Profil (unter Einstellungen)
 
 Alle Einträge sind als **„von dir“** oder **„gelernt aus deinen Fahrten“** gekennzeichnet.
@@ -84,7 +148,7 @@ Alle Einträge sind als **„von dir“** oder **„gelernt aus deinen Fahrten�
 ## Was noch offen ist
 
 1. **Datenschutz:** Lernen geschieht auf dem Gerät, nichts davon geht an den Server. Die Datenschutzerklärung muss das beschreiben, ebenso die gesicherte Profildatei.
-2. **Echte Meldungen:** Die Meldung zum eigenen Weg (Stau, Störung) braucht Verkehrslage und moBiel-Meldungen für die gespeicherte Strecke. Die Lage für Bielefeld gibt es, Strecken außerhalb (Detmold, Mönchengladbach) nur teilweise.
-3. **Empfehlung „Bahn statt Auto“:** Vergleichen der echten Zeiten braucht den Fahrplan der Verbindung und die Verkehrslage. Im Dummy sind es Beispielwerte.
+2. **Echte Meldungen:** Geklärt im Abschnitt „Wie echte Daten in ‚Dein Weg jetzt‘ einfließen“: Lage für Bielefeld da, Detmold nur nach Erweiterung des Gebiets, Mönchengladbach auf Wunsch über die Streckenabfrage. Zu entscheiden sind das Gebiet und die Sichtbarkeit von Start und Ziel.
+3. **Empfehlung „Bahn statt Auto“:** Der Vergleich ist mit den vorhandenen Abfragen möglich (Auto mit Verkehr, Bahn mit Fahrplan und Echtzeit), aber nur, wo beide Werte vorliegen. Sonst keine Empfehlung. Im Dummy sind es Beispielwerte.
 4. **Mehrere Bedarfe:** Kombinationen sind möglich. Die Beispielfrage und die Zeile zum Bedarf nehmen den ersten gewählten.
 5. **Wie viele Fahrten für den ersten Vorschlag?** Drei, wie entschieden. Wie lange zurück gezählt wird (6 Wochen im Dummy), ist noch offen.
