@@ -3455,10 +3455,16 @@ function quellenPruefung(antwort, messages, used) {
   return null;
 }
 const Q_ERSATZ = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es auf bahn.de, mobiel.de oder in der Bahn-App.';
+// Zeiten aus fahrt_pruefen ohne Echtzeit stehen laut Fahrplan: Das sagt der Server selbst dazu, falls die Antwort es nicht tut
+function mitFahrplanHinweis(antwort, messages) {
+  const fp = messages.filter((m) => m.role === 'tool' && m.name === 'fahrt_pruefen').pop();
+  if (!fp || !/Fahrten gefunden/.test(fp.content) || /"verspaetung_min":|"faellt_aus":/.test(fp.content) || /fahrplan|echtzeit/i.test(antwort)) return antwort;
+  return antwort.replace(/\s+$/, '') + ' Das gilt laut Fahrplan, Verspätungen kenne ich dafür nicht.';
+}
 // prüft die Antwort der KI; einmal korrigieren lassen, sonst die sichere Ersatzantwort
 async function absichern(antwort, messages, used) {
   const grund = quellenPruefung(antwort, messages, used);
-  if (!grund) return antwort;
+  if (!grund) return mitFahrplanHinweis(antwort, messages);
   console.error(new Date().toISOString(), 'Quellenprüfung:', grund);
   used.push('quellenpruefung');
   try {
@@ -3466,7 +3472,7 @@ async function absichern(antwort, messages, used) {
     messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“` });
     const m = await mistralChat(messages, true);
     const a2 = sauber(m.content);
-    if (a2 && !quellenPruefung(a2, messages, used)) return a2;
+    if (a2 && !quellenPruefung(a2, messages, used)) return mitFahrplanHinweis(a2, messages);
   } catch (e) { /* dann die Ersatzantwort */ }
   return Q_ERSATZ;
 }
