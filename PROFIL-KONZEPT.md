@@ -104,7 +104,7 @@ Die Lage für das Gebiet ist für alle gleich, das Handy filtert selbst: Der Ser
 
 ### Reihenfolge für die App (M8a)
 
-1. Wege speichern (Ortssuche oder aus Fahrten), nur auf dem Handy.
+1. Wege speichern (Ortssuche oder aus Fahrten), nur auf dem Handy. **Ortssuche gebaut in App 0.103.0** (Einstellungen, „Meine Wege“, in der Sicherung enthalten); „aus Fahrten“ folgt mit dem Lernen.
 2. „Dein Weg jetzt“ für Wege im Gebiet der Lage: Meldungen aus `/api/lage`, Quelle und Alter aus der Antwort, 30-Minuten-Regel.
 3. Streckenabfrage für Wege außerhalb des Gebiets (Detmold, Mönchengladbach) auf Wunsch, mit Hinweis zu Start und Ziel. Das Gebiet der Lage bleibt vorerst Bielefeld.
 4. Vergleich Auto gegen Bahn über die vorhandenen Abfragen, ohne Empfehlung bei fehlenden Werten.

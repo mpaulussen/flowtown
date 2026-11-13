@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.102.1';
+  const VERSION = '0.103.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4031,7 +4031,7 @@
   }
   const stamp = () => new Date().toISOString().slice(0, 10);
   $('#btn-export').addEventListener('click', () => {
-    download(`flowtown-${stamp()}.json`, JSON.stringify({ app: 'flowtown', version: VERSION, exported: new Date().toISOString(), names, trips }, null, 1), 'application/json');
+    download(`flowtown-${stamp()}.json`, JSON.stringify({ app: 'flowtown', version: VERSION, exported: new Date().toISOString(), names, trips, wege: wege().filter(wegOk) }, null, 1), 'application/json');
   });
   $('#btn-export-csv').addEventListener('click', () => {
     const head = ['fahrt', 'verkehrsmittel', 'demo', 'typ', 'ampel', 'name', 'lat', 'lon', 'zeit', 'wartezeit_s', 'halte', 'richtung_grad', 'bewertung', 'stichworte'];
@@ -4052,7 +4052,17 @@
       const add = data.trips.filter((t) => t && t.id && Array.isArray(t.events) && !known.has(t.id));
       trips = trips.concat(add); saveTrips();
       if (data.names) { names = Object.assign({}, data.names, names); store.set('names', names); }
-      moreMsg(`${add.length} Fahrt${add.length === 1 ? '' : 'en'} importiert.`);
+      let nw = 0;
+      if (Array.isArray(data.wege)) {
+        for (const w of data.wege) {
+          if (!wegOk(w) || wege().filter(wegOk).length >= WEGE_MAX) continue;
+          const n = { id: 'w' + Date.now().toString(36) + nw, von: { name: wegName(w.von), lat: +w.von.lat, lon: +w.von.lon }, nach: { name: wegName(w.nach), lat: +w.nach.lat, lon: +w.nach.lon }, freq: WEG_FREQ.includes(w.freq) ? w.freq : 'selten', src: 'du', u: Date.now() };
+          if (wege().filter(wegOk).some((x) => wegSame(x, n))) continue;
+          settings.wege = wege().filter(wegOk).concat(n); nw++;
+        }
+        if (nw) { store.set('settings', settings); renderWege(); }
+      }
+      moreMsg(`${add.length} Fahrt${add.length === 1 ? '' : 'en'} importiert${nw ? `, dazu ${nw} Weg${nw === 1 ? '' : 'e'}` : ''}.`);
     } catch (e) {
       moreMsg('Die Datei konnte nicht gelesen werden. Bitte wähle einen Export aus dieser App.');
     }
@@ -4227,7 +4237,7 @@
     if (name === 'tag') { renderToday(); renderLastTrip(); }
     if (name === 'kann') { const ok = !!apiBase(); document.querySelectorAll('#view-kann [data-kex]').forEach((d) => { d.hidden = !ok; }); $('#kann-note').hidden = ok; }
     if (name === 'plan') { $('#plan-off').hidden = !!apiBase(); renderToday(); }
-    if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); }
+    if (name === 'more') { updateSignalsInfo(); renderPilotCard(); renderMoreSubs(); renderWege(); }
     if (name === 'start') renderA2hs();
     const h = $('#view-' + name + ' h2');
     // Seitentitel nennt die Ansicht, damit Screenreader und App-Umschalter wissen, wo man ist
@@ -6490,6 +6500,82 @@
     }
   });
   renderGoals();
+  // ---------- Meine Wege: oft gefahrene Wege, nur auf dem Handy (0.103.0) ----------
+  const WEGE_MAX = 6, WEG_FREQ = ['täglich', 'mehrmals pro Woche', 'wöchentlich', 'alle zwei Wochen', 'selten'];
+  const wege = () => (Array.isArray(settings.wege) ? settings.wege : []);
+  const wegOk = (w) => w && w.von && w.nach && [w.von, w.nach].every((o) => typeof o.name === 'string' && isFinite(o.lat) && isFinite(o.lon));
+  let wegForm = null;   // { step: 'von' | 'nach' | 'freq', von, nach, hits, msg, q }
+  const wegName = (o) => String(o.name || '').split(',')[0].trim().slice(0, 40) || 'Ort';
+  const wegSame = (a, b) => dist(a.von, b.von) < 150 && dist(a.nach, b.nach) < 150;
+  function renderWege() {
+    const el = $('#wege-list'), f = $('#wege-form');
+    if (!el || !f) return;
+    const list = wege().filter(wegOk);
+    $('#wege-sub').textContent = list.length ? list.map((w) => `${w.von.name} → ${w.nach.name}`).join(' · ') : 'Noch keiner';
+    el.innerHTML = list.length
+      ? `<ul class="wege-ul">${list.map((w) => `<li><span><b>${esc(w.von.name)} → ${esc(w.nach.name)}</b><small>${esc(w.freq)}</small></span><button type="button" class="btn quiet" data-weg-del="${esc(w.id)}" aria-label="Weg ${esc(w.von.name)} nach ${esc(w.nach.name)} entfernen">${ic('trash')}Entfernen</button></li>`).join('')}</ul>`
+      : (wegForm ? '' : '<p class="small muted">Du hast noch keinen Weg gespeichert.</p>');
+    $('#wege-add').hidden = !!wegForm || list.length >= WEGE_MAX;
+    if (!wegForm) { f.innerHTML = list.length >= WEGE_MAX ? `<p class="small muted">Mehr als ${WEGE_MAX} Wege gehen nicht. Entferne zuerst einen.</p>` : ''; return; }
+    if (wegForm.step === 'freq') {
+      f.innerHTML = `<p><b>${esc(wegForm.von.name)} → ${esc(wegForm.nach.name)}</b></p>
+        <label class="field" for="wege-freq">Wie oft fährst du den Weg?<select id="wege-freq">${WEG_FREQ.map((x) => `<option${x === (wegForm.freq || 'täglich') ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
+        <p class="small muted" role="status">${esc(wegForm.msg || '')}</p>
+        <div class="btn-col"><button type="button" class="btn" data-weg="save">Weg speichern</button><button type="button" class="btn quiet" data-weg="cancel">Abbrechen</button></div>`;
+      return;
+    }
+    const hits = wegForm.hits || [];
+    f.innerHTML = `<form data-weg-search="1"><label class="field" for="wege-q">${wegForm.step === 'von' ? 'Von wo startest du? (Ort, Haltestelle oder Adresse)' : 'Wohin fährst du?'}<input id="wege-q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(wegForm.q || '')}"></label><button class="btn" type="submit">Suchen</button></form>
+      <p class="small muted" role="status" aria-live="polite">${esc(wegForm.msg || '')}</p>
+      ${hits.length ? `<div class="btn-col">${hits.map((o, i) => `<button type="button" class="btn quiet hit" data-weg-pick="${i}">${esc(wegName(o))}<small>${esc(o.sub || '')}</small></button>`).join('')}</div>` : ''}
+      <button type="button" class="btn quiet" data-weg="cancel">Abbrechen</button>
+      <p class="small muted">${ic('shield')} Die Suche läuft über den Flowtown-Server und HERE. Gespeichert wird der Weg nur auf diesem Handy.</p>`;
+  }
+  async function wegSearch(q) {
+    if (!wegForm) return;
+    wegForm.q = q; wegForm.msg = 'Suche …'; wegForm.hits = null; renderWege();
+    if (q.trim().length < 2) { wegForm.msg = 'Bitte gib mindestens zwei Buchstaben ein.'; renderWege(); return; }
+    await loadBf().catch(() => null);
+    const near = await ortNear(), local = /bielefeld/i.test(q) || !near ? bfSearch(q) : [];
+    if (!wegForm) return;
+    try {
+      wegForm.hits = local.concat(((await api('/api/ort?q=' + encodeURIComponent(q) + near)).orte || []).filter((o) => !local.some((l) => dist(l, o) < 80))).slice(0, 6);
+      wegForm.msg = wegForm.hits.length ? '' : 'Nichts gefunden. Versuch es mit Straße und Ort.';
+    } catch (e) {
+      wegForm.hits = local; wegForm.msg = local.length ? '' : (e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server.' : e.message);
+    }
+    if (!wegForm) return;
+    renderWege();
+    const first = $('#wege-form [data-weg-pick]'); if (first && wegForm.hits.length) first.focus();
+  }
+  function wegPick(i) {
+    if (!wegForm || !wegForm.hits || !wegForm.hits[i]) return;
+    const o = wegForm.hits[i], p = { name: wegName(o), lat: Math.round(o.lat * 1e5) / 1e5, lon: Math.round(o.lon * 1e5) / 1e5 };
+    if (wegForm.step === 'von') { wegForm.von = p; wegForm.step = 'nach'; }
+    else if (dist(wegForm.von, p) < 150) { wegForm.msg = 'Start und Ziel sind derselbe Ort. Such ein anderes Ziel.'; renderWege(); return; }
+    else { wegForm.nach = p; wegForm.step = 'freq'; }
+    wegForm.hits = null; wegForm.q = ''; wegForm.msg = wegForm.step === 'nach' ? `Start: ${p.name}.` : '';
+    renderWege();
+    const nx = $('#wege-q') || $('#wege-freq'); if (nx) nx.focus();
+  }
+  function wegSave() {
+    if (!wegForm || wegForm.step !== 'freq') return;
+    const w = { id: 'w' + Date.now().toString(36), von: wegForm.von, nach: wegForm.nach, freq: ($('#wege-freq') || {}).value || 'täglich', src: 'du', u: Date.now() };
+    if (wege().some((x) => wegOk(x) && wegSame(x, w))) { wegForm.freq = w.freq; wegForm.msg = 'Diesen Weg hast du schon gespeichert.'; renderWege(); return; }
+    settings.wege = wege().filter(wegOk).concat(w).slice(0, WEGE_MAX); store.set('settings', settings);
+    wegForm = null; renderWege(); moreMsg(`Weg gespeichert: ${w.von.name} → ${w.nach.name}.`);
+  }
+  $('#box-wege').addEventListener('click', (ev) => {
+    const t = ev.target.closest('[data-weg-pick],[data-weg],[data-weg-del],#wege-add');
+    if (!t) return;
+    if (t.id === 'wege-add') { wegForm = { step: 'von', von: null, nach: null, hits: null, msg: '', q: '' }; renderWege(); const q = $('#wege-q'); if (q) q.focus(); return; }
+    if (t.dataset.wegPick !== undefined) { wegPick(Number(t.dataset.wegPick)); return; }
+    if (t.dataset.wegDel) { const w = wege().find((x) => x.id === t.dataset.wegDel); settings.wege = wege().filter((x) => x.id !== t.dataset.wegDel); store.set('settings', settings); renderWege(); moreMsg(w && wegOk(w) ? `Weg entfernt: ${w.von.name} → ${w.nach.name}.` : 'Weg entfernt.'); return; }
+    if (t.dataset.weg === 'save') wegSave();
+    else if (t.dataset.weg === 'cancel') { wegForm = null; renderWege(); }
+  });
+  $('#box-wege').addEventListener('submit', (ev) => { if (ev.target.closest('[data-weg-search]')) { ev.preventDefault(); wegSearch($('#wege-q').value); } });
+  renderWege();
   // Begrüßung: Vorlesen, Profil und große Schrift gleich hier einstellen
   function renderWelcomeAccess() {
     const v = $('#w-voice');
