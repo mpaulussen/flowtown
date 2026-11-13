@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.109.0';
+  const VERSION = '0.109.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2126,15 +2126,23 @@
     el.classList.toggle('big', assistBig);
     el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
-    el.innerHTML = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
-      ${assistBig ? '<p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><p class="call-heard" id="call-heard" aria-live="off"></p>' : ''}
-      ${prev.length ? `<ol class="call-log" aria-label="Bisheriges Gespräch">${prev.map((t) => `<li><span class="cl-q">Du: ${esc(t.q)}</span><span class="cl-a">Flowtown: ${esc(t.a)}</span></li>`).join('')}</ol>` : ''}
-      ${frage ? `<p class="assist-q">${assistBig ? 'Du: ' : ''}${esc(frage)}</p>` : ''}
-      <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
-      ${assistFb ? `<div class="assist-fb" id="assist-fb" role="group" aria-label="War die Antwort richtig?"><span>War das richtig?</span><button type="button" class="btn quiet" data-assist="fb-gut">Stimmt</button><button type="button" class="btn quiet" data-assist="fb-falsch">Stimmt nicht</button><button type="button" class="btn quiet" data-assist="fb-veraltet">Veraltet</button></div><p class="small muted" id="assist-fb-note">Bei „Stimmt nicht“ und „Veraltet“ gehen Frage und Antwort an die Redaktion.</p>` : ''}
-      <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>
-      ${assistBig ? `<button type="button" class="hangup" data-assist="close" aria-label="Auflegen und Gespräch beenden">${ic('handset')}<span>Auflegen</span></button>` : ''}
-      <p class="small muted">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>`;
+    const head = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>`;
+    const logHtml = prev.length ? `<ol class="call-log" aria-label="Bisheriges Gespräch">${prev.map((t) => `<li><span class="cl-q">Du: ${esc(t.q)}</span><span class="cl-a">Flowtown: ${esc(t.a)}</span></li>`).join('')}</ol>` : '';
+    const qHtml = frage ? `<p class="assist-q">${assistBig ? 'Du: ' : ''}${esc(frage)}</p>` : '';
+    const aHtml = `<p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}`;
+    const fbHtml = assistFb ? `<div class="assist-fb" id="assist-fb" role="group" aria-label="War die Antwort richtig?"><span>War das richtig?</span><button type="button" class="btn quiet" data-assist="fb-gut">Stimmt</button><button type="button" class="btn quiet" data-assist="fb-falsch">Stimmt nicht</button><button type="button" class="btn quiet" data-assist="fb-veraltet">Veraltet</button></div><p class="small muted" id="assist-fb-note">Bei „Stimmt nicht“ und „Veraltet“ gehen Frage und Antwort an die Redaktion.</p>` : '';
+    const formHtml = `<form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>`;
+    const note = '<p class="small muted call-note">Antworten aus den Daten von Flowtown, formuliert von einer KI (Mistral). Bitte vor Ort prüfen.</p>';
+    if (assistBig) {
+      // vier feste Bereiche, damit sich nichts überlagert: Kopf und Zustand oben, der Gesprächstext in der Mitte (scrollt), live Gesagtes und Knöpfe unten
+      el.innerHTML = `${head}<div class="call-status"><p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div></div>
+        <div class="call-body" tabindex="-1">${logHtml}${qHtml}${aHtml}${fbHtml}${note}</div>
+        <p class="call-heard" id="call-heard" aria-live="off"></p>
+        <div class="call-actions">${formHtml}<button type="button" class="hangup" data-assist="close" aria-label="Auflegen und Gespräch beenden">${ic('handset')}<span>Auflegen</span></button></div>`;
+      const body = el.querySelector('.call-body'), qe = el.querySelector('.call-body .assist-q'); if (body) body.scrollTop = qe ? qe.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 : 0;   // die neue Frage oben, die Antwort darunter von Anfang an
+    } else {
+      el.innerHTML = `${head}\n      ${qHtml}\n      ${aHtml}\n      ${fbHtml}\n      ${formHtml}\n      ${note}`;
+    }
     el.hidden = false;
     if (assistBig && !assistTick) assistLoopStart();
     micStatus('');

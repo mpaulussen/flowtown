@@ -1661,3 +1661,30 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .umode-chip{--gc:var(--accent);font:inherit;font-size:15px;font-weight:700;min-height:44px;padding:6px 14px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--gc) 45%,var(--line));background:var(--surface);color:var(--gc);display:inline-flex;align-items:center;gap:8px;cursor:pointer}
 .umode-chip .ic{width:18px;height:18px}
 .umode-chip[aria-pressed="true"]{background:var(--gc);color:var(--on-accent);border-color:var(--gc)}
+
+/* 0.109.1 Sprachmodus: feste Bereiche statt einer langen Spalte (nichts liegt mehr übereinander, die Mitte scrollt) */
+.assist.big:not([hidden]){display:flex;flex-direction:column;gap:8px;overflow:hidden}
+.assist.big .assist-head{flex:none;display:flex;align-items:center;gap:8px}
+.assist.big .assist-head b{font-size:clamp(18px,5vw,22px);white-space:nowrap}
+.assist.big .call-status{flex:none;display:flex;align-items:center;justify-content:center;gap:12px;min-height:36px}
+.assist.big .call-state{font-size:clamp(17px,4.8vw,20px);min-height:0}
+.assist.big .call-bars{height:28px;gap:5px}
+.assist.big .call-bars i{width:6px}
+.call-body{flex:1 1 auto;min-height:0;overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:12px;padding:2px 2px 22px;-webkit-mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent);mask-image:linear-gradient(to bottom,#000 calc(100% - 22px),transparent)}   /* unten ausgeblendet: zeigt, dass es weitergeht */
+.assist.big .call-body .assist-a{flex:none;overflow:visible;font-size:clamp(20px,min(5.6vw,4.2vh),28px);line-height:1.35}
+.assist.big .call-body .assist-q{font-size:clamp(16px,4.4vw,21px)}
+.assist.big .call-heard{flex:none;margin:0;max-height:20vh;overflow:auto;font-size:clamp(18px,5vw,24px)}
+.assist.big .call-heard:empty{display:none}
+.assist.big .call-note{display:block;font-size:13px}
+.assist.big>.small{display:none}
+.call-actions{flex:none;display:flex;align-items:center;justify-content:center;gap:clamp(20px,9vw,44px);padding-top:6px}
+.call-actions .assist-form{margin:0;flex-direction:column;align-items:center;gap:10px}
+.assist.big .assist-mic{width:clamp(76px,15vh,120px);height:clamp(76px,15vh,120px);min-height:0}
+.assist.big .assist-mic .ic{width:clamp(38px,8vh,60px);height:clamp(38px,8vh,60px)}
+.assist.big .hangup{margin:0;gap:4px;font-size:15px}
+.assist.big .hangup .ic{width:30px;height:30px;padding:14px}
+.assist.big.nosr .call-actions{flex-direction:column;align-items:stretch}
+.assist.big.nosr .call-actions .assist-form{align-items:stretch}
+.assist.big.nosr .hangup{align-self:center}
+@media (max-height:480px){.assist.big .call-status{min-height:28px}.assist.big .call-bars{height:20px}}
+@media (max-height:480px){.assist.big .call-heard{max-height:14vh;font-size:18px}.assist.big .assist-mic{width:68px;height:68px}}
