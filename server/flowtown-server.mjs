@@ -3392,7 +3392,11 @@ function beispieleFuer(frage, typ) {
 // Fahrt prüfen: gibt es im Fahrplan eine Fahrt, die am Start hält und danach am Ziel? Nur Fahrplan und Echtzeit, nichts aus Wissen.
 // Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt das Ziel dort, sagt das Werkzeug „nicht prüfbar“.
 function fahrtPruefen(von, nach, art) {
-  const kv = hstNorm(von), kn = hstNorm(nach);
+  // Haltestellenname und Frage gleich schreiben; ein Treffer gilt nur, wenn der Name mit dem Gefragten beginnt und dort ein Wort endet:
+  // „Detmold“ trifft „Detmold, Bahnhof“, aber nicht „Detmolder Straße“ in Steinheim und nicht „Höv-Riege, Detmolder Straße“
+  const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim();
+  const kv = wort(von), kn = wort(nach);
+  const trifft = (name, k) => { const n = wort(name); return n.startsWith(k) && !/[a-zäöü]/.test(n.charAt(k.length) || ' '); };
   if (kv.length < 3 || kn.length < 3) return { fehler: 'Bitte Start und Ziel nennen' };
   rtWanted = Date.now(); rtTick();
   const { ymd, min } = berlinNow();
@@ -3401,10 +3405,9 @@ function fahrtPruefen(von, nach, art) {
   let startGefunden = false, zielGefunden = false; const halte = new Set(), fahrten = [];
   for (const id of Object.keys(fahrplaene)) {
     const d = fpData(id); if (!d) continue;
-    const nm = d.stops.map((st) => hstNorm(fpName(st[1], d)));
     const iv = new Set(), iz = new Set();
-    nm.forEach((n, i) => { if (n.includes(kv)) iv.add(i); if (n.includes(kn)) iz.add(i); });
-    if (iv.size) { startGefunden = true; iv.forEach((i) => halte.add(fpName(d.stops[i][1], d))); }
+    d.stops.forEach((st, i) => { if (trifft(st[1], kv)) iv.add(i); if (trifft(st[1], kn)) iz.add(i); });
+    if (iv.size) { startGefunden = true; iv.forEach((i) => halte.add(String(d.stops[i][1]))); }
     if (iz.size) zielGefunden = true;
     if (!iv.size || !iz.size) continue;
     // Haltefolgen mit Halt am Start und danach am Ziel; gemerkt wird die Stelle des Halts am Start
