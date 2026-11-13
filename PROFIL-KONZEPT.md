@@ -1,43 +1,65 @@
 # Persönliches Profil: erster Start, Wege, Flowtown lernt mit
 
-Stand 13.11.2026. Entwurf, bisher nur im Klick-Dummy umgesetzt (Rundgang Schritte 1 bis 4). In der App ist noch nichts davon gebaut.
+Stand 13.11.2026. Entwurf, bisher nur im Klick-Dummy umgesetzt (Rundgang Schritte 1 bis 5). In der App ist noch nichts davon gebaut.
+
+## Entscheidungen (13.11.2026)
+
+1. **Lernen nur auf dem Handy,** das Profil lässt sich **sichern** (Datei) und wiederherstellen.
+2. **Vorschläge ab drei Fahrten.**
+3. **Das Profil gibt es von Anfang an,** im ersten Start. Es ist die Grundlage dafür, dass jede Person sofort einen eigenen Nutzen sieht, der Flowtown von anderen Apps unterscheidet.
 
 ## Idee
 
-Ein dauerhaftes Profil, das aus drei Teilen besteht und sich auf zwei Wegen füllt: von Hand oder aus den Fahrten.
+Ein dauerhaftes Profil aus drei Teilen, das sich auf zwei Wegen füllt: von Hand oder aus den Fahrten.
 
 | Teil | Beispiel | Von Hand | Aus Fahrten gelernt |
 | --- | --- | --- | --- |
-| **Mein Bedarf** | Rollstuhl, Rollator, sehen, hören, einfache Sprache, Ruhe, oder kein Profil | sechs Kacheln, mehrere möglich | nein (bleibt bewusst Entscheidung der Person) |
-| **Unterwegs mit** | Auto, Öffis, Rad, zu Fuß, Wohnort | Chips | „Du nutzt oft Bus und Bahn. Öffis ergänzen?“ |
+| **Unterwegs mit** | Auto, Öffis, Rad, zu Fuß | Knöpfe mit Symbol, mehrere möglich | „Du nutzt oft Bus und Bahn. Öffis ergänzen?“ |
+| **Mein Bedarf** | Rollstuhl, Rollator, sehen, hören, einfache Sprache, Ruhe, oder kein besonderes Profil | Kacheln, mehrere möglich | nein, bleibt bewusst Entscheidung der Person |
 | **Meine Wege** | täglich Detmold → Bielefeld, alle zwei Wochen Bielefeld → Mönchengladbach | Von, Nach, Wie oft | „Du fährst oft von Bielefeld nach Mönchengladbach. Als Weg merken?“ |
 
 ## Erster Start (drei Schritte)
 
-1. **Wer bist du, und womit bist du oft unterwegs?** Sechs Kacheln, mehrere möglich, oder „Kein besonderes Profil“. Darunter die Verkehrsmittel als Knöpfe mit Symbol: Auto, Öffis, Rad, zu Fuß (mehrere möglich).
+1. **Womit bist du oft unterwegs, und brauchst du etwas Besonderes?** Zuerst die Verkehrsmittel. Darunter „Kein besonderes Profil“ als erste Kachel, dann Rollstuhl, Rollator, sehen, hören, einfache Sprache, Ruhe. So fragt die App nicht zuerst nach Behinderung, sondern nach der Art, wie man sich bewegt.
 2. **Wo lebst du, welche Wege fährst du oft?** Wohnort und oft gefahrene Wege. Man muss nichts eintragen.
-3. **So sieht das für dich aus.** Sofort ein Beispiel: die eigenen Wege mit Meldungen von heute und eine Frage, die zum Profil passt (zum Beispiel Rollstuhl: „Geht der Aufzug am Jahnplatz?“). Ein zweites Beispiel zeigt die ehrliche Antwort „keine Angabe“.
+3. **Flowtown kennt jetzt deine Wege.** Sofort der Nutzen: dieselbe Karte „Dein Weg jetzt“, die später auf Heute steht, mit Meldung, Empfehlung und Hinweis zum Bedarf. Darunter drei Dinge, die sich für diese Person ändern, und zwei Beispielfragen.
+
+## Wie das Profil in die App eingreift
+
+| Ansicht | Was sich nach Profil, Verkehrsmitteln und Wegen richtet |
+| --- | --- |
+| **Heute** | Ziele-Knöpfe aus den eigenen Wegen. Neue Karte **„Dein Weg jetzt“**: Meldung zum Weg (zum Beispiel Stau auf der B66, +12 Minuten), Empfehlung nach den Verkehrsmitteln („Heute lieber mit der Bahn: pünktlich, 44 Minuten. Mit dem Auto 53 Minuten im Stau.“), eine Zeile zum Bedarf, und der Grund („Weil du Detmold → Bielefeld täglich fährst und oft Auto und Bahn nutzt“). Das Verkehrsmittel beim Aufzeichnen ist das meistgenutzte. |
+| **Dein Weg heute** | Die eigenen Wege mit Meldung zuerst, dann Orte wie Herforder Straße. |
+| **Weg zum Ziel** | Das schnellste der eigenen Verkehrsmittel steht oben („Für dich: du bist oft mit Auto, Öffis und zu Fuß unterwegs“). Bei Rollstuhl oder Rollator Bus und Bahn. |
+| **Tipps** | „Für dich“ nach Bedarf (zum Beispiel Rollator: Obernstraße gut, Alter Markt meiden) und „Beste Abfahrt“ für den eigenen Weg. |
+| **Verlauf** | Fahrten benannt nach den eigenen Wegen und Verkehrsmitteln. |
+| **Karte** | Ebenen nach Verkehrsmitteln vorgewählt: Rad zeigt Radwege, Öffis die Stadtbahn, Auto Staus und Baustellen. |
+| **Fragen** | Beispielfragen nach Bedarf, Weg und Verkehrsmittel, zum Beispiel „Wie ist mein Weg heute?“. |
+| **Einstellungen** | Eine Zeile fasst zusammen: „Rollator oder Gehhilfe · Auto, Öffis · 1 Weg“. |
+
+Der Dummy zeigt den Zusammenhang: Wer beim Lernmoment „Öffis ergänzen“ bestätigt, sieht die Empfehlung auf Heute sofort von Auto auf Bahn wechseln.
 
 ## Mein Profil (unter Einstellungen)
 
 Alle Einträge sind als **„von dir“** oder **„gelernt aus deinen Fahrten“** gekennzeichnet.
 
 **Flowtown lernt mit:**
-- Nur auf dem Handy. Flowtown schlägt vor, die Person entscheidet mit Ja oder Nein.
+- Nur auf dem Handy. Ab drei Fahrten schlägt Flowtown vor, die Person entscheidet mit Ja oder Nein.
 - Lernen lässt sich abschalten.
-- Vorschläge entstehen aus wiederkehrenden Fahrten (Zahl der Fahrten und Zeitraum stehen dabei, damit man sieht, warum).
+- Zu jedem Vorschlag steht, warum („3 Fahrten in 6 Wochen, meist freitags“).
 - Das Bedarfsprofil wird nie automatisch verändert.
+
+**Profil sichern:** Die Datei enthält nur Bedarf, Verkehrsmittel und Wege, keine Fahrten. Sie hilft beim Handywechsel. „Sichern und übertragen“ für Fahrten gibt es schon.
 
 ## Was damit möglich wird
 
-- **Dein Weg heute:** Die Seite zeigt zuerst die eigenen Wege mit Meldungen (Stau, Störung, Baustelle).
-- **Morgenwarnung (Idee, noch nicht gebaut):** „Soll Flowtown dir morgens sagen, wie dein Weg Detmold → Bielefeld heute aussieht?“ Das ist TODO L4.
-- **Antworten:** Wege und Verkehrsmittel des Profils fließen in „Womit komme ich am besten?“ ein.
+- **Morgenwarnung (Idee, noch nicht gebaut):** „Soll Flowtown dir morgens sagen, wie dein Weg Detmold → Bielefeld heute aussieht?“ (TODO L4)
+- **Unterscheidung von anderen Apps:** Flowtown richtet sich nach der Person (Wege, Verkehrsmittel, Bedarf) und sagt bei jeder Antwort, woher sie kommt.
 
-## Offene Fragen
+## Was noch offen ist
 
-1. **Datenschutz:** Das Lernen braucht gespeicherte Fahrten. Heute liegen sie nur auf dem Handy. Das soll so bleiben: Lernen geschieht auf dem Gerät, nichts davon geht an den Server. Die Datenschutzerklärung muss das beschreiben.
-2. **Wie viele Fahrten für einen Vorschlag?** Im Dummy: 4 Fahrten in 8 Wochen für einen seltenen Weg, 9 in 2 Wochen für einen täglichen. Werte noch ungeprüft.
-3. **Wo gibt es das Profil erstmals?** Sofort im ersten Start (wie im Dummy) oder erst nach der ersten Aufzeichnung?
-4. **Mehrere Bedarfe:** Kombinationen wie Rollator und Ruhe sind möglich. Die Reihenfolge der Beispielfrage nimmt den ersten gewählten Bedarf.
-5. **Profil teilen oder sichern:** Wie kommt das Profil auf ein neues Handy? („Sichern und übertragen“ gibt es schon für Fahrten.)
+1. **Datenschutz:** Lernen geschieht auf dem Gerät, nichts davon geht an den Server. Die Datenschutzerklärung muss das beschreiben, ebenso die gesicherte Profildatei.
+2. **Echte Meldungen:** Die Meldung zum eigenen Weg (Stau, Störung) braucht Verkehrslage und moBiel-Meldungen für die gespeicherte Strecke. Die Lage für Bielefeld gibt es, Strecken außerhalb (Detmold, Mönchengladbach) nur teilweise.
+3. **Empfehlung „Bahn statt Auto“:** Vergleichen der echten Zeiten braucht den Fahrplan der Verbindung und die Verkehrslage. Im Dummy sind es Beispielwerte.
+4. **Mehrere Bedarfe:** Kombinationen sind möglich. Die Beispielfrage und die Zeile zum Bedarf nehmen den ersten gewählten.
+5. **Wie viele Fahrten für den ersten Vorschlag?** Drei, wie entschieden. Wie lange zurück gezählt wird (6 Wochen im Dummy), ist noch offen.
