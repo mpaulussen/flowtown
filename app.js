@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.107.1';
+  const VERSION = '0.108.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6437,10 +6437,11 @@
   }
   // Startseite in zwei Schritten: erst erklären, was Flowtown kann, dann um Erlaubnis fragen
   function welcomeStep(n) {
-    $('#w-step1').hidden = n !== 1; $('#w-step2').hidden = n !== 2;
+    $('#w-step1').hidden = n !== 1; $('#w-step2').hidden = n !== 2; $('#w-step3').hidden = n !== 3;
     renderWelcomeAccess();
-    if (n === 2) speak('Schritt 2 von 2: Was darf Flowtown? Verkehrslage laden ist an. Fahrten anonym beitragen und KI-Einschätzung sind aus. Alles lässt sich später ändern. Ganz unten: Los geht es.', { now: true });
-    const h = $(n === 1 ? '#h-welcome' : '#h-welcome2');
+    if (n === 2) speak('Schritt 2 von 3: Was darf Flowtown? Verkehrslage laden ist an. Fahrten anonym beitragen und KI-Einschätzung sind aus. Alles lässt sich später ändern. Ganz unten: Los geht es.', { now: true });
+    if (n === 3) { startWegForm('w', false); speak('Schritt 3 von 3: Dein erster Weg. Suche den Start und das Ziel eines Wegs, den du oft fährst. Oder tippe ganz unten auf Später.', { now: true }); }
+    const h = $(n === 1 ? '#h-welcome' : n === 2 ? '#h-welcome2' : '#h-welcome3');
     h.setAttribute('tabindex', '-1'); h.focus({ preventScroll: true });
     window.scrollTo(0, 0);
   }
@@ -6508,11 +6509,14 @@
   const wege = () => (Array.isArray(settings.wege) ? settings.wege : []);
   const wegOk = (w) => w && w.von && w.nach && [w.von, w.nach].every((o) => typeof o.name === 'string' && isFinite(o.lat) && isFinite(o.lon));
   let wegForm = null;   // { step: 'von' | 'nach' | 'freq', von, nach, hits, msg, q }
+  let wegHost = 'set';   // wo das Formular steht: 'set' (Einstellungen) oder 'w' (erster Start, Schritt 3)
   const wegName = (o) => String(o.name || '').split(',')[0].trim().slice(0, 40) || 'Ort';
   const wegSame = (a, b) => dist(a.von, b.von) < 150 && dist(a.nach, b.nach) < 150;
   function renderWege() {
-    const el = $('#wege-list'), f = $('#wege-form');
+    const el = $('#wege-list'), f = $(wegHost === 'w' ? '#w-wege-form' : '#wege-form'), other = $(wegHost === 'w' ? '#wege-form' : '#w-wege-form');
     if (!el || !f) return;
+    if (other) other.innerHTML = '';   // die Eingabefelder gibt es nur einmal
+    const cx = wegHost === 'w' ? '' : '<button type="button" class="btn quiet" data-weg="cancel">Abbrechen</button>';
     if (nowReady) renderNow();
     const list = wege().filter(wegOk);
     $('#wege-sub').textContent = list.length ? list.map((w) => `${w.von.name} → ${w.nach.name}`).join(' · ') : 'Noch keiner';
@@ -6525,14 +6529,14 @@
       f.innerHTML = `<p><b>${esc(wegForm.von.name)} → ${esc(wegForm.nach.name)}</b></p>
         <label class="field" for="wege-freq">Wie oft fährst du den Weg?<select id="wege-freq">${WEG_FREQ.map((x) => `<option${x === (wegForm.freq || 'täglich') ? ' selected' : ''}>${x}</option>`).join('')}</select></label>
         <p class="small muted" role="status">${esc(wegForm.msg || '')}</p>
-        <div class="btn-col"><button type="button" class="btn" data-weg="save">Weg speichern</button><button type="button" class="btn quiet" data-weg="cancel">Abbrechen</button></div>`;
+        <div class="btn-col"><button type="button" class="btn" data-weg="save">Weg speichern</button>${cx}</div>`;
       return;
     }
     const hits = wegForm.hits || [];
     f.innerHTML = `<form data-weg-search="1"><label class="field" for="wege-q">${wegForm.step === 'von' ? 'Von wo startest du? (Ort, Haltestelle oder Adresse)' : 'Wohin fährst du?'}<input id="wege-q" type="search" autocomplete="off" enterkeyhint="search" value="${esc(wegForm.q || '')}"></label><button class="btn" type="submit">Suchen</button></form>
       <p class="small muted" role="status" aria-live="polite">${esc(wegForm.msg || '')}</p>
       ${hits.length ? `<div class="btn-col">${hits.map((o, i) => `<button type="button" class="btn quiet hit" data-weg-pick="${i}">${esc(wegName(o))}<small>${esc(o.sub || '')}</small></button>`).join('')}</div>` : ''}
-      <button type="button" class="btn quiet" data-weg="cancel">Abbrechen</button>
+      ${cx}
       <p class="small muted">${ic('shield')} Die Suche läuft über den Flowtown-Server und HERE. Gespeichert wird der Weg nur auf diesem Handy.</p>`;
   }
   async function wegSearch(q) {
@@ -6567,18 +6571,26 @@
     const w = { id: 'w' + Date.now().toString(36), von: wegForm.von, nach: wegForm.nach, freq: ($('#wege-freq') || {}).value || 'täglich', src: 'du', u: Date.now() };
     if (wege().some((x) => wegOk(x) && wegSame(x, w))) { wegForm.freq = w.freq; wegForm.msg = 'Diesen Weg hast du schon gespeichert.'; renderWege(); return; }
     settings.wege = wege().filter(wegOk).concat(w).slice(0, WEGE_MAX); store.set('settings', settings);
-    wegForm = null; renderWege(); moreMsg(`Weg gespeichert: ${w.von.name} → ${w.nach.name}.`);
+    const fromW = wegHost === 'w';
+    wegForm = null; wegHost = 'set'; renderWege(); moreMsg(`Weg gespeichert: ${w.von.name} → ${w.nach.name}.`);
+    if (fromW) { nowId = w.id; showView('start'); checkWeg(w); }   // erster Start: der Nutzer sieht gleich sein Ergebnis
   }
-  $('#box-wege').addEventListener('click', (ev) => {
+  function startWegForm(host, focus) {
+    wegHost = host || 'set'; wegForm = { step: 'von', von: null, nach: null, hits: null, msg: '', q: '' }; renderWege();
+    const q = $('#wege-q'); if (q && focus !== false) q.focus();
+  }
+  const wegClick = (ev) => {
     const t = ev.target.closest('[data-weg-pick],[data-weg],[data-weg-del],#wege-add');
     if (!t) return;
-    if (t.id === 'wege-add') { wegForm = { step: 'von', von: null, nach: null, hits: null, msg: '', q: '' }; renderWege(); const q = $('#wege-q'); if (q) q.focus(); return; }
+    if (t.id === 'wege-add') { startWegForm('set'); return; }
     if (t.dataset.wegPick !== undefined) { wegPick(Number(t.dataset.wegPick)); return; }
     if (t.dataset.wegDel) { const w = wege().find((x) => x.id === t.dataset.wegDel); settings.wege = wege().filter((x) => x.id !== t.dataset.wegDel); store.set('settings', settings); renderWege(); moreMsg(w && wegOk(w) ? `Weg entfernt: ${w.von.name} → ${w.nach.name}.` : 'Weg entfernt.'); return; }
     if (t.dataset.weg === 'save') wegSave();
     else if (t.dataset.weg === 'cancel') { wegForm = null; renderWege(); }
-  });
-  $('#box-wege').addEventListener('submit', (ev) => { if (ev.target.closest('[data-weg-search]')) { ev.preventDefault(); wegSearch($('#wege-q').value); } });
+  };
+  const wegSubmit = (ev) => { if (ev.target.closest('[data-weg-search]')) { ev.preventDefault(); wegSearch($('#wege-q').value); } };
+  $('#box-wege').addEventListener('click', wegClick); $('#w-step3').addEventListener('click', wegClick);
+  $('#box-wege').addEventListener('submit', wegSubmit); $('#w-step3').addEventListener('submit', wegSubmit);
   renderWege();
   // ---------- Unterwegs mit: Verkehrsmittel der Person, nur auf dem Handy (0.107.0) ----------
   const UMODES = { auto: ['Auto', 'car'], oepnv: ['Bus und Bahn', 'bus'], rad: ['Rad', 'bike'], fuss: ['Zu Fuß', 'walk'] };
@@ -6633,8 +6645,12 @@
   }
   function renderNow() {
     const el = $('#nowcard'); if (!el) return;
-    const list = nowList(); el.hidden = !list.length;
-    if (!list.length) return;
+    const list = nowList(); el.hidden = false;
+    if (!list.length) {
+      el.className = 'lw nowcard grey';
+      el.innerHTML = `<div class="lw-head"><h3 class="lw-title" id="h-now">Dein Weg jetzt</h3></div><p class="small">Lege einen Weg an, zum Beispiel zur Arbeit. Dann vergleicht Flowtown für diesen Weg Auto, Bus und Bahn, Rad und zu Fuß, mit Quelle und Stand.</p><div class="now-btns"><button type="button" class="btn" data-now="anlegen">Weg anlegen</button></div>`;
+      return;
+    }
     const w = list.find((x) => x.id === nowId) || list[0]; nowId = w.id;
     const res = nowRes[w.id], ok = res && res.data, stale = ok && nowAge(res) > WEG_ALT_MIN;
     let state = 'grey', badge = '', body = '', btn = 'Weg jetzt prüfen';
@@ -6678,12 +6694,13 @@
   }
   $('#nowcard').addEventListener('click', (ev) => {
     const b = ev.target.closest('[data-now]'); if (!b) return;
+    if (b.dataset.now === 'anlegen') { showView('more'); const d = $('#box-wege'); if (d) d.open = true; startWegForm('set'); if (d) setTimeout(() => d.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); return; }
     const w = nowList().find((x) => x.id === nowId);
     if (b.dataset.now === 'check') checkWeg(w);
     else if (b.dataset.now === 'say' && w && nowRes[w.id] && nowRes[w.id].data) speak(nowSummary(w, nowRes[w.id]), { force: true, now: true });
   });
   $('#nowcard').addEventListener('change', (ev) => { if (ev.target.id === 'now-sel') { nowId = ev.target.value; renderNow(); } });
-  setInterval(() => { if (!document.hidden && !$('#nowcard').hidden) renderNow(); }, 60000);   // „zu alt“ rechtzeitig zeigen
+  setInterval(() => { if (!document.hidden && !$('#nowcard').hidden && nowList().length) renderNow(); }, 60000);   // „zu alt“ rechtzeitig zeigen
   nowReady = true; renderModes(); renderNow();
   // Begrüßung: Vorlesen, Profil und große Schrift gleich hier einstellen
   function renderWelcomeAccess() {
@@ -6722,6 +6739,7 @@
   });
   $('#w-big').addEventListener('change', (ev) => { settings.big = ev.target.checked; store.set('settings', settings); applyAccessUI(); });
   $('#btn-intro-next').addEventListener('click', () => welcomeStep(2));
+  $('#btn-w3-skip').addEventListener('click', () => { wegForm = null; wegHost = 'set'; renderWege(); showView('start'); speak('Flowtown ist bereit. Oben gibst du dein Ziel ein. Unter Dein Weg jetzt legst du einen Weg an.', { now: true }); });
   $('#btn-intro-back').addEventListener('click', () => welcomeStep(1));
   $('#btn-welcome').addEventListener('click', async () => {
     const msg = $('#welcome-msg');
@@ -6737,6 +6755,7 @@
     }
     settings.onboarded = VERSION;
     store.set('settings', settings);
+    if (!wege().filter(wegOk).length) { welcomeStep(3); return; }   // noch kein Weg: als Nächstes der erste Weg
     showView('start');
     speak('Flowtown ist bereit. Oben gibst du dein Ziel ein, oder du wählst, womit du unterwegs bist, und tippst auf Ohne Ziel aufzeichnen.', { now: true });
   });
