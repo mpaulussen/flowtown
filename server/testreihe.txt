@@ -113,6 +113,8 @@ Fährt von Bielefeld ein Zug nach Köln? => fahrt_pruefen
 Wann fährt von Hamburg Hbf ein Zug nach Kiel? => fahrt_pruefen
 Gibt es einen Zug von Bielefeld nach München? => fahrt_pruefen
 Fährt von Münster ein Zug nach Osnabrück? => fahrt_pruefen
+Wann fährt ein Zug von München nach Augsburg? => fahrt_pruefen
+Wie komme ich von München zum Flughafen?
 
 # Formulierungen [einzeln]
 Wann fährt der nächste Zug von Bielefeld nach Herford? => fahrt_pruefen
