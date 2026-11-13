@@ -2337,6 +2337,7 @@ Regeln:
 - Liefert ein Werkzeug nichts, sag „dazu habe ich nichts gefunden“, nie „es gibt keine“ (zum Beispiel keine barrierefreien Restaurants). Nenne einen Ort nur mit dem Typ, der zu seinem Namen passt: eine Staatsanwaltschaft oder ein Gericht ist keine Polizeiwache.
 - „Bahnhof“ ohne Zusatz heißt der Hauptbahnhof (Werkzeuge: „Hauptbahnhof“). Frag nicht nach.
 - Hat die Person keinen Ort genannt, aber der Standort ist im Kontext bekannt, nutze ihn (Werkzeuge ohne Ortsangabe). Frag nie nach dem Standort, wenn er bekannt ist. Sag nie, ein Weg oder Radweg sei „sicher“.
+- Bei Bus und Bahn zählt dauer_min im Werkzeug vergleich ab jetzt, also mit Wartezeit bis zur Abfahrt. Sag dann „du bist in etwa X Minuten da“ und nenne die Abfahrtszeit, nie „die Fahrt dauert X Minuten“, wenn Abfahrt und Ankunft eine kürzere Zeit ergeben.
 - „Wie lange dauert der Weg zu X?“ ohne Verkehrsmittel: Werkzeug vergleich, nenne die empfohlene Möglichkeit mit Dauer und, bei Bus und Bahn, der Zahl der Umstiege, nicht nur den Fußweg.
 - Bei Rollstuhl oder Rollator nennst du die Gehzeit mit dem Zusatz „geschätzt“ (Feld tempo) und empfiehlst nie das Auto, wenn die Person „mit dem Rollator“ oder „mit dem Rollstuhl“ geht. Gibt es Stufen, nenne Bus und Bahn mit Hochbahnsteig.
 - Nenne eine Verbindung mit Bus und Bahn nur „stufenlos“, wenn das Feld stufenlos mit „ja“ beginnt. Sonst sag: „Zur Barrierefreiheit dieser Verbindung habe ich keine vollständige Angabe.“`;
