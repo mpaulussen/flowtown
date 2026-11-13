@@ -2979,7 +2979,7 @@ async function assistTool(name, a, ctx, act) {
       // Nach einem Vergleich merkt sich das Gespräch die Verbindungen mit Bus und Bahn, damit Rückfragen („ohne Busse“, „eine Stunde später“, „schaffe ich den Anschluss?“) greifen
       try {
         const vb = (sink.verbindungen || []).filter((c) => Date.parse(c.ab) >= Date.now() - 60000).slice(0, 3);
-        if (vb.length) ctx.neu = { typ: 'verbindung', von: { name: from.name }, nach: { name: to.name }, art: '', ueber: '', wunsch: { max_umstiege: null, ohne_bus: false, nur_regio: false }, ab: new Date(Date.parse(vb[0].ab)).toISOString(), suche_ab: '',
+        if (vb.length) ctx.neu = { typ: 'verbindung', von: { name: from.name, pos: from.pos }, nach: { name: to.name, pos: to.pos }, art: '', ueber: '', wunsch: { max_umstiege: null, ohne_bus: false, nur_regio: false }, ab: new Date(Date.parse(vb[0].ab)).toISOString(), suche_ab: '',
           verbindungen: vb.map((c) => ({ legs: c.teile.filter((l) => l.art !== 'fuss').map((l) => ({ art: l.art, linie: l.linie, von: l.von, nach: l.nach, ab: new Date(Date.parse(l.ab)).toISOString(), an: new Date(Date.parse(l.an)).toISOString(), ziel: l.ziel, gleis: l.gleis, vonPos: l.vonPos, nachPos: l.nachPos })) })) };
       } catch (e) { /* ohne Gedächtnis weiter */ }
       act.ziel = { name: to.name, lat: t[0], lon: t[1], mode: v.empfehlung.verkehrsmittel };
@@ -3555,7 +3555,8 @@ function zustandClean(z) {
   if (!z || typeof z !== 'object') return null;
   const s = (x, n) => clip(String(x == null ? '' : x), n || 60), iso = (x) => (typeof x === 'string' && !isNaN(Date.parse(x)) ? new Date(Date.parse(x)).toISOString() : '');
   const typ = z.typ === 'verbindung' ? 'verbindung' : z.typ === 'fahrt' ? 'fahrt' : null; if (!typ) return null;
-  const o = { typ, von: { name: s(z.von && z.von.name) }, nach: { name: s(z.nach && z.nach.name) }, art: s(z.art, 12), ueber: s(z.ueber), ab: iso(z.ab), suche_ab: iso(z.suche_ab), wunsch: { max_umstiege: z.wunsch && isFinite(z.wunsch.max_umstiege) && z.wunsch.max_umstiege !== null ? Number(z.wunsch.max_umstiege) : null, ohne_bus: !!(z.wunsch && z.wunsch.ohne_bus), nur_regio: !!(z.wunsch && z.wunsch.nur_regio) } };
+  const pos = (x) => (x && Array.isArray(x.pos) && x.pos.length === 2 && x.pos.every((n) => isFinite(n)) ? x.pos.map(Number) : undefined);
+  const o = { typ, von: { name: s(z.von && z.von.name), pos: pos(z.von) }, nach: { name: s(z.nach && z.nach.name), pos: pos(z.nach) }, art: s(z.art, 12), ueber: s(z.ueber), ab: iso(z.ab), suche_ab: iso(z.suche_ab), wunsch: { max_umstiege: z.wunsch && isFinite(z.wunsch.max_umstiege) && z.wunsch.max_umstiege !== null ? Number(z.wunsch.max_umstiege) : null, ohne_bus: !!(z.wunsch && z.wunsch.ohne_bus), nur_regio: !!(z.wunsch && z.wunsch.nur_regio) } };
   if (typ === 'fahrt') o.fahrten = (Array.isArray(z.fahrten) ? z.fahrten : []).slice(0, 4).map((f) => ({ linie: s(f && f.linie, 20), ab: iso(f && f.ab), von: s(f && f.von), ziel: s(f && f.ziel) }));
   else o.verbindungen = (Array.isArray(z.verbindungen) ? z.verbindungen : []).slice(0, 3).map((v) => ({ legs: (Array.isArray(v && v.legs) ? v.legs : []).slice(0, 6).map((l) => ({ art: s(l && l.art, 8), linie: s(l && l.linie, 20), von: s(l && l.von, 50), nach: s(l && l.nach, 50), ab: iso(l && l.ab), an: iso(l && l.an), ziel: s(l && l.ziel, 40), gleis: s(l && l.gleis, 8), vonPos: l && Array.isArray(l.vonPos) && l.vonPos.length === 2 && l.vonPos.every((n) => isFinite(n)) ? l.vonPos.map(Number) : undefined, nachPos: l && Array.isArray(l.nachPos) && l.nachPos.length === 2 && l.nachPos.every((n) => isFinite(n)) ? l.nachPos.map(Number) : undefined })) }));
   return o;
@@ -3603,7 +3604,8 @@ function folgeAufruf(frage, z) {
 // Nur Fahrplan und Echtzeit, nichts aus Wissen. Der Fahrplan reicht nur über die Auszüge (Ostwestfalen, Mönchengladbach, Paderborn, Detmold): Fehlt ein Ort dort, sagt das Werkzeug „nicht prüfbar“.
 async function fahrtPruefen(a, ctx) {
   a = a || {}; const z = (ctx && ctx.zustand) || {};
-  const von = a.von || (z.von && z.von.name) || '', nach = a.nach || (z.nach && z.nach.name) || '';
+  const ohneH = (x) => String(x || '').replace(/^\s*haltestelle\s+/i, '');
+  const von = ohneH(a.von || (z.von && z.von.name) || ''), nach = ohneH(a.nach || (z.nach && z.nach.name) || '');
   // Haltestellenname und Frage gleich schreiben; ein Treffer gilt nur, wenn der Name mit dem Gefragten beginnt und dort ein Wort endet:
   // „Detmold“ trifft „Detmold, Bahnhof“, aber nicht „Detmolder Straße“ in Steinheim und nicht „Höv-Riege, Detmolder Straße“
   const wort = (x) => String(x || '').toLowerCase().replace(/ß/g, 'ss').replace(/[,;/]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -3681,7 +3683,10 @@ async function verbindungSuchen(a, ctx) {
   if (!HERE_KEY) return { fehler: 'Die Verbindungssuche braucht den HERE-Schlüssel auf dem Server.' };
   const vonN = a.von || (z.von && z.von.name) || '', nachN = a.nach || (z.nach && z.nach.name) || '';
   if (!vonN || !nachN) return { fehler: 'Start und Ziel fehlen. Frag kurz, von wo nach wo.' };
-  const o1 = await assistOrt(vonN, ctx || {}), o2 = await assistOrt(nachN, ctx || {});
+  // aus dem Gespräch die Koordinaten nehmen, wenn Start oder Ziel nicht neu genannt wurden: Namen wie „Haltestelle Universität“ kennt die Ortssuche nicht
+  const posAus = (x) => (x && Array.isArray(x.pos) && x.pos.length === 2 ? x.pos : null);
+  const o1 = !a.von && posAus(z.von) ? { name: vonN, pos: posAus(z.von) } : await assistOrt(vonN, ctx || {});
+  const o2 = !a.nach && posAus(z.nach) ? { name: nachN, pos: posAus(z.nach) } : await assistOrt(nachN, ctx || {});
   if (!o1 || !o2 || o1.auswahl || o2.auswahl) return { ergebnis: 'nicht prüfbar', hinweis: 'Start oder Ziel konnte ich nicht eindeutig finden. Frag, welcher Ort genau gemeint ist.' };
   const mitZeit = !!(a.ab || a.tag || a.versatz_min != null || a.danach || (z && z.suche_ab)), T = zeitStart(a, z);
   let list, zeitGesetzt = mitZeit;
@@ -3727,7 +3732,7 @@ async function verbindungSuchen(a, ctx) {
       abschnitte: fahrt.map((l) => ({ art: l.art === 'zug' ? 'Zug' : l.art === 'bus' ? 'Bus' : l.art === 'bahn' ? 'Stadtbahn' : l.art, linie: l.linie, von: l.von, ab: hmZ(Date.parse(l.ab)), nach: l.nach, an: hmZ(Date.parse(l.an)), gleis: l.gleis })),
       echtzeit_erste_fahrt: ez ? (ez.faellt_aus ? { faellt_aus: true, quelle: ez.quelle } : ez.verspaetung_min != null ? { verspaetung_min: ez.verspaetung_min, quelle: ez.quelle } : { keine_abweichung_gemeldet: true, quelle: ez.quelle }) : undefined });
   }
-  if (ctx) ctx.neu = { typ: 'verbindung', von: { name: vonN }, nach: { name: nachN }, art: '', ueber: ueberN || '', wunsch: { max_umstiege: maxU, ohne_bus: ohneBus, nur_regio: nurRegio }, ab: new Date(Date.parse(teil[0].ab)).toISOString(), suche_ab: mitZeit || (z && z.suche_ab) ? new Date(T).toISOString() : '',
+  if (ctx) ctx.neu = { typ: 'verbindung', von: { name: vonN, pos: o1.pos }, nach: { name: nachN, pos: o2.pos }, art: '', ueber: ueberN || '', wunsch: { max_umstiege: maxU, ohne_bus: ohneBus, nur_regio: nurRegio }, ab: new Date(Date.parse(teil[0].ab)).toISOString(), suche_ab: mitZeit || (z && z.suche_ab) ? new Date(T).toISOString() : '',
     verbindungen: teil.map((c) => ({ legs: c.teile.filter((l) => l.art !== 'fuss').map((l) => ({ art: l.art, linie: l.linie, von: l.von, nach: l.nach, ab: new Date(Date.parse(l.ab)).toISOString(), an: new Date(Date.parse(l.an)).toISOString(), ziel: l.ziel, gleis: l.gleis, vonPos: l.vonPos, nachPos: l.nachPos })) })) };
   return { ergebnis: 'Verbindungen gefunden', zeit_gesetzt: zeitGesetzt, wunsch, verbindungen: aus,
     hinweis: 'Verbindungen laut Fahrplan von HERE' + (mitZeit && !zeitGesetzt ? ' (die Uhrzeit konnte nicht gesetzt werden: sag, dass die Zeiten ab jetzt gelten)' : '') + '. Echtzeit nur für die erste Fahrt, wenn echtzeit_erste_fahrt da ist; sonst „Verspätungen nicht bekannt“. Ob Umstiege reichen, prüft anschluss_pruefen. Nenne nur diese Zeiten und Linien, rechne nie selbst mit Uhrzeiten.' };
