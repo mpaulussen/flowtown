@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.107.0';
+  const VERSION = '0.107.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4615,6 +4615,7 @@
   }
   $('#tag-link').addEventListener('click', () => showView('tag'));
   $('#kann-link').addEventListener('click', () => showView('kann'));
+  $('#intro-link').addEventListener('click', () => openWelcome());   // der erste Start lässt sich wiederholen; Angaben bleiben, die Häkchen zeigen den jetzigen Stand
   $('#kann-back').addEventListener('click', () => showView('more'));
   // Beispielfragen auf „Was kann Flowtown?“: ein Tipp stellt die Frage, die Antwort erscheint über der Leiste
   $('#view-kann').addEventListener('click', (ev) => { const b = ev.target.closest('[data-kask]'); if (b) { unlockSpeech(); askAssist(b.dataset.kask, false); } });
