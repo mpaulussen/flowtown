@@ -57,11 +57,15 @@ Einmal umsteigen ist ok => verbindung_suchen
 Nur zwei Umstiege => verbindung_suchen
 
 # Filter: über einen Ort
-Fährt von Detmold ein Zug nach Hannover?
+Fährt von Detmold ein Zug nach Bielefeld?
 Über Herford => fahrt_pruefen
-Über Hannover => fahrt_pruefen
-Über Bad Salzuflen => fahrt_pruefen
 Über Lage => fahrt_pruefen
+Über Bad Salzuflen => fahrt_pruefen
+Über Hannover => fahrt_pruefen
+
+# Ziel nicht im Fahrplan: ehrlich absagen, nichts erfinden
+Fährt von Detmold ein Zug nach Hannover?
+Über Lage
 
 # Verspätung
 Wann fährt von Detmold ein Zug nach Herford?

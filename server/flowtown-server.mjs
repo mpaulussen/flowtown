@@ -3691,7 +3691,7 @@ async function fahrtPruefen(a, ctx) {
         if (!tage_ok.includes(dd)) continue;
         const ts = berlinMitternacht(dd) + tm * 60000;
         if (ts < T0 || ts > T1) continue;
-        fahrten.push(Object.assign({ ts, uhr: hmZ(ts), tag: tagText(ts), in_min: Math.round((ts - jetzt) / 60000), linie, richtung: fpName(d.heads[t[2]], d), halt_am_start: fpName(d.stops[pat[j]][1], d), halt_am_ziel: fpName(d.stops[pat[eZiel]][1], d), ankunft_am_ziel: hmZ(ts + fz * 60000), fahrzeit_min: fz, art: ['Stadtbahn', '', 'Zug', 'Bus'][kind] || 'Bus' }, dd === heute ? rtAt(id, ti, pat, j) || {} : {}));
+        fahrten.push(Object.assign({ ts, uhr: hmZ(ts), tag: tagText(ts), in_min: Math.round((ts - jetzt) / 60000), linie, richtung: fpName(d.heads[t[2]], d), halt_am_start: fpName(d.stops[pat[j]][1], d), halt_am_ziel: fpName(d.stops[pat[eZiel]][1], d), ankunft_am_ziel: hmZ(ts + fz * 60000), fahrzeit_min: fz, satz: `${linie} ab ${fpName(d.stops[pat[j]][1], d)} um ${hmZ(ts)}${tagText(ts) !== 'heute' ? ' (' + tagText(ts) + ')' : ''}, an ${fpName(d.stops[pat[eZiel]][1], d)} um ${hmZ(ts + fz * 60000)}, Fahrzeit ${fz} Minuten`, art: ['Stadtbahn', '', 'Zug', 'Bus'][kind] || 'Bus' }, dd === heute ? rtAt(id, ti, pat, j) || {} : {}));
       }
     }
   }
@@ -3776,7 +3776,7 @@ async function verbindungSuchen(a, ctx) {
   }
   if (ctx) ctx.neu = { typ: 'verbindung', von: { name: vonN, pos: o1.pos }, nach: { name: nachN, pos: o2.pos }, art: '', ueber: ueberN || '', wunsch: { max_umstiege: maxU, ohne_bus: ohneBus, nur_regio: nurRegio }, ab: new Date(Date.parse(teil[0].ab)).toISOString(), suche_ab: mitZeit || (z && z.suche_ab) ? new Date(T).toISOString() : '',
     verbindungen: teil.map((c) => ({ legs: c.teile.filter((l) => l.art !== 'fuss').map((l) => ({ art: l.art, linie: l.linie, von: l.von, nach: l.nach, ab: new Date(Date.parse(l.ab)).toISOString(), an: new Date(Date.parse(l.an)).toISOString(), ziel: l.ziel, gleis: l.gleis, vonPos: l.vonPos, nachPos: l.nachPos })) })) };
-  return { ergebnis: 'Verbindungen gefunden', zeit_gesetzt: zeitGesetzt, wunsch, verbindungen: aus,
+  return { ergebnis: 'Verbindungen gefunden', zeit_gesetzt: zeitGesetzt, wunsch, verbindungen: aus.map((v) => Object.assign({ satz: `Abfahrt ${v.ab}, Ankunft ${v.an}${v.tag && v.tag !== 'heute' ? ' (' + v.tag + ')' : ''}, Fahrzeit ${v.dauer_min} Minuten, ${v.umstiege ? v.umstiege + (v.umstiege === 1 ? ' Umstieg' : ' Umstiege') : 'ohne Umstieg'}` }, v)),
     hinweis: 'Verbindungen laut Fahrplan von HERE' + (mitZeit && !zeitGesetzt ? ' (die Uhrzeit konnte nicht gesetzt werden: sag, dass die Zeiten ab jetzt gelten)' : '') + '. Echtzeit nur für die erste Fahrt, wenn echtzeit_erste_fahrt da ist; sonst „Verspätungen nicht bekannt“. Ob Umstiege reichen, prüft anschluss_pruefen. Nenne nur diese Zeiten und Linien, rechne nie selbst mit Uhrzeiten.' };
 }
 // Echtzeit der DB für ein Ereignis (Abfahrt dp oder Ankunft ar) einer Fahrt von HERE: Station über den Namen, Fahrt über Linie und geplante Zeit (± 2 Minuten)
@@ -3932,7 +3932,7 @@ async function absichern(antwort, messages, used) {
   used.push('quellenpruefung');
   try {
     messages.push({ role: 'assistant', content: antwort });
-    messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“` });
+    messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“${/^Dauer|^Uhrzeit/.test(grund) ? ' Fahrzeit, Abfahrt und Ankunft stehen fertig im Feld satz des Ergebnisses (auch fahrzeit_min, dauer_min): nutze genau diese Angaben aus einem Eintrag, rechne nicht selbst und rechne die Wartezeit ab jetzt nicht dazu.' : ''}` });
     const m = await mistralChat(messages, true);
     const a2 = sauber(m.content);
     if (a2 && !quellenPruefung(a2, messages, used)) return mitFahrplanHinweis(a2, messages);
