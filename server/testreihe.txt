@@ -86,38 +86,38 @@ Nur Regionalverkehr => fahrt_pruefen
 Und der nächste? => fahrt_pruefen
 Gibt es Verspätung? => verspaetung_pruefen
 
-# Ortsvarianten: Bahnhof allein
-Wann fährt ein Zug vom Bahnhof nach Detmold?
-Wann fährt ein Zug vom Hauptbahnhof nach Herford?
-Fährt vom Hbf ein Zug nach Hannover?
-Fährt von Bahnhof Detmold ein Zug nach Bielefeld?
-Fährt vom Detmolder Bahnhof ein Zug nach Herford?
-Wann fährt von Hauptbahnhof Bielefeld ein Zug nach Paderborn?
-Fährt vom Busbahnhof Herford ein Bus nach Bielefeld?
-Wann fährt die Stadtbahn von der Uni zum Hauptbahnhof?
-Wann fährt die Stadtbahn vom Hbf zur Universität?
-Wann fährt ein Bus vom Jahnplatz zum Rathaus?
+# Ortsvarianten: Bahnhof allein [einzeln]
+Wann fährt ein Zug vom Bahnhof nach Detmold? => fahrt_pruefen
+Wann fährt ein Zug vom Hauptbahnhof nach Herford? => fahrt_pruefen
+Fährt vom Hbf ein Zug nach Hannover? => fahrt_pruefen
+Fährt von Bahnhof Detmold ein Zug nach Bielefeld? => fahrt_pruefen
+Fährt vom Detmolder Bahnhof ein Zug nach Herford? => fahrt_pruefen
+Wann fährt von Hauptbahnhof Bielefeld ein Zug nach Paderborn? => fahrt_pruefen
+Fährt vom Busbahnhof Herford ein Bus nach Bielefeld? => fahrt_pruefen
+Wann fährt die Stadtbahn von der Uni zum Hauptbahnhof? => fahrt_pruefen
+Wann fährt die Stadtbahn vom Hbf zur Universität? => fahrt_pruefen
+Wann fährt ein Bus vom Jahnplatz zum Rathaus? => fahrt_pruefen
 
-# Orte in anderen Städten
-Fährt von Mönchengladbach Hauptbahnhof ein Zug nach Düsseldorf?
-Fährt von Paderborn Hbf ein Zug nach Bielefeld?
-Wann fährt von Detmold ein Zug nach Paderborn?
+# Orte in anderen Städten [einzeln]
+Fährt von Mönchengladbach Hauptbahnhof ein Zug nach Düsseldorf? => fahrt_pruefen
+Fährt von Paderborn Hbf ein Zug nach Bielefeld? => fahrt_pruefen
+Wann fährt von Detmold ein Zug nach Paderborn? => fahrt_pruefen
 Hält der Zug nach Osnabrück in Detmold?
-Fährt von Bielefeld ein Zug nach Köln?
+Fährt von Bielefeld ein Zug nach Köln? => fahrt_pruefen
 
-# Orte außerhalb des Fahrplans (soll ehrlich absagen)
-Wann fährt von Hamburg Hbf ein Zug nach Kiel?
-Gibt es einen Zug von Bielefeld nach München?
-Fährt von Münster ein Zug nach Osnabrück?
+# Orte außerhalb des Fahrplans (soll ehrlich absagen) [einzeln]
+Wann fährt von Hamburg Hbf ein Zug nach Kiel? => fahrt_pruefen
+Gibt es einen Zug von Bielefeld nach München? => fahrt_pruefen
+Fährt von Münster ein Zug nach Osnabrück? => fahrt_pruefen
 
-# Formulierungen
-Wann fährt der nächste Zug von Bielefeld nach Herford?
-Gibt es einen Zug von Bielefeld nach Herford?
-Fährt gleich ein Zug von Bielefeld nach Herford?
-Hält die RB 72 in Lage?
-Hält der RE 82 in Herford?
-Welcher Zug fährt von Detmold nach Bielefeld?
-Wie lange fährt man von Detmold nach Bielefeld?
+# Formulierungen [einzeln]
+Wann fährt der nächste Zug von Bielefeld nach Herford? => fahrt_pruefen
+Gibt es einen Zug von Bielefeld nach Herford? => fahrt_pruefen
+Fährt gleich ein Zug von Bielefeld nach Herford? => fahrt_pruefen
+Hält die RB 72 in Lage? => -
+Hält der RE 82 in Herford? => -
+Welcher Zug fährt von Detmold nach Bielefeld? => fahrt_pruefen
+Wie lange fährt man von Detmold nach Bielefeld? => -
 Ich möchte von Detmold nach Bielefeld, was gibt es da?
 
 # Stadtbahn und Bus in Bielefeld
@@ -128,8 +128,21 @@ Ohne Bus => fahrt_pruefen
 Gibt es Verspätung? => verspaetung_pruefen
 Eine halbe Stunde später => fahrt_pruefen
 
-# Fragen ohne Gesprächsbezug (kein Vorabaufruf, die KI antwortet oder sagt offen, was sie nicht weiß)
+# Fragen ohne Gesprächsbezug (die KI antwortet oder sagt offen, was sie nicht weiß) [einzeln]
 Wie ist das Wetter?
 Gibt es am Hauptbahnhof einen Aufzug?
 Wann hat das Rathaus auf?
 Danke!
+
+# Themenwechsel mitten im Gespräch: eine ganz neue Strecke gilt, nicht die alte
+Fährt von Detmold ein Zug nach Herford?
+Wann fährt die Stadtbahn vom Hbf zur Universität? => fahrt_pruefen
+Fährt von Bielefeld ein Zug nach Paderborn? => fahrt_pruefen
+Wann fährt ein Bus vom Jahnplatz zum Rathaus? => fahrt_pruefen
+Wie komme ich von Detmold nach Bielefeld?
+Fährt vom Hbf ein Zug nach Hannover? => fahrt_pruefen
+
+# Nach Stadtbahn: ohne Busse heißt Stadtbahn bleibt erlaubt
+Wann fährt die Stadtbahn von der Universität zum Hauptbahnhof?
+Ohne Busse => fahrt_pruefen
+Keine Busse => fahrt_pruefen

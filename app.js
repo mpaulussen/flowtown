@@ -2120,7 +2120,7 @@
   let callLog = [];   // bisheriges Gespräch: { q, a }, damit nichts verschwindet, wenn die nächste Antwort kommt
   const assistReset = () => { callLog = []; assistZustand = null; assistHist = []; };   // neues Gespräch: nichts von der letzten Strecke, Zeit oder den Wünschen
   // Worüber das Gespräch gerade geht (vom Server gemerkt), als lesbare Zeile: so sieht man, was „eine Stunde später“ oder „nur Regionalverkehr“ meint
-  const ZART = { zug: 'nur Züge', bus: 'nur Busse', stadtbahn: 'nur Stadtbahn', nahverkehr: 'nur Regionalverkehr', fernverkehr: 'nur Fernverkehr', oepnv: 'Stadtbahn und Bus' };
+  const ZART = { zug: 'nur Züge', schiene: 'ohne Busse', bus: 'nur Busse', stadtbahn: 'nur Stadtbahn', nahverkehr: 'nur Regionalverkehr', fernverkehr: 'nur Fernverkehr', oepnv: 'Stadtbahn und Bus' };
   function kontextText(z) {
     if (!z || !z.von || !z.nach || !z.von.name || !z.nach.name) return '';
     const p = [`${z.von.name} → ${z.nach.name}`], t = z.ab || z.suche_ab, d = t ? new Date(t) : null;
