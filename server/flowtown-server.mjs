@@ -3636,6 +3636,7 @@ function streckeAufruf(frage) {
   if (x && x.name !== 'fahrt_pruefen' && x.name !== 'verbindung_suchen') return null;
   const args = Object.assign({}, x ? x.args : {}, { von, nach });
   if (!args.art) { const q = f.toLowerCase(); if (/stadtbahn|straßenbahn/.test(q)) args.art = 'stadtbahn'; else if (/\b(?:zug|züge|regionalzug)\b/.test(q)) args.art = 'zug'; }
+  if (!args.art && /\bbus(?:se)?\b/i.test(f) && !/zug|züge|bahn/i.test(f)) args.nenne_art = 'Bus';   // gefragt war ein Bus; fahren dort andere Arten, muss die Antwort das sagen
   return { name: x ? x.name : 'fahrt_pruefen', args };
 }
 // Fahrt prüfen: gibt es im Fahrplan Fahrten ohne Umstieg, die am Start halten und danach am Ziel (optional „über“ einen Ort), zu einer Zeit, mit Filter nach Art?
@@ -3723,7 +3724,8 @@ async function fahrtPruefen(a, ctx) {
     }
   }
   if (ctx) ctx.neu = { typ: 'fahrt', von: { name: von }, nach: { name: nach }, art, ueber: ueberN || '', ab: new Date(top[0].ts).toISOString(), suche_ab: new Date(T0).toISOString(), wunsch: { max_umstiege: 0, ohne_bus: art === 'zug' || art === 'schiene' || art === 'nahverkehr' || art === 'fernverkehr' || art === 'stadtbahn', nur_regio: art === 'nahverkehr' }, fahrten: top.map((f) => ({ linie: f.linie, ab: new Date(f.ts).toISOString(), von: f.halt_am_start, ziel: f.richtung })) };
-  return { ergebnis: 'Fahrten gefunden', zeitraum, zeit_hinweis: a.versatz_min != null && a.versatz_min < 0 && T0 === jetzt ? 'Früher als jetzt kann ich keine Abfahrt nennen: Die Liste beginnt mit der nächsten Abfahrt ab jetzt. Sag das offen, nenne keine Zeit davor.' : undefined, wunsch: { art, ueber: !!ku }, haltestellen_start: [...halte].slice(0, 4), fahrten: top.map(({ ts, ...rest }) => rest), hinweis: 'Fahrten ohne Umstieg laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden; bei keine_abweichung_gemeldet sag „laut DB keine Abweichung gemeldet“ (nie „pünktlich“). Nenne nur diese Linien und Uhrzeiten, rechne nie selbst mit Uhrzeiten. Nenne die Fahrten in der Reihenfolge des Ergebnisses, bei „später“ oder „der nächste“ die erste Fahrt zuerst. Für „später“ oder „der nächste“ ruf das Werkzeug mit versatz_min oder danach noch einmal auf.' };
+  const artAbw = a.nenne_art && !top.some((f) => f.art === a.nenne_art) ? `Gefragt war ein ${a.nenne_art}, aber die Fahrten hier sind eine andere Art (Feld art, zum Beispiel Stadtbahn). Sag das zuerst: „Dort fährt kein ${a.nenne_art}, sondern die …“.` : undefined;
+  return { ergebnis: 'Fahrten gefunden', art_abweichend: artAbw, zeitraum, zeit_hinweis: a.versatz_min != null && a.versatz_min < 0 && T0 === jetzt ? 'Früher als jetzt kann ich keine Abfahrt nennen: Die Liste beginnt mit der nächsten Abfahrt ab jetzt. Sag das offen, nenne keine Zeit davor.' : undefined, wunsch: { art, ueber: !!ku }, haltestellen_start: [...halte].slice(0, 4), fahrten: top.map(({ ts, ...rest }) => rest), hinweis: 'Fahrten ohne Umstieg laut Fahrplan; nenne verspaetung_min oder faellt_aus, wenn vorhanden; bei keine_abweichung_gemeldet sag „laut DB keine Abweichung gemeldet“ (nie „pünktlich“). Nenne nur diese Linien und Uhrzeiten, rechne nie selbst mit Uhrzeiten. Nenne die Fahrten in der Reihenfolge des Ergebnisses, bei „später“ oder „der nächste“ die erste Fahrt zuerst. Für „später“ oder „der nächste“ ruf das Werkzeug mit versatz_min oder danach noch einmal auf.' };
 }
 // Verbindungen mit Umstiegen von HERE (Fahrplan), mit Uhrzeit und Filtern. Echtzeit nur für die erste Fahrt (DELFI oder DB), Anschlüsse prüft anschluss_pruefen.
 async function verbindungSuchen(a, ctx) {
