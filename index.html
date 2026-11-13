@@ -94,6 +94,11 @@
       <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span><span class="tip-main"><b>Gerade jetzt</b><span>Abfahrten, Störungen, Staus, Aufzüge. Und ein anderer Weg, wenn etwas ausfällt.</span></span></div></li>
       <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-wave"/></svg></span><span class="tip-main"><b>Dein Flow</b><span>Flowtown misst, wo du an Ampeln wartest. Das bleibt auf deinem Handy.</span></span></div></li>
     </ul>
+    <section class="w-goals" aria-labelledby="w-mode-h">
+      <h3 id="w-mode-h">Womit bist du oft unterwegs?</h3>
+      <p class="small muted">Mehrere möglich. Flowtown vergleicht deine Wege danach.</p>
+      <div class="goal-chips" id="w-modes" role="group" aria-labelledby="w-mode-h"></div>
+    </section>
     <section class="w-goals" aria-labelledby="w-goal-h">
       <h3 id="w-goal-h">Was ist dir wichtig?</h3>
       <p class="small muted">Mehrere möglich. Flowtown zeigt dir das zuerst.</p>
@@ -408,6 +413,13 @@
         <p class="small muted">Ruhe und Pausen passt zum Beispiel bei chronischer Krankheit, Autismus oder Angst. Rollator oder Gehhilfe auch, wenn du langsamer zu Fuß bist.</p>
         <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
         <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
+      </div>
+    </details>
+    <details class="tipcard setbox" id="box-modes">
+      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg></span><span class="tip-main"><b>Unterwegs mit</b><span id="modes-sub">Noch nichts gewählt</span></span></summary>
+      <div class="tip-detail">
+        <p class="small muted" id="set-modes-h">Womit du oft unterwegs bist. Mehrere möglich. Das bleibt auf diesem Handy. In „Dein Weg jetzt“ empfiehlt Flowtown dann das schnellste davon.</p>
+        <div class="goal-chips" id="set-modes" role="group" aria-labelledby="set-modes-h"></div>
       </div>
     </details>
     <details class="tipcard setbox" id="box-wege">

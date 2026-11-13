@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.106.1';
+  const VERSION = '0.107.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4031,7 +4031,7 @@
   }
   const stamp = () => new Date().toISOString().slice(0, 10);
   $('#btn-export').addEventListener('click', () => {
-    download(`flowtown-${stamp()}.json`, JSON.stringify({ app: 'flowtown', version: VERSION, exported: new Date().toISOString(), names, trips, wege: wege().filter(wegOk) }, null, 1), 'application/json');
+    download(`flowtown-${stamp()}.json`, JSON.stringify({ app: 'flowtown', version: VERSION, exported: new Date().toISOString(), names, trips, wege: wege().filter(wegOk), unterwegs: unterwegs() }, null, 1), 'application/json');
   });
   $('#btn-export-csv').addEventListener('click', () => {
     const head = ['fahrt', 'verkehrsmittel', 'demo', 'typ', 'ampel', 'name', 'lat', 'lon', 'zeit', 'wartezeit_s', 'halte', 'richtung_grad', 'bewertung', 'stichworte'];
@@ -4062,6 +4062,7 @@
         }
         if (nw) { store.set('settings', settings); renderWege(); }
       }
+      if (Array.isArray(data.unterwegs) && !unterwegs().length) { settings.unterwegs = data.unterwegs.filter((k) => UMODES[k]); store.set('settings', settings); renderModes(); if (nowReady) renderNow(); }
       moreMsg(`${add.length} Fahrt${add.length === 1 ? '' : 'en'} importiert${nw ? `, dazu ${nw} Weg${nw === 1 ? '' : 'e'}` : ''}.`);
     } catch (e) {
       moreMsg('Die Datei konnte nicht gelesen werden. Bitte wähle einen Export aus dieser App.');
@@ -6578,6 +6579,22 @@
   });
   $('#box-wege').addEventListener('submit', (ev) => { if (ev.target.closest('[data-weg-search]')) { ev.preventDefault(); wegSearch($('#wege-q').value); } });
   renderWege();
+  // ---------- Unterwegs mit: Verkehrsmittel der Person, nur auf dem Handy (0.107.0) ----------
+  const UMODES = { auto: ['Auto', 'car'], oepnv: ['Bus und Bahn', 'bus'], rad: ['Rad', 'bike'], fuss: ['Zu Fuß', 'walk'] };
+  const unterwegs = () => (Array.isArray(settings.unterwegs) ? settings.unterwegs : []).filter((k) => UMODES[k]);
+  function renderModes() {
+    const u = unterwegs();
+    const html = Object.entries(UMODES).map(([k, [l, i]]) => `<button type="button" class="umode-chip" data-umode="${k}" aria-pressed="${u.includes(k)}">${ic(i)}${l}</button>`).join('');
+    ['#w-modes', '#set-modes'].forEach((id) => { const el = $(id); if (el) el.innerHTML = html; });
+    const sub = $('#modes-sub'); if (sub) sub.textContent = u.length ? u.map((k) => UMODES[k][0]).join(' · ') : 'Noch nichts gewählt';
+  }
+  function toggleMode(k) {
+    if (!UMODES[k]) return;
+    const u = unterwegs(); settings.unterwegs = u.includes(k) ? u.filter((x) => x !== k) : u.concat(k);
+    store.set('settings', settings); renderModes();
+    if (nowReady) renderNow();
+  }
+  ['#w-modes', '#set-modes'].forEach((id) => $(id).addEventListener('click', (ev) => { const b = ev.target.closest('[data-umode]'); if (b) toggleMode(b.dataset.umode); }));
   // ---------- Dein Weg jetzt: ein gespeicherter Weg, auf Tipp geprüft und verglichen (0.105.0) ----------
   // Geprüft wird nur auf Tipp: Dann gehen Start und Ziel des Wegs (auf etwa 100 m genau) und, falls gewählt, das Profil an den Server und HERE.
   // Verglichen werden Auto (mit Verkehr), Bus und Bahn (Fahrplan), Rad und zu Fuß. Eine Empfehlung gibt es nur, wenn mindestens zwei Möglichkeiten berechnet wurden.
@@ -6591,18 +6608,26 @@
   const nowVm = (o) => (o.verkehrsmittel === 'oepnv' ? 'oepnv' : o.verkehrsmittel);
   function nowRows(d) {
     return (d.optionen || []).filter((o) => NOW_NAME[nowVm(o)]).map((o) => {
-      const vm = nowVm(o), best = !!d.empfehlung && d.empfehlung.verkehrsmittel === vm && (d.optionen || []).filter((x) => NOW_NAME[nowVm(x)]).length > 1;
+      const vm = nowVm(o);
       const det = [];
       if (vm === 'auto') { if (o.verzoegerung_min >= 2) det.push(`+${o.verzoegerung_min} min durch Verkehr`); if (o.parken) det.push('mit etwa 5 min Parken (geschätzt)'); }
       if (vm === 'oepnv') { det.push(`ab ${o.ab}`); det.push(o.umstiege ? `${o.umstiege} Umstieg${o.umstiege === 1 ? '' : 'e'}` : 'ohne Umstieg'); if (o.linien && o.linien.length) det.push(o.linien.join(', ')); const ez = o.echtzeit; det.push(!ez ? 'nach Fahrplan, Verspätungen nicht bekannt' : ez.faellt_aus ? 'fällt laut Echtzeit aus' : ez.verspaetung_min > 0 ? `${ez.verspaetung_min} min Verspätung laut Echtzeit (${ez.quelle})${ez.eingerechnet ? ', in der Ankunft eingerechnet' : ', in der Ankunft nicht eingerechnet'}` : `laut Echtzeit pünktlich (${ez.quelle})`); }
       if ((vm === 'rad' || vm === 'fuss') && o.km) det.push(`${String(o.km).replace('.', ',')} km`);
       if (o.geeignet === false) det.push('für dein Profil nicht empfohlen');
-      return { vm, best, name: NOW_NAME[vm], min: o.dauer_min, an: o.ankunft, det, meld: vm === 'auto' ? (o.meldungen || []) : [] };
+      return { vm, best: false, nogo: o.geeignet === false, name: NOW_NAME[vm], min: o.dauer_min, an: o.ankunft, det, meld: vm === 'auto' ? (o.meldungen || []) : [] };
     });
   }
+  // Empfehlung: die des Servers. Hat die Person Verkehrsmittel gewählt und liegt die Empfehlung nicht darunter, zählt das schnellste ihrer Verkehrsmittel.
+  function nowRec(rows, e) {
+    if (rows.length < 2 || !e) return null;
+    const U = unterwegs(), mine = rows.filter((r) => U.includes(r.vm) && !r.nogo).sort((x, y) => x.min - y.min)[0];
+    if (!U.length || !mine || U.includes(e.verkehrsmittel)) return { vm: e.verkehrsmittel, eigen: false, grund: String(e.grund).split(';').map((x) => x.trim()).filter(Boolean) };
+    const srv = rows.find((r) => r.vm === e.verkehrsmittel);
+    return { vm: mine.vm, eigen: true, grund: [`${mine.min} min, Ankunft ${mine.an}`].concat(srv && srv.min < mine.min ? [`Schneller wäre es ${GROUP_WITH[srv.vm]} (${srv.min} min), das hast du aber nicht als dein Verkehrsmittel gewählt`] : []) };
+  }
   function nowSummary(w, res) {
-    const d = res.data, rows = nowRows(d), e = d.empfehlung;
-    const rec = rows.length > 1 && e ? `Am besten ${GROUP_WITH[e.verkehrsmittel] || ''}: ${String(e.grund).replace(/;/g, ',')}.` : 'Es konnte nur eine Möglichkeit berechnet werden, deshalb gibt es keine Empfehlung.';
+    const d = res.data, rows = nowRows(d), r0 = nowRec(rows, d.empfehlung);
+    const rec = r0 ? `${r0.eigen ? 'Für dich am besten' : 'Am besten'} ${GROUP_WITH[r0.vm] || ''}: ${r0.grund.join(', ')}.` : 'Es konnte nur eine Möglichkeit berechnet werden, deshalb gibt es keine Empfehlung.';
     return `Dein Weg ${w.von.name} nach ${w.nach.name}. ${rec} ${rows.map((r) => `${r.name}: ${r.min} Minuten, Ankunft gegen ${r.an}${r.det.length ? ', ' + r.det.join(', ') : ''}.`).join(' ')} ${nowStamp(res)}. Bus und Bahn nach Fahrplan von HERE; Echtzeit nur, wo sie genannt ist.`;
   }
   function renderNow() {
@@ -6622,8 +6647,9 @@
       const meld = auto ? auto.meld : [];
       state = meld.length || (auto && auto.det.some((x) => /durch Verkehr/.test(x))) ? 'amber' : 'green';
       badge = rows.length > 1 && e ? 'verglichen' : 'ohne Vergleich';
-      const g = e && rows.length > 1 ? String(e.grund).split(';').map((x) => x.trim()).filter(Boolean) : [];
-      body = (g.length ? `<p class="rec"><b>Am besten ${esc(GROUP_WITH[e.verkehrsmittel] || '')}</b>: ${esc(g[0])}</p>${g.length > 1 ? `<p class="small muted">${esc(g.slice(1).join(' · '))}</p>` : ''}`
+      const rc = nowRec(rows, e), g = rc ? rc.grund : [];
+      rows.forEach((r) => { r.best = !!rc && r.vm === rc.vm; });
+      body = (g.length ? `<p class="rec"><b>${rc.eigen ? 'Für dich am besten ' : 'Am besten '}${esc(GROUP_WITH[rc.vm] || '')}</b>: ${esc(g[0])}</p>${g.length > 1 ? `<p class="small muted">${esc(g.slice(1).join(' · '))}</p>` : ''}`
         : `<p class="lw-ok small"><b>Keine Empfehlung:</b> ${rows.length ? 'Es konnte nur eine Möglichkeit berechnet werden.' : 'Für diesen Weg gab es keine Strecke.'}</p>`)
         + (rows.length ? `<ul class="lw-list">${rows.map((r) => `<li><span class="dot${r.best ? ' best' : ''}" aria-hidden="true"></span><span class="lw-name"><b>${esc(r.name)}${r.best ? ' (empfohlen)' : ''}</b> · ${esc(String(r.min))} min, Ankunft ${esc(r.an)}${r.det.length ? `<small class="muted"> ${esc(r.det.join(' · '))}</small>` : ''}</span></li>`).join('')}</ul>` : '')
         + (meld.length ? `<p class="small"><b>Auf der Strecke mit dem Auto:</b> ${meld.map(esc).join('; ')}</p>` : '')
@@ -6657,7 +6683,7 @@
   });
   $('#nowcard').addEventListener('change', (ev) => { if (ev.target.id === 'now-sel') { nowId = ev.target.value; renderNow(); } });
   setInterval(() => { if (!document.hidden && !$('#nowcard').hidden) renderNow(); }, 60000);   // „zu alt“ rechtzeitig zeigen
-  nowReady = true; renderNow();
+  nowReady = true; renderModes(); renderNow();
   // Begrüßung: Vorlesen, Profil und große Schrift gleich hier einstellen
   function renderWelcomeAccess() {
     const v = $('#w-voice');

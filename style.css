@@ -1649,3 +1649,8 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .nowcard .rec{margin:0;font-size:17px}
 .nowcard .dot.best{background:var(--good)}
 .nowcard .lw-name small{display:block}
+
+/* Unterwegs mit (0.107.0): wie die Wahl-Chips */
+.umode-chip{--gc:var(--accent);font:inherit;font-size:15px;font-weight:700;min-height:44px;padding:6px 14px;border-radius:999px;border:1.5px solid color-mix(in srgb,var(--gc) 45%,var(--line));background:var(--surface);color:var(--gc);display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.umode-chip .ic{width:18px;height:18px}
+.umode-chip[aria-pressed="true"]{background:var(--gc);color:var(--on-accent);border-color:var(--gc)}
