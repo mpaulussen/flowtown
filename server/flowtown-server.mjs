@@ -3868,6 +3868,9 @@ if (cli === 'echtzeit-leg') {
     break;
   }
   if (!gefunden) console.log('In keinem Fahrplan-Auszug gibt es eine Haltestelle im Umkreis von 150 m.');
+  // der Datenstrom selbst: wie viele Fahrten haben überhaupt eine Echtzeit-Meldung, je Fahrplan-Auszug
+  console.log(`Echtzeit-Datenstrom: Stand vor ${Math.round((Date.now() - rt.ts) / 60000)} min, ${rt.n || 0} Meldungen insgesamt; Fahrten mit Meldung je Auszug:`,
+    Object.keys(fahrplaene).map((id) => { const m = rt.staedte[id] || {}, v = Object.values(m); return `${id}: ${v.length} von ${(fpData(id) || { trips: [] }).trips.length} (davon verspätet: ${v.filter((e) => e[1] > 60 || (e[2] || []).some((q) => q[1] > 60)).length}, ausgefallen: ${v.filter((e) => e[0]).length})`; }).join(' | '));
   console.log('Ergebnis:', JSON.stringify(rtLeg({ vonPos: [Number(lat), Number(lon)], linie, ab }) || null), '(null = keine eindeutige Zuordnung)');
   process.exit(0);
 }
