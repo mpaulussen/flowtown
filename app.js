@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.0';
+  const VERSION = '0.111.2';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2158,14 +2158,14 @@
     const el = $('#assist');
     const done = !!antwort && !!frage;
     if (done && !(callLog.length && callLog[callLog.length - 1].a === antwort)) callLog.push({ q: frage, a: antwort });
-    const prev = (done ? callLog.slice(0, -1) : callLog).slice(-(assistBig ? 3 : 6));
+    const prev = (done ? callLog.slice(0, -1) : callLog).slice(-(assistBig ? 20 : 6));   // im Sprachmodus der ganze Verlauf
     const ctxT = kontextText(assistZustand);
     el.classList.toggle('big', assistBig);
     el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
     const head = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>`;
     const logOl = prev.length ? `<ol class="call-log" aria-label="Bisheriges Gespräch">${prev.map((t) => `<li><span class="cl-q">Du: ${esc(t.q)}</span><span class="cl-a">Flowtown: ${esc(t.a)}</span></li>`).join('')}</ol>` : '';
-    const logHtml = assistBig || !prev.length ? logOl : `<details class="assist-log"><summary>Bisheriges Gespräch (${prev.length} ${prev.length === 1 ? 'Frage' : 'Fragen'})</summary>${logOl}</details>`;
+    const logHtml = assistBig ? (prev.length ? `<button type="button" class="log-jump" data-assist="logjump" aria-label="Früheren Chatverlauf anzeigen oder wieder zur neuesten Frage">${ic('list')}Chatverlauf (${prev.length}) ↑↓</button>${logOl}` : '') : !prev.length ? '' : `<details class="assist-log"><summary>Bisheriges Gespräch (${prev.length} ${prev.length === 1 ? 'Frage' : 'Fragen'})</summary>${logOl}</details>`;
     const ctxHtml = ctxT ? `<div class="assist-ctx" id="assist-ctx"><span class="ctx-t"><span class="ctx-l">Gespräch über:</span> <b>${esc(ctxT)}</b></span><button type="button" class="btn quiet ctx-x" data-assist="neu">Neues Thema</button></div>` : '';
     const qHtml = frage ? `<p class="assist-q">${assistBig ? 'Du: ' : ''}${esc(frage)}</p>` : '';
     const aHtml = `<p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}`;
@@ -2178,7 +2178,7 @@
         ${ctxHtml}<div class="call-body" tabindex="-1">${logHtml}${qHtml}${aHtml}${fbHtml}${note}</div>
         <p class="call-heard" id="call-heard" aria-live="off"></p>
         <div class="call-actions">${formHtml}<button type="button" class="hangup" data-assist="close" aria-label="Auflegen und Gespräch beenden">${ic('handset')}<span>Auflegen</span></button></div>`;
-      const body = el.querySelector('.call-body'), qe = el.querySelector('.call-body .assist-q'); if (body) body.scrollTop = qe ? qe.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 : 0;   // die neue Frage oben, die Antwort darunter von Anfang an
+      const body = el.querySelector('.call-body'), qe = el.querySelector('.call-body .assist-q'), cj = el.querySelector('.log-jump'); if (body) body.scrollTop = qe ? qe.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 - (cj ? cj.offsetHeight + 6 : 0) : 0;   // die neue Frage oben, die Antwort darunter von Anfang an
     } else {
       el.innerHTML = `${head}\n      ${ctxHtml}${logHtml}\n      ${qHtml}\n      ${aHtml}\n      ${fbHtml}\n      ${formHtml}\n      ${note}`;
     }
@@ -7046,6 +7046,10 @@
       const msg = 'Neues Thema. Was möchtest du wissen?';
       showAssist('', msg); assistLast = msg;
       speak(msg, { now: true, force: true, onend: assistBig ? () => { if (!$('#assist').hidden) listenAfter('Ich höre zu …'); } : undefined });
+    }
+    else if (a === 'logjump') {   // früheren Verlauf zeigen, und wieder zurück zur neuesten Frage
+      const body = $('#assist .call-body'), qe = body && body.querySelector('.assist-q'), cj = body && body.querySelector('.log-jump');
+      if (body) body.scrollTo({ top: body.scrollTop > 8 || !qe ? 0 : qe.getBoundingClientRect().top - body.getBoundingClientRect().top + body.scrollTop - 4 - (cj ? cj.offsetHeight + 6 : 0), behavior: 'smooth' });
     }
     else if (a === 'mic') { unlockSpeech(); listen(); }
     else if (a === 'say') { unlockSpeech(); speak(assistLast, { now: true, force: true }); }

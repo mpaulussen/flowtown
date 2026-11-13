@@ -1699,3 +1699,8 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .assist-log summary{cursor:pointer;min-height:44px;display:flex;align-items:center;font-weight:600;color:var(--muted)}
 .assist-log .call-log{max-height:34vh}
 @media (max-height:480px){.assist.big .assist-ctx .ctx-l{display:none}.assist.big .assist-ctx .ctx-x{min-height:36px}}
+
+/* Chatverlauf im Sprachmodus: Knopf bleibt oben sichtbar, auch wenn zur neuesten Frage gescrollt ist */
+.log-jump{position:sticky;top:0;z-index:2;align-self:flex-start;display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:6px 14px;border-radius:22px;border:1px solid var(--line,#8886);background:var(--surface);color:var(--fg);font:inherit;font-weight:600;font-size:15px;cursor:pointer}
+.log-jump .ic{width:18px;height:18px}
+.assist.big .call-log{max-height:none;overflow:visible}
