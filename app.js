@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.108.0';
+  const VERSION = '0.109.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2099,6 +2099,8 @@
     };
   }
   let assistBig = false, assistTick = null, assistT0 = 0;
+  let callLog = [];   // bisheriges Gespräch im großen Sprachmodus: { q, a }, damit nichts verschwindet, wenn die nächste Antwort kommt
+  const CALL_HELLO = 'Hallo, ich bin Flowtown. Wohin möchtest du, oder was möchtest du wissen?';
   // Großer Sprachmodus wie ein Anruf: Zustand (zuhören, nachdenken, sprechen), Gesprächszeit, roter Hörer zum Auflegen
   function assistLoop() {
     const el = $('#assist');
@@ -2118,12 +2120,16 @@
   function showAssist(frage, antwort, fb) {
     assistFb = antwort && fb ? fb : null;
     const el = $('#assist');
+    const done = assistBig && !!antwort && !!frage;
+    if (done && !(callLog.length && callLog[callLog.length - 1].a === antwort)) callLog.push({ q: frage, a: antwort });
+    const prev = assistBig ? (done ? callLog.slice(0, -1) : callLog).slice(-3) : [];
     el.classList.toggle('big', assistBig);
     el.classList.toggle('nosr', !SR);
     const act = antwort && assistAct && assistAct.typ === 'ziel' ? `<button type="button" class="btn" data-assist="ziel">${ic('route')}${esc(assistAct.name)} in „Wohin?“ öffnen</button>` : '';
     el.innerHTML = `<div class="assist-head"><b>${ic(sprechIcon())}Frag Flowtown</b><span class="call-time" id="call-time" hidden></span>${canSpeak && antwort ? `<button type="button" class="vf-x vf-say" data-assist="say" aria-label="Antwort vorlesen">${ic('sound')}</button>` : ''}<button type="button" class="vf-x" data-assist="close" aria-label="Schließen">${ic('x')}</button></div>
       ${assistBig ? '<p class="call-state" id="call-state" role="status" aria-live="polite"></p><div class="call-bars" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div><p class="call-heard" id="call-heard" aria-live="off"></p>' : ''}
-      ${frage ? `<p class="assist-q">${esc(frage)}</p>` : ''}
+      ${prev.length ? `<ol class="call-log" aria-label="Bisheriges Gespräch">${prev.map((t) => `<li><span class="cl-q">Du: ${esc(t.q)}</span><span class="cl-a">Flowtown: ${esc(t.a)}</span></li>`).join('')}</ol>` : ''}
+      ${frage ? `<p class="assist-q">${assistBig ? 'Du: ' : ''}${esc(frage)}</p>` : ''}
       <p class="assist-a" role="status" aria-live="polite">${antwort ? esc(antwort) : 'Einen Moment …'}</p>${act}
       ${assistFb ? `<div class="assist-fb" id="assist-fb" role="group" aria-label="War die Antwort richtig?"><span>War das richtig?</span><button type="button" class="btn quiet" data-assist="fb-gut">Stimmt</button><button type="button" class="btn quiet" data-assist="fb-falsch">Stimmt nicht</button><button type="button" class="btn quiet" data-assist="fb-veraltet">Veraltet</button></div><p class="small muted" id="assist-fb-note">Bei „Stimmt nicht“ und „Veraltet“ gehen Frage und Antwort an die Redaktion.</p>` : ''}
       <form class="assist-form" data-assist="form"><label class="sr-only" for="assist-inp">Weitere Frage</label><input id="assist-inp" type="text" placeholder="Weitere Frage tippen …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button>${SR ? `<button type="button" class="btn assist-mic" data-assist="mic" aria-label="Sprechen">${ic(sprechIcon())}</button>` : ''}</form>
@@ -4185,11 +4191,15 @@
   function openAssistEmpty(opts) {
     unlockSpeech(); pendingIntent = null; assistAct = null;
     assistBig = !!(opts && opts.big) || !!settings.sprechGross;
-    showAssist('', assistBig && SR ? 'Hallo! Wobei kann ich helfen?' : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
+    callLog = [];
+    showAssist('', assistBig ? CALL_HELLO : 'Frag mich nach Wegen, Abfahrten, Aufzügen oder Toiletten. Ist etwas gestört, nenne ich dir eine Alternative.');
     const ex = askExamples('start').ex, form = $('#assist .assist-form');
     if (form && ex.length) form.insertAdjacentHTML('beforebegin', `<div class="vf-chips assist-pick" role="group" aria-label="Beispielfragen">${ex.map((x) => `<button type="button" class="vf-chip" ${x.i ? `data-askintent="${x.i}"` : `data-askex="${esc(x.q)}"`}>${esc(x.l)}</button>`).join('')}</div>`);
     if (assistBig) assistLoopStart(true);
-    if (SR && settings.voiceIn && !(opts && opts.launch)) listen();
+    const hoeren = () => { if (assistBig && !$('#assist').hidden && !recog && !assistBusy && SR && settings.voiceIn && !(opts && opts.launch)) listen(); };
+    // Der Bot spricht zuerst und redet dich direkt an; danach hört er zu (nicht, solange er selbst spricht, sonst hört er sich)
+    if (assistBig && canSpeak) speak(CALL_HELLO, { now: true, force: true, onend: hoeren });
+    else if (SR && settings.voiceIn && !(opts && opts.launch)) listen();
   }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());

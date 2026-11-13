@@ -1627,6 +1627,13 @@ body[data-view] .assist.big{top:0;bottom:0;max-height:none}
 .kex .ask-ex-chip{min-height:44px;text-align:left}
 .kex .ask-ex-chip{white-space:normal;max-width:100%;line-height:1.3;padding-top:8px;padding-bottom:8px}
 
+/* Sprachmodus: Verlauf und größere Schrift (0.109.0) */
+.assist.big .assist-q{font-size:22px;color:var(--fg);font-style:normal;font-weight:700}
+.assist.big .call-heard{font-size:24px;color:var(--fg);font-weight:600}
+.call-log{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px;max-height:30vh;overflow:auto}
+.call-log li{display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:12px;background:var(--tint)}
+.call-log .cl-q{font-weight:700}
+.call-log .cl-a{color:var(--muted)}
 /* Meine Wege (0.103.0) */
 .wege-ul{list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:8px}
 .wege-ul li{display:flex;justify-content:space-between;align-items:center;gap:10px;border:1px solid var(--line);border-radius:12px;padding:8px 10px;background:var(--surface)}
