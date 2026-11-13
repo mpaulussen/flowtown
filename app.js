@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.3';
+  const VERSION = '0.111.4';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -4452,7 +4452,7 @@
   }
   // gewählter Treffer: als Ziel merken (ein schon gespeichertes an derselben Stelle nehmen), dann gleich vergleichen
   function planPick(o) {
-    let z = settings.ziele.find((x) => dist(x, o) < 80);
+    let z = findZiel(o);
     if (z) { z.u = Date.now(); store.set('settings', settings); } else {
       z = { id: 'z' + Date.now().toString(36), name: o.name.split(',')[0].slice(0, 30), sub: o.sub || '', lat: o.lat, lon: o.lon, u: Date.now() };
       if (o.bf) z.bf = o.bf;
@@ -5111,6 +5111,16 @@
   let vfOpen = false, zielOpen = null, zielEdit = false, ortList = null, ortQ = '', ortMsg = '';
   const zielRes = {};   // Ziel-ID|Verkehrsmittel → { t, data } | { loading } | { error }
   if (!Array.isArray(settings.ziele)) settings.ziele = [];
+  // dasselbe Ziel nicht doppelt: gleicher Name in der Nähe (1 km) oder fast dieselbe Stelle (30 m) zählt als eines; das zuletzt genutzte bleibt
+  const zName = (z) => String((z && z.name) || '').split(',')[0].slice(0, 30).toLowerCase().replace(/\s+/g, ' ').trim();
+  const zielGleich = (x, z) => isFinite(x.lat) && isFinite(z.lat) && (dist(x, z) < 30 || (zName(x) === zName(z) && dist(x, z) < 1000));
+  const findZiel = (o) => settings.ziele.find((x) => dist(x, o) < 80 || zielGleich(x, o));
+  function dedupeZiele() {
+    const keep = [];
+    for (const z of settings.ziele.slice().sort((a, b) => (b.u || 0) - (a.u || 0))) if (!keep.some((x) => zielGleich(x, z))) keep.push(z);
+    if (keep.length !== settings.ziele.length) { settings.ziele = settings.ziele.filter((z) => keep.includes(z)); store.set('settings', settings); }
+  }
+  dedupeZiele();
   const zielFor = (group) => (group === 'auto' || group === 'rad' || group === 'oepnv' || group === 'fuss');
   let zielAb = null, conOpen = 0;   // Bus und Bahn: Start an einer eigenen Haltestelle (sonst Standort), aufgeklappte Verbindung
   const zKey = (z, group) => z.id + '|' + group + (group === 'oepnv' ? '|' + (zielAb || '') : '');
@@ -5597,6 +5607,8 @@
     renderVorfahrt();
   }
   function addZiel(o) {
+    const vorhanden = findZiel(o);
+    if (vorhanden) { vorhanden.u = Date.now(); store.set('settings', settings); ortList = null; ortQ = ''; ortMsg = ''; zielOpen = vorhanden.id; zielEdit = false; checkZiel(vorhanden); return; }   // schon gespeichert: nicht noch einmal anlegen
     const z = { id: 'z' + Date.now().toString(36), name: o.name.split(',')[0].slice(0, 30), sub: o.sub || '', lat: o.lat, lon: o.lon, u: Date.now() };
     if (o.bf) z.bf = o.bf;
     while (settings.ziele.length >= ZIEL_MAX) { const old = zielOldest(); settings.ziele = settings.ziele.filter((x) => x !== old); }
