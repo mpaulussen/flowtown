@@ -4468,8 +4468,9 @@ function testreiheLesen(datei) {
     if (zeile.startsWith('##')) continue;   // Kommentar
     if (zeile.startsWith('#')) { g = { titel: zeile.replace(/^#\s*/, ''), fragen: [] }; gespraeche.push(g); continue; }
     if (!g) { g = { titel: 'Gespräch ' + (gespraeche.length + 1), fragen: [] }; gespraeche.push(g); }
-    const [frage, erw] = zeile.split(/\s*=>\s*/);
-    g.fragen.push({ frage, erwartet: erw ? erw.trim() : '' });
+    const teile = zeile.split(/\s*;;\s*/), [frage, erw] = teile[0].split(/\s*=>\s*/), q = { frage, erwartet: erw ? erw.trim() : '' };
+    for (const t of teile.slice(1)) { const m = /^(muss|nicht):\s*(.+)$/i.exec(t); if (m) q[m[1].toLowerCase()] = m[2].trim(); }
+    g.fragen.push(q);
   }
   // „# Titel [einzeln]“: jede Frage ist ein eigenes Gespräch (unabhängige Fragen sollen sich nicht beeinflussen)
   return gespraeche.flatMap((x) => (/\[einzeln\]/i.test(x.titel) ? x.fragen.map((q) => ({ titel: x.titel.replace(/\s*\[einzeln\]/i, '') + ': ' + q.frage, fragen: [q] })) : [x]));
@@ -4503,7 +4504,7 @@ if (cli === 'assist-testreihe') {
   const gs = testreiheLesen(process.argv[3] && !/^[\d,]+$/.test(process.argv[3]) ? process.argv[3] : undefined);
   const nur = (process.argv.slice(3).find((x) => /^[\d,]+$/.test(x)) || '').split(',').filter(Boolean).map(Number);
   loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
-  const sum = { fragen: 0, ohneWerkzeug: 0, quellenpruefung: 0, absagen: 0, fehler: 0, abweichung: 0 }, llmAntworten = [];
+  const sum = { fragen: 0, ohneWerkzeug: 0, quellenpruefung: 0, absagen: 0, fehler: 0, abweichung: 0, verstoss: 0 }, llmAntworten = [];
   for (let gi = 0; gi < gs.length; gi++) {
     if (nur.length && !nur.includes(gi + 1)) continue;
     const g = gs[gi]; let zustand = null; const verlauf = [];
@@ -4519,12 +4520,15 @@ if (cli === 'assist-testreihe') {
         if (w.includes('quellenpruefung')) { sum.quellenpruefung++; marken.push('Quellenprüfung eingegriffen'); }
         if (/keine Angabe aus einer sicheren Quelle|nicht prüfbar|kenne ich (nicht|im Fahrplan nicht)|finde ich keine Fahrt/i.test(r.antwort)) { sum.absagen++; marken.push('Absage'); }
         if (q.erwartet && q.erwartet !== '-' && !w.includes(q.erwartet.split(/\s+/)[0])) { sum.abweichung++; marken.push('erwartet ' + q.erwartet); }
+        const res = (l) => l.split(/,\s+/).map((x) => x.trim()).filter(Boolean).map((x) => new RegExp(x, 'i'));
+        if (q.nicht) { const hit = res(q.nicht).find((re) => re.test(r.antwort)); if (hit) { sum.verstoss++; marken.push('VERBOTEN: ' + hit.source); } }
+        if (q.muss && !res(q.muss).some((re) => re.test(r.antwort))) { sum.verstoss++; marken.push('FEHLT: ' + q.muss); }
         if (!/^(festantwort|direkt)/.test(w[0] || '')) llmAntworten.push(r.antwort);
         console.log('\nDu:  ' + q.frage + '\nBot: ' + r.antwort + '\n     (' + (w.join(', ') || 'keine Werkzeuge') + (zustand ? '; merkt sich ' + zustand.typ + ' ' + zustand.von.name + ' → ' + zustand.nach.name : '') + ')' + (marken.length ? '   ⚠ ' + marken.join(', ') : ''));
       } catch (e) { sum.fehler++; console.log('\nDu:  ' + q.frage + '\n     ⚠ Fehler: ' + e.message); }
     }
   }
-  console.log(`\nZusammenfassung: ${sum.fragen} Fragen · ohne Werkzeug ${sum.ohneWerkzeug} · Quellenprüfung eingegriffen ${sum.quellenpruefung} · Absagen ${sum.absagen} · Fehler ${sum.fehler} · weicht von der Erwartung ab ${sum.abweichung}`);
+  console.log(`\nZusammenfassung: ${sum.fragen} Fragen · ohne Werkzeug ${sum.ohneWerkzeug} · Quellenprüfung eingegriffen ${sum.quellenpruefung} · Absagen ${sum.absagen} · Fehler ${sum.fehler} · weicht von der Erwartung ab ${sum.abweichung} · Regelverstöße ${sum.verstoss}`);
   console.log('Ton: ' + tonMass(llmAntworten));
   process.exit(0);
 }
