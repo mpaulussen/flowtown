@@ -1569,7 +1569,7 @@ function sendFaq(req, res, origin) {
 const HST_URL = process.env.HALTESTELLEN_CSV_URL || '';
 const HST_CSV = path.join(DATA_DIR, 'haltestellen.csv'), HST_REPO = path.join(path.dirname(new URL(import.meta.url).pathname), 'haltestellen.csv');
 let hst = null, hstRun = null;
-const hstNorm = (n) => String(n || '').toLowerCase().replace(/^(bielefeld|bi-[^,]*),\s*/, '').replace(/ß/g, 'ss').replace(/strasse|str\.?/g, 'str').replace(/[^a-z0-9äöü]/g, '');
+const hstNorm = (n) => String(n || '').toLowerCase().replace(/^(bielefeld|bi-[^,]*),\s*/, '').replace(/^bielefeld\s+/, '').replace(/ß/g, 'ss').replace(/strasse|str\.?/g, 'str').replace(/[^a-z0-9äöü]/g, '');
 const fpParsedBy = {};
 function fpData(id) {
   const f = fahrplaene[id || 'bielefeld'];
