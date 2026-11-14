@@ -3943,10 +3943,23 @@ function mitFahrplanHinweis(antwort, messages) {
   if (!fp || !/Fahrten gefunden/.test(fp.content) || /"verspaetung_min":|"faellt_aus":|"keine_abweichung_gemeldet":/.test(fp.content) || /fahrplan|echtzeit/i.test(antwort)) return antwort;
   return antwort.replace(/\s+$/, '') + ' Das gilt laut Fahrplan, Verspätungen kenne ich dafür nicht.';
 }
+// Besteht die Antwort nur aus „Dazu habe ich keine Angabe.“, sagt der Server selbst, wo man es erfährt
+function mitFundort(antwort, frage) {
+  const a = String(antwort || '').trim();
+  if (!/^Dazu habe ich (gerade )?keine (Angabe|Antwort)\.?$/i.test(a)) return antwort;
+  const f = String(frage || '').toLowerCase();
+  let h;
+  if (/öffnungszeit|geöffnet|\bauf\b|offen|schließt|öffnet|notdienst/.test(f)) h = 'Die Öffnungszeiten stehen auf der Website der Einrichtung oder der Stadt Bielefeld, oder frag direkt dort.';
+  else if (/weg|alternative|umweg|anders|stufenlos|barrierefrei|rampe/.test(f) && !/bahnhof|bahnsteig|gleis/.test(f)) h = 'Sag mir Start und Ziel, dann prüfe ich eine Verbindung, oder frag vor Ort beim Personal.';
+  else if (/aufzug|fahrstuhl|bahnhof|bahnsteig|gleis|eingang/.test(f)) h = 'Für Bahnhöfe zeigt bahnhof.de (DB Info) den Status, sonst frag vor Ort beim Personal.';
+  else if (/stadtbahn|bus|haltestelle|linie|hochbahnsteig|ticket|preis/.test(f)) h = 'Bei moBiel (mobiel.de) oder vor Ort beim Personal erfährst du es.';
+  else h = 'Frag am besten vor Ort nach.';
+  return a.replace(/\.?$/, '.') + ' ' + h;
+}
 // prüft die Antwort der KI; einmal korrigieren lassen, sonst die sichere Ersatzantwort
-async function absichern(antwort, messages, used) {
+async function absichern(antwort, messages, used, frage) {
   const grund = quellenPruefung(antwort, messages, used);
-  if (!grund) return mitFahrplanHinweis(antwort, messages);
+  if (!grund) return mitFundort(mitFahrplanHinweis(antwort, messages), frage);
   console.error(new Date().toISOString(), 'Quellenprüfung:', grund);
   used.push('quellenpruefung');
   try {
@@ -3954,7 +3967,7 @@ async function absichern(antwort, messages, used) {
     messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“${/^Dauer|^Uhrzeit/.test(grund) ? ' Fahrzeit, Abfahrt und Ankunft stehen fertig im Feld satz des Ergebnisses (auch fahrzeit_min, dauer_min): nutze genau diese Angaben aus einem Eintrag, rechne nicht selbst und rechne die Wartezeit ab jetzt nicht dazu.' : ''}` });
     const m = await mistralChat(messages, true);
     const a2 = sauber(m.content);
-    if (a2 && !quellenPruefung(a2, messages, used)) return mitFahrplanHinweis(a2, messages);
+    if (a2 && !quellenPruefung(a2, messages, used)) return mitFundort(mitFahrplanHinweis(a2, messages), frage);
   } catch (e) { /* dann die Ersatzantwort */ }
   return /^Thema:/.test(grund) ? Q_ERSATZ_ALLG : Q_ERSATZ;
 }
@@ -4019,7 +4032,7 @@ async function assist(body) {
       if (!calls.length && !String(m.content || '').trim()) m = await mistralChat(messages, true);
     }
     if (!calls.length) {
-      const antwort = await absichern(sauber(m.content) || 'Dazu habe ich gerade keine Antwort.', messages, used);
+      const antwort = await absichern(sauber(m.content) || 'Dazu habe ich gerade keine Antwort.', messages, used, frage);
       return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length, zustand: ctx.neu || ctx.zustand || null };
     }
     // höchstens drei Werkzeuge je Runde, und die Nachricht der KI nennt genau diese drei: sonst lehnt Mistral mit 400 ab (zu wenige Antworten)
@@ -4039,7 +4052,7 @@ async function assist(body) {
   try {
     messages.push({ role: 'user', content: 'Antworte jetzt ohne weitere Werkzeuge mit dem, was du hast, in höchstens drei Sätzen. Was fehlt, sag offen.' });
     const m = await mistralChat(messages, true);
-    const antwort = sauber(m.content) && await absichern(sauber(m.content), messages, used);
+    const antwort = sauber(m.content) && await absichern(sauber(m.content), messages, used, frage);
     if (antwort) return { antwort, aktion: act.ziel ? Object.assign({ typ: 'ziel' }, act.ziel) : null, werkzeuge: used, beispiele: bsp.length, zustand: ctx.neu || ctx.zustand || null };
   } catch (e) { /* unten die Ersatzantwort */ }
   return { antwort: 'Das konnte ich gerade nicht vollständig nachschlagen. Versuch es bitte etwas genauer.', aktion: null, werkzeuge: used, zustand: ctx.neu || ctx.zustand || null };

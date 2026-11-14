@@ -52,5 +52,5 @@ Und am Jahnplatz? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht
 Gibt es dort einen anderen stufenlosen Weg? ;; muss: Weg, Rathaus, Hochbahnsteig, moBiel, vor Ort, Haltestelle, Plan ;; nicht: garantiert, Ich helfe dir bei
 
 # Gespräch: Barrierefreiheit, dann Zeiten
-Ist die Universität Bielefeld barrierefrei? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert
+Ist die Universität Bielefeld barrierefrei? ;; muss: einzelne Gebäude, nur Angaben, nicht für die ganze, Gelände, Gebäude, welches ;; nicht: garantiert, uneingeschränkt
 Und wann hat sie auf? ;; muss: Website, Internet, vor Ort, Einrichtung, Universität ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr, Ich helfe dir bei
