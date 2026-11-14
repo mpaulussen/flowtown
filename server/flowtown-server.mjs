@@ -16,6 +16,7 @@ const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(new URL(import.m
 const ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://mpaulussen.github.io').split(',').map((s) => s.trim()).filter(Boolean);
 const MISTRAL_KEY = process.env.MISTRAL_API_KEY || '';
 const MISTRAL_MODEL = process.env.MISTRAL_MODEL || 'mistral-small-latest';
+const MISTRAL_TEMP = Number(process.env.MISTRAL_TEMPERATURE) || 0.2;   // für die Assistenz; höher = abwechslungsreicher, aber mehr Risiko
 const MISTRAL_URL = process.env.MISTRAL_URL || 'https://api.mistral.ai/v1/chat/completions';
 const K_MIN = Number(process.env.K_MIN || 5);          // ein Wert erscheint erst ab so vielen verschiedenen Beitragenden
 const KI_PER_DAY = Number(process.env.KI_PER_DAY || 20); // KI-Anfragen je IP und Tag
@@ -2259,6 +2260,8 @@ const mAbs = (a, b) => Math.round(Math.hypot((a[0] - b[0]) * 111320, (a[1] - b[1
 const ASSIST_SYSTEM = `Du bist die Sprachassistenz von Flowtown, einer App aus Bielefeld für Wege mit Auto, Rad, zu Fuß, Bus und Bahn, mit Schwerpunkt Barrierefreiheit. Wege in andere Städte und Wege in anderen Städten gehören dazu.
 Regeln:
 - Antworte auf Deutsch (außer die Frage ist in einer anderen Sprache gestellt) und kurz: höchstens drei Sätze, gut zum Vorlesen. Keine Aufzählungszeichen, kein Markdown, keine Emojis.
+- Ton: Sprich wie ein freundlicher, ruhiger Mensch, der neben der Person steht, in ganzen Sätzen mit eigenen Worten statt in Stichworten. Fang nicht jede Antwort gleich an, wiederhole nicht die Frage und lass Floskeln weg. Ein kurzes Eingehen auf die Person ist gut, wenn es passt („Gern.“, „Das klappt.“). Zahlen, Uhrzeiten, Linien und Ortsnamen bleiben dabei genau wie im Ergebnis des Werkzeugs.
+- Felder namens satz in Werkzeug-Ergebnissen sind Fakten, keine Formulierung. Gib ihren Inhalt in eigenen, natürlichen Worten wieder, mit denselben Zahlen, Uhrzeiten, Linien und Orten, und nicht Wort für Wort.
 - Fahrzeiten ab 60 Minuten nennst du in Stunden und Minuten („5 Stunden 24 Minuten“, nicht „324 Minuten“), unter einer Stunde nur in Minuten.
 - Rückfragen im Gespräch: Antworte nur auf das, was neu gefragt ist. Wiederhole nichts, was du im Verlauf schon gesagt hast (Name, Adresse, Dauer, Linien, schon genannte Merkmale), außer die Person fragt ausdrücklich noch einmal danach. Keine Einleitung, die den Ort oder die Strecke erneut vorstellt; fang direkt mit dem Neuen an.
 - Fakten (Orte, Entfernungen, Zeiten, Linien, Barrierefreiheit) nur aus den Ergebnissen der Werkzeuge; Angaben zu den eigenen Fahrten aus dem Werkzeug meine_auswertung. Erfinde nichts. Liefert ein Werkzeug nichts, sag das offen und schlage vor, was die Person stattdessen tun kann.
@@ -3330,7 +3333,7 @@ async function mistralChat(messages, ohneWerkzeuge, mussWerkzeug) {
   const ctrl = new AbortController(), timer = setTimeout(() => ctrl.abort(), 30000);
   try {
     const res = await fetch(MISTRAL_URL, { method: 'POST', signal: ctrl.signal, headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${MISTRAL_KEY}` },
-      body: JSON.stringify({ model: MISTRAL_MODEL, temperature: 0.2, max_tokens: 400, tools: ASSIST_TOOLS, tool_choice: ohneWerkzeuge ? 'none' : mussWerkzeug ? 'any' : 'auto', messages }) });
+      body: JSON.stringify({ model: MISTRAL_MODEL, temperature: MISTRAL_TEMP, max_tokens: 400, tools: ASSIST_TOOLS, tool_choice: ohneWerkzeuge ? 'none' : mussWerkzeug ? 'any' : 'auto', messages }) });
     // lehnt Mistral den Zwang zum Werkzeug ab, einmal ohne ihn
     if (!res.ok && mussWerkzeug && res.status >= 400 && res.status < 500) { clearTimeout(timer); return mistralChat(messages, ohneWerkzeuge, false); }
     if (!res.ok) {
@@ -3980,7 +3983,7 @@ async function assist(body) {
   const zeitFrage = /\b(um|gegen|bis|ab)\s+(\d{1,2}(:\d{2})?\s*uhr|halb\s+\w+|\d{1,2}:\d{2})|\bmorgen\b|übermorgen|sonntag|samstag|montag|dienstag|mittwoch|donnerstag|freitag|wochenende|feiertag|neujahr|weihnacht|ostern/i.test(frage) && !/letzte|nachts|zurück|rückweg|geöffnet|öffnungszeit|\boffen\b|toilette|\bwc\b|apotheke/i.test(frage);
   const zeit = zeitFrage && !/\b(zug|züge|bahn|bus|busse|verbindung|abfahrt|abfahrten|fährt|fahren|umstieg|anschluss)\b/i.test(frage) ? '\n\n(Die Werkzeuge kennen nur Zeiten ab jetzt. Sag das offen. Nenne keine Uhrzeit zum Losgehen und keinen Fahrplan für einen anderen Tag oder Feiertag.)' : '';
   const bsp = beispieleFuer(frage, ctx.typ);
-  const vorbild = bsp.length ? '\nGeprüfte Beispiele der Redaktion zu ähnlichen Fragen. Übernimm daraus Aufbau, Ton, Länge und was wichtig ist; die Fakten (Zeiten, Entfernungen, Angaben) aber nur aus den Werkzeugen von jetzt, nie aus den Beispielen:\n' + bsp.map((b) => `Frage${b.profil ? ' (Profil ' + b.profil + ')' : ''}: ${b.frage}\nGute Antwort: ${b.antwort}`).join('\n') : '';
+  const vorbild = bsp.length ? '\nGeprüfte Beispiele der Redaktion zu ähnlichen Fragen. Übernimm daraus, was wichtig ist und wie vorsichtig es gesagt wird. Formuliere in eigenen Worten und nicht wortgleich, damit nicht jede Antwort gleich klingt; die Fakten (Zeiten, Entfernungen, Angaben) aber nur aus den Werkzeugen von jetzt, nie aus den Beispielen:\n' + bsp.map((b) => `Frage${b.profil ? ' (Profil ' + b.profil + ')' : ''}: ${b.frage}\nGute Antwort: ${b.antwort}`).join('\n') : '';
   const messages = [{ role: 'system', content: ASSIST_SYSTEM + vorbild + '\nKontext: ' + JSON.stringify(kontext) }, ...verlauf, { role: 'user', content: frage + nachfrage + gruppe + zeit }];
   const act = {}, used = [];
   ctx.used = used;
@@ -4446,6 +4449,15 @@ if (cli === 'fahrt-pruefen') {
 }
 // Testreihe: viele Fragen und Folgefragen aus einer Datei (server/testreihe.txt). Gespräche stehen durch Leerzeilen getrennt, „# Titel“ benennt sie
 // („# Titel [verbindung]“ lässt den Offline-Test mit einer Verbindung als Gesprächsstand laufen). Hinter einer Frage steht optional „=> Werkzeug“ (erwartet) oder „=> -“ (kein Vorabaufruf).
+// Wie gleichförmig klingen Antworten? Anteil verschiedener Anfänge (erste zwei Wörter), häufigster Anfang, durchschnittliche Länge
+function tonMass(antworten) {
+  const a = antworten.map((x) => String(x || '').trim()).filter(Boolean);
+  if (!a.length) return 'keine Antworten';
+  const wort = (x) => x.toLowerCase().replace(/[.,!?:;„“"]/g, '').split(/\s+/).filter(Boolean);
+  const anf = {}; for (const x of a) { const k = wort(x).slice(0, 2).join(' '); anf[k] = (anf[k] || 0) + 1; }
+  const top = Object.entries(anf).sort((x, y) => y[1] - x[1])[0], laenge = a.reduce((s, x) => s + wort(x).length, 0) / a.length;
+  return `${a.length} Antworten von der KI · verschiedene Anfänge ${Object.keys(anf).length} (${Math.round(Object.keys(anf).length / a.length * 100)} %) · häufigster Anfang „${top[0]}“ ${top[1]}-mal · Ø ${Math.round(laenge)} Wörter`;
+}
 function testreiheLesen(datei) {
   const text = fs.readFileSync(datei || path.join(path.dirname(new URL(import.meta.url).pathname), 'testreihe.txt'), 'utf8');
   const gespraeche = []; let g = null;
@@ -4460,6 +4472,12 @@ function testreiheLesen(datei) {
   }
   // „# Titel [einzeln]“: jede Frage ist ein eigenes Gespräch (unabhängige Fragen sollen sich nicht beeinflussen)
   return gespraeche.flatMap((x) => (/\[einzeln\]/i.test(x.titel) ? x.fragen.map((q) => ({ titel: x.titel.replace(/\s*\[einzeln\]/i, '') + ': ' + q.frage, fragen: [q] })) : [x]));
+}
+if (cli === 'ton-auswerten') {
+  // Gleichförmigkeit der Antworten aus einer gespeicherten Testreihe messen: ton-auswerten /tmp/testreihe4.txt (Festantworten und direkte Antworten zählen nicht mit)
+  const z = fs.readFileSync(process.argv[3] || '/dev/stdin', 'utf8').split(/\r?\n/), ant = [];
+  for (let i = 0; i < z.length; i++) if (z[i].startsWith('Bot: ')) { const n = (z[i + 1] || ''); if (!/\((festantwort|direkt)/.test(n)) ant.push(z[i].slice(5)); }
+  console.log(tonMass(ant)); process.exit(0);
 }
 if (cli === 'folge-test') {
   // Ohne KI und ohne Netz: Was ruft der Server bei einer Folgefrage vorab auf? Aufruf: folge-test [Datei]
@@ -4484,7 +4502,7 @@ if (cli === 'assist-testreihe') {
   const gs = testreiheLesen(process.argv[3] && !/^[\d,]+$/.test(process.argv[3]) ? process.argv[3] : undefined);
   const nur = (process.argv.slice(3).find((x) => /^[\d,]+$/.test(x)) || '').split(',').filter(Boolean).map(Number);
   loadFahrplan(); rtWanted = Date.now(); rtTick(); if (rtRun) await rtRun.catch(() => {});
-  const sum = { fragen: 0, ohneWerkzeug: 0, quellenpruefung: 0, absagen: 0, fehler: 0, abweichung: 0 };
+  const sum = { fragen: 0, ohneWerkzeug: 0, quellenpruefung: 0, absagen: 0, fehler: 0, abweichung: 0 }, llmAntworten = [];
   for (let gi = 0; gi < gs.length; gi++) {
     if (nur.length && !nur.includes(gi + 1)) continue;
     const g = gs[gi]; let zustand = null; const verlauf = [];
@@ -4500,11 +4518,13 @@ if (cli === 'assist-testreihe') {
         if (w.includes('quellenpruefung')) { sum.quellenpruefung++; marken.push('Quellenprüfung eingegriffen'); }
         if (/keine Angabe aus einer sicheren Quelle|nicht prüfbar|kenne ich (nicht|im Fahrplan nicht)|finde ich keine Fahrt/i.test(r.antwort)) { sum.absagen++; marken.push('Absage'); }
         if (q.erwartet && q.erwartet !== '-' && !w.includes(q.erwartet.split(/\s+/)[0])) { sum.abweichung++; marken.push('erwartet ' + q.erwartet); }
+        if (!/^(festantwort|direkt)/.test(w[0] || '')) llmAntworten.push(r.antwort);
         console.log('\nDu:  ' + q.frage + '\nBot: ' + r.antwort + '\n     (' + (w.join(', ') || 'keine Werkzeuge') + (zustand ? '; merkt sich ' + zustand.typ + ' ' + zustand.von.name + ' → ' + zustand.nach.name : '') + ')' + (marken.length ? '   ⚠ ' + marken.join(', ') : ''));
       } catch (e) { sum.fehler++; console.log('\nDu:  ' + q.frage + '\n     ⚠ Fehler: ' + e.message); }
     }
   }
   console.log(`\nZusammenfassung: ${sum.fragen} Fragen · ohne Werkzeug ${sum.ohneWerkzeug} · Quellenprüfung eingegriffen ${sum.quellenpruefung} · Absagen ${sum.absagen} · Fehler ${sum.fehler} · weicht von der Erwartung ab ${sum.abweichung}`);
+  console.log('Ton: ' + tonMass(llmAntworten));
   process.exit(0);
 }
 if (cli === 'assist-gespraech') {
