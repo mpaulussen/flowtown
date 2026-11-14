@@ -3908,7 +3908,7 @@ function quellenPruefung(antwort, messages, used) {
     const erlaubt = rohU + ' ' + messages.filter((m) => m.role === 'user').map((m) => m.content).join(' ');
     // Dauer und genannte Uhrzeiten müssen zusammenpassen („ab 19:01, an 19:27, dauert 53 Minuten“ ist falsch)
     const zeiten = [...antwort.matchAll(/\b(\d{1,2}):(\d{2})\b/g)].map((m) => +m[1] * 60 + +m[2]);
-    const dm = /(?:dauert|dauer|reise|fahrt|fahrzeit)[^.]{0,30}?(?<![\d:])(\d{1,3})\s*(?:Minuten|Min\.)/i.exec(antwort);
+    const dm = /(?:dauert|dauer|reisezeit|fahrzeit)[^.]{0,30}?(?<![\d:])(\d{1,3})\s*(?:Minuten|Min\.)(?!\s*(?:Verspätung|später|früher|zu spät|vor|nach|Wartezeit|Umsteigezeit))/i.exec(antwort);   // „Fahrt … 3 Minuten Verspätung“ ist keine Dauer
     if (dm && zeiten.length >= 2 && !zeiten.some((x, i) => zeiten.some((y, j) => i !== j && ((y - x + 1440) % 1440) === +dm[1]))) return 'Dauer ' + dm[1] + ' Minuten passt nicht zu den genannten Zeiten';
     for (const m of antwort.matchAll(/(?<![\d:])(\d{1,3})\s*(?:Minuten|Min\.)/g)) if (!new RegExp('(?<!\\d)(?<!\\d:)' + m[1] + '(?!\\d)(?!:\\d)').test(erlaubt)) return 'Dauer ' + m[1] + ' Minuten';
   }
