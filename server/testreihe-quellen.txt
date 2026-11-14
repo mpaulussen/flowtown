@@ -18,9 +18,9 @@ Gibt es am Bahnhof Herford einen Aufzug? ;; muss: @absage, vor Ort, DB, nicht pr
 
 # Barrierefreiheit von Orten: nur mit Quelle [einzeln]
 Ist das Rathaus Bielefeld rollstuhlgerecht? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert, uneingeschränkt
-Ist die Universität Bielefeld barrierefrei? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert, uneingeschränkt
+Ist die Universität Bielefeld barrierefrei? ;; muss: einzelne Gebäude, nur Angaben, nicht für die ganze, Gelände, Gebäude, welches ;; nicht: garantiert, uneingeschränkt
 Hat die Kunsthalle Bielefeld einen stufenlosen Eingang? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert
-Ist der Eingang vom Hauptbahnhof Bielefeld ebenerdig? ;; muss: Angabe, Quelle, laut, vor Ort, DB ;; nicht: garantiert
+Ist der Eingang vom Hauptbahnhof Bielefeld ebenerdig? ;; muss: bahnhof.de, DB Info, vor Ort, Personal, laut, Quelle ;; nicht: garantiert
 Gibt es im Stadttheater Bielefeld Rollstuhlplätze? ;; muss: @absage, vor Ort, nicht prüfen, Quelle, laut ;; nicht: garantiert
 Ist das Jobcenter Bielefeld barrierefrei? ;; muss: @absage, vor Ort, nicht prüfen, Quelle, laut ;; nicht: garantiert, uneingeschränkt
 Ist die Stadtbahnhaltestelle Jahnplatz stufenlos? ;; muss: Hochbahnsteig, stufenlos, Angabe, vor Ort, Quelle ;; nicht: garantiert
@@ -32,12 +32,12 @@ Wie steil ist die Rampe am Kesselbrink? ;; muss: @absage, nicht prüfen, vor Ort
 Wie breit ist der Eingang vom Rathaus für einen Rollstuhl? ;; muss: @absage, nicht prüfen, vor Ort ;; nicht: \d\s*cm, \d[.,]\d+\s*m\b
 
 # Öffnungszeiten: keine erfundenen Zeiten [einzeln]
-Wann hat das Rathaus Bielefeld auf? ;; muss: @absage, Website, Stadt, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Wann öffnet die Kunsthalle Bielefeld? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Bis wann hat die Stadtbibliothek Bielefeld offen? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Hat die Apotheke am Jahnplatz Notdienst? ;; muss: @absage, nicht prüfen, Website, Apotheker ;; nicht: \d{1,2}[:.]\d{2}
-Ist das Bürgeramt am Samstag geöffnet? ;; muss: @absage, Website, nicht prüfen ;; nicht: ist geöffnet, \d{1,2}[:.]\d{2}
-Wann schließt das Hallenbad? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Wann hat das Rathaus Bielefeld auf? ;; muss: @absage, Website, Stadt, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr, Ich helfe dir bei, Wo möchtest du hin
+Wann öffnet die Kunsthalle Bielefeld? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr, Ich helfe dir bei, Wo möchtest du hin
+Bis wann hat die Stadtbibliothek Bielefeld offen? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr, Ich helfe dir bei, Wo möchtest du hin
+Hat die Apotheke am Jahnplatz Notdienst? ;; muss: @absage, nicht prüfen, Website, Apotheker ;; nicht: \d{1,2}[:.]\d{2}, Ich helfe dir bei, Wo möchtest du hin
+Ist das Bürgeramt am Samstag geöffnet? ;; muss: @absage, Website, nicht prüfen ;; nicht: ist geöffnet, \d{1,2}[:.]\d{2}, Ich helfe dir bei, Wo möchtest du hin
+Wann schließt das Hallenbad? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr, Ich helfe dir bei, Wo möchtest du hin
 Hat die Toilette am Kesselbrink noch auf? ;; muss: Toilette, Öffnungszeit, @absage, Uhr, nicht prüfen
 
 # Preise und Telefonnummern: nur mit Quelle [einzeln]
@@ -49,8 +49,8 @@ Wie erreiche ich moBiel telefonisch? ;; muss: @absage, Website, nicht prüfen, m
 # Gespräch: Aufzug, Nachfrage, Ausweg
 Ist der Aufzug am Hauptbahnhof in Betrieb? ;; muss: DB, Redaktion, Live-Status, @absage, Meldung ;; nicht: garantiert
 Und am Jahnplatz? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
-Gibt es dort einen anderen stufenlosen Weg? ;; muss: Hochbahnsteig, stufenlos, Rathaus, @absage, vor Ort, Alternative ;; nicht: garantiert
+Gibt es dort einen anderen stufenlosen Weg? ;; muss: Weg, Rathaus, Hochbahnsteig, moBiel, vor Ort, Haltestelle, Plan ;; nicht: garantiert, Ich helfe dir bei
 
 # Gespräch: Barrierefreiheit, dann Zeiten
 Ist die Universität Bielefeld barrierefrei? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert
-Und wann hat sie auf? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Und wann hat sie auf? ;; muss: Website, Internet, vor Ort, Einrichtung, Universität ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr, Ich helfe dir bei
