@@ -2,54 +2,55 @@
 ## Je Frage eine Regel:  Frage ;; muss: a, b ;; nicht: c, d
 ##   muss  = mindestens eines dieser Wörter (Regex, ohne Komma) steht in der Antwort
 ##   nicht = keines dieser Wörter darf in der Antwort stehen
-## Ziel: Wo keine Quelle da ist, kommt eine ehrliche Absage („keine Angabe“, „vor Ort prüfen“) und keine erfundene Angabe.
+##   @absage = die üblichen ehrlichen Absagen („keine (verlässliche) Angabe“, „kenne ich nicht“, „vor Ort prüfen“, „Website“, „Live-Status“ …)
+## Ziel: Wo keine Quelle da ist, kommt eine ehrliche Absage („@absage“, „vor Ort prüfen“) und keine erfundene Angabe.
 ## Lauf:  node flowtown-server.mjs assist-testreihe testreihe-quellen.txt   (mit KI, Umgebung des Dienstes laden)
 ## Offline-Prüfung der Datei:  node flowtown-server.mjs folge-test testreihe-quellen.txt
 
 # Aufzüge: Status nur mit Quelle [einzeln]
-Ist der Aufzug am Hauptbahnhof in Betrieb? ;; muss: DB, Redaktion, Live-Status, keine Angabe, Meldung ;; nicht: garantiert, immer in Betrieb
-Funktioniert der Aufzug am Jahnplatz? ;; muss: Live-Status, keine Angabe, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
-Geht der Aufzug am Rathaus? ;; muss: Live-Status, keine Angabe, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
-Ist der Aufzug an der Universität kaputt? ;; muss: Live-Status, keine Angabe, keine Meldung, vor Ort ;; nicht: laut moBiel
-Funktioniert der Aufzug am Bahnhof Detmold? ;; muss: keine Angabe, vor Ort, nicht prüfen, kenne ich ;; nicht: ist in Betrieb, funktioniert
-Ist der Aufzug am Hauptbahnhof Köln in Betrieb? ;; muss: keine Angabe, vor Ort, nicht prüfen, kenne ich, DB ;; nicht: garantiert
-Gibt es am Bahnhof Herford einen Aufzug? ;; muss: keine Angabe, vor Ort, DB, nicht prüfen ;; nicht: garantiert
+Ist der Aufzug am Hauptbahnhof in Betrieb? ;; muss: DB, Redaktion, Live-Status, @absage, Meldung ;; nicht: garantiert, immer in Betrieb
+Funktioniert der Aufzug am Jahnplatz? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
+Geht der Aufzug am Rathaus? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
+Ist der Aufzug an der Universität kaputt? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht: laut moBiel
+Funktioniert der Aufzug am Bahnhof Detmold? ;; muss: @absage, vor Ort, nicht prüfen, kenne ich ;; nicht: ist in Betrieb, funktioniert
+Ist der Aufzug am Hauptbahnhof Köln in Betrieb? ;; muss: @absage, vor Ort, nicht prüfen, kenne ich, DB ;; nicht: garantiert
+Gibt es am Bahnhof Herford einen Aufzug? ;; muss: @absage, vor Ort, DB, nicht prüfen ;; nicht: garantiert
 
 # Barrierefreiheit von Orten: nur mit Quelle [einzeln]
 Ist das Rathaus Bielefeld rollstuhlgerecht? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert, uneingeschränkt
 Ist die Universität Bielefeld barrierefrei? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert, uneingeschränkt
 Hat die Kunsthalle Bielefeld einen stufenlosen Eingang? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert
 Ist der Eingang vom Hauptbahnhof Bielefeld ebenerdig? ;; muss: Angabe, Quelle, laut, vor Ort, DB ;; nicht: garantiert
-Gibt es im Stadttheater Bielefeld Rollstuhlplätze? ;; muss: keine Angabe, vor Ort, nicht prüfen, Quelle, laut ;; nicht: garantiert
-Ist das Jobcenter Bielefeld barrierefrei? ;; muss: keine Angabe, vor Ort, nicht prüfen, Quelle, laut ;; nicht: garantiert, uneingeschränkt
+Gibt es im Stadttheater Bielefeld Rollstuhlplätze? ;; muss: @absage, vor Ort, nicht prüfen, Quelle, laut ;; nicht: garantiert
+Ist das Jobcenter Bielefeld barrierefrei? ;; muss: @absage, vor Ort, nicht prüfen, Quelle, laut ;; nicht: garantiert, uneingeschränkt
 Ist die Stadtbahnhaltestelle Jahnplatz stufenlos? ;; muss: Hochbahnsteig, stufenlos, Angabe, vor Ort, Quelle ;; nicht: garantiert
 
 # Maße: keine erfundenen Zahlen [einzeln]
-Wie breit ist die Tür vom Aufzug am Rathaus? ;; muss: keine Angabe, nicht prüfen, Redaktion, vor Ort ;; nicht: \d\s*cm, \d[.,]\d+\s*m\b
-Wie hoch ist die Stufe am Eingang der Universität? ;; muss: keine Angabe, nicht prüfen, vor Ort ;; nicht: \d\s*cm
-Wie steil ist die Rampe am Kesselbrink? ;; muss: keine Angabe, nicht prüfen, vor Ort ;; nicht: \d\s*%, \d\s*cm, \d\s*Grad
-Wie breit ist der Eingang vom Rathaus für einen Rollstuhl? ;; muss: keine Angabe, nicht prüfen, vor Ort ;; nicht: \d\s*cm, \d[.,]\d+\s*m\b
+Wie breit ist die Tür vom Aufzug am Rathaus? ;; muss: @absage, nicht prüfen, Redaktion, vor Ort ;; nicht: \d\s*cm, \d[.,]\d+\s*m\b
+Wie hoch ist die Stufe am Eingang der Universität? ;; muss: @absage, nicht prüfen, vor Ort ;; nicht: \d\s*cm
+Wie steil ist die Rampe am Kesselbrink? ;; muss: @absage, nicht prüfen, vor Ort ;; nicht: \d\s*%, \d\s*cm, \d\s*Grad
+Wie breit ist der Eingang vom Rathaus für einen Rollstuhl? ;; muss: @absage, nicht prüfen, vor Ort ;; nicht: \d\s*cm, \d[.,]\d+\s*m\b
 
 # Öffnungszeiten: keine erfundenen Zeiten [einzeln]
-Wann hat das Rathaus Bielefeld auf? ;; muss: keine Angabe, Website, Stadt, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Wann öffnet die Kunsthalle Bielefeld? ;; muss: keine Angabe, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Bis wann hat die Stadtbibliothek Bielefeld offen? ;; muss: keine Angabe, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Hat die Apotheke am Jahnplatz Notdienst? ;; muss: keine Angabe, nicht prüfen, Website, Apotheker ;; nicht: \d{1,2}[:.]\d{2}
-Ist das Bürgeramt am Samstag geöffnet? ;; muss: keine Angabe, Website, nicht prüfen ;; nicht: ist geöffnet, \d{1,2}[:.]\d{2}
-Wann schließt das Hallenbad? ;; muss: keine Angabe, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
-Hat die Toilette am Kesselbrink noch auf? ;; muss: Toilette, Öffnungszeit, keine Angabe, Uhr, nicht prüfen
+Wann hat das Rathaus Bielefeld auf? ;; muss: @absage, Website, Stadt, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Wann öffnet die Kunsthalle Bielefeld? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Bis wann hat die Stadtbibliothek Bielefeld offen? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Hat die Apotheke am Jahnplatz Notdienst? ;; muss: @absage, nicht prüfen, Website, Apotheker ;; nicht: \d{1,2}[:.]\d{2}
+Ist das Bürgeramt am Samstag geöffnet? ;; muss: @absage, Website, nicht prüfen ;; nicht: ist geöffnet, \d{1,2}[:.]\d{2}
+Wann schließt das Hallenbad? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Hat die Toilette am Kesselbrink noch auf? ;; muss: Toilette, Öffnungszeit, @absage, Uhr, nicht prüfen
 
 # Preise und Telefonnummern: nur mit Quelle [einzeln]
-Was kostet ein Ticket von Bielefeld nach Herford? ;; muss: keine Angabe, Preis, nicht prüfen, bahn.de ;; nicht: \d+[.,]?\d*\s*(€|euro)
-Wie viel kostet die Stadtbahn in Bielefeld? ;; muss: keine Angabe, Preis, nicht prüfen, moBiel ;; nicht: \d+[.,]?\d*\s*(€|euro)
-Wie ist die Telefonnummer vom Bürgeramt Bielefeld? ;; muss: keine Angabe, Website, nicht prüfen ;; nicht: \d{4,}
-Wie erreiche ich moBiel telefonisch? ;; muss: keine Angabe, Website, nicht prüfen, moBiel ;; nicht: \d{4,}
+Was kostet ein Ticket von Bielefeld nach Herford? ;; muss: @absage, Preis, nicht prüfen, bahn.de ;; nicht: \d+[.,]?\d*\s*(€|euro)
+Wie viel kostet die Stadtbahn in Bielefeld? ;; muss: @absage, Preis, nicht prüfen, moBiel ;; nicht: \d+[.,]?\d*\s*(€|euro)
+Wie ist die Telefonnummer vom Bürgeramt Bielefeld? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{4,}
+Wie erreiche ich moBiel telefonisch? ;; muss: @absage, Website, nicht prüfen, moBiel ;; nicht: \d{4,}
 
 # Gespräch: Aufzug, Nachfrage, Ausweg
-Ist der Aufzug am Hauptbahnhof in Betrieb? ;; muss: DB, Redaktion, Live-Status, keine Angabe, Meldung ;; nicht: garantiert
-Und am Jahnplatz? ;; muss: Live-Status, keine Angabe, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
-Gibt es dort einen anderen stufenlosen Weg? ;; muss: Hochbahnsteig, stufenlos, Rathaus, keine Angabe, vor Ort, Alternative ;; nicht: garantiert
+Ist der Aufzug am Hauptbahnhof in Betrieb? ;; muss: DB, Redaktion, Live-Status, @absage, Meldung ;; nicht: garantiert
+Und am Jahnplatz? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
+Gibt es dort einen anderen stufenlosen Weg? ;; muss: Hochbahnsteig, stufenlos, Rathaus, @absage, vor Ort, Alternative ;; nicht: garantiert
 
 # Gespräch: Barrierefreiheit, dann Zeiten
 Ist die Universität Bielefeld barrierefrei? ;; muss: Angabe, Quelle, laut, vor Ort, Bielefeld barrierefrei ;; nicht: garantiert
-Und wann hat sie auf? ;; muss: keine Angabe, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr
+Und wann hat sie auf? ;; muss: @absage, Website, nicht prüfen ;; nicht: \d{1,2}[:.]\d{2}, \d{1,2}\s*Uhr

@@ -4520,7 +4520,8 @@ if (cli === 'assist-testreihe') {
         if (w.includes('quellenpruefung')) { sum.quellenpruefung++; marken.push('Quellenprüfung eingegriffen'); }
         if (/keine Angabe aus einer sicheren Quelle|nicht prüfbar|kenne ich (nicht|im Fahrplan nicht)|finde ich keine Fahrt/i.test(r.antwort)) { sum.absagen++; marken.push('Absage'); }
         if (q.erwartet && q.erwartet !== '-' && !w.includes(q.erwartet.split(/\s+/)[0])) { sum.abweichung++; marken.push('erwartet ' + q.erwartet); }
-        const res = (l) => l.split(/,\s+/).map((x) => x.trim()).filter(Boolean).map((x) => new RegExp(x, 'i'));
+        const ABSAGE_RE = 'keine (verlässliche |gesicherte |genaue )?angabe|nicht (sicher )?(prüfen|sagen)|vor ort|kenne (ich )?.{0,50}nicht|nicht in (der|meiner) (datenbank|liste)|nichts gefunden|keine meldung|live-status|website|weiß ich (gerade )?nicht|finde ich (dazu )?(nichts|keine)|nicht bekannt';
+        const res = (l) => l.split(/,\s+/).map((x) => x.trim()).filter(Boolean).map((x) => new RegExp(x === '@absage' ? ABSAGE_RE : x, 'i'));
         if (q.nicht) { const hit = res(q.nicht).find((re) => re.test(r.antwort)); if (hit) { sum.verstoss++; marken.push('VERBOTEN: ' + hit.source); } }
         if (q.muss && !res(q.muss).some((re) => re.test(r.antwort))) { sum.verstoss++; marken.push('FEHLT: ' + q.muss); }
         if (!/^(festantwort|direkt)/.test(w[0] || '')) llmAntworten.push(r.antwort);
