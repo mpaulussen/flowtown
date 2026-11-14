@@ -3195,7 +3195,7 @@ function aufzugPlan(frage, stopNames) {
   for (const n of stopNames || []) { const k = norm(n); if (k.length > 3 && tn.includes(k) && (!best || k.length > norm(best).length)) best = n; }
   if (best) return { typ: 'stop', name: best };
   const m = String(frage).match(/\b(?:am|an der|beim|bei der)\s+([A-Za-zÄÖÜäöüß][\wÄÖÜäöüß\- ]{2,40}?)(?:\s+(?:gerade|in|ist|geht|funktioniert|heute|noch)\b|[?.!,]|$)/i);
-  if (m && !/haltestelle|bahnsteig|ziel|moment|ende/i.test(m[1])) return { typ: 'unbekannt', ort: m[1].trim() };
+  if (m && !/haltestelle|bahnsteig|ziel|moment|ende/i.test(m[1])) return { typ: 'unbekannt', ort: m[1].replace(/\s+(?:einen|ein|den|der|die|das)\s+(?:aufzug|fahrstuhl|lift)\b.*$/i, '').replace(/\s+(?:aufzug|fahrstuhl|lift)\b.*$/i, '').trim() };
   if (/haltestelle|stadtbahn|bahnsteig|bahnhof|\bbahn\b|ausgefallen|ausfall|außer betrieb|defekt|kaputt|gerade in ordnung|funktioniert|in betrieb|geht der aufzug/.test(t)) return { typ: 'allgemein' };
   return null;
 }
@@ -3292,15 +3292,15 @@ async function direktAntwort(frage, ctx) {
   let meld = null, st = null;
   try { st = await assistTool('oepnv_stoerungen', {}, ctx, {}); meld = Array.isArray(st.aufzuege_gemeldet) ? st.aufzuege_gemeldet : []; } catch (e) { /* ohne Meldungen weiter */ }
   const db = st && st.db_aufzuege_ausser_betrieb;
-  const dbSatz = ctx.aussen ? '' : Array.isArray(db) && db.length ? ` Laut DB sind außer Betrieb: ${db.slice(0, 2).join('; ')}.` : db === 'alle in Betrieb' ? ' Laut DB sind die Aufzüge an den Bahnhöfen in Betrieb.' : ' Für die Aufzüge der Bahn zeigt die App „DB Bahnhof live“ den Status.';
-  const flow = (name) => meld == null ? '' : name ? (meld.some((x) => new RegExp(name, 'i').test(x.bei)) ? ' In Flowtown ist dort ein Ausfall gemeldet.' : ' In Flowtown ist dort kein Ausfall gemeldet.') : meld.length ? (meld.length === 1 ? ' In Flowtown ist 1 Ausfall gemeldet.' : ` In Flowtown sind ${meld.length} Ausfälle gemeldet.`) : ' In Flowtown ist kein Ausfall gemeldet.';
+  const dbSatz = ctx.aussen ? '' : Array.isArray(db) && db.length ? ` Laut DB sind außer Betrieb: ${db.slice(0, 2).join('; ')}.` : db === 'alle in Betrieb' ? ' Laut DB ist in der Umgebung kein Aufzug an einem Bahnhof als außer Betrieb gemeldet.' : ' Für die Aufzüge der Bahn zeigt bahnhof.de (DB Info) den Status.';
+  const flow = (name) => meld == null ? '' : name ? (meld.some((x) => new RegExp(name, 'i').test(x.bei)) ? ' In Flowtown ist dort ein Ausfall gemeldet.' : ' In Flowtown liegt dort keine Ausfallmeldung vor, das sagt aber nichts über den Zustand.') : meld.length ? (meld.length === 1 ? ' In Flowtown ist 1 Ausfall gemeldet.' : ` In Flowtown sind ${meld.length} Ausfälle gemeldet.`) : ' In Flowtown liegt keine Ausfallmeldung vor, das sagt aber nichts über den Zustand.';
   if (plan.typ === 'stop') {
     let lift = null;
     try { lift = (await assistTool('haltestelle', { name: plan.name }, ctx, {})).aufzug; } catch (e) { /* ohne Angabe */ }
-    return `${lift === 'ja' ? `Am ${plan.name} gibt es laut Fahrplan einen Aufzug.` : `Zu einem Aufzug am ${plan.name} habe ich keine Angabe.`}${redaktionAufzugSatz(plan.name)} ${KEIN}${flow(plan.name)}`.trim();
+    return `${lift === 'ja' ? `An der Haltestelle ${plan.name} gibt es laut Fahrplan einen Aufzug.` : `Zu einem Aufzug an der Haltestelle ${plan.name} habe ich keine Angabe.`}${redaktionAufzugSatz(plan.name)} ${KEIN}${flow(plan.name)}`.trim();
   }
   if (plan.typ === 'bahnhof') return `${KEIN}${dbSatz}${flow('Hauptbahnhof')}${redaktionAufzugSatz('Hauptbahnhof')}`.trim();
-  if (plan.typ === 'unbekannt') return `Den Ort „${plan.ort}“ finde ich nicht bei den Haltestellen. ${KEIN}`.trim();
+  if (plan.typ === 'unbekannt') return `Den Ort „${plan.ort}“ finde ich nicht bei den Stadtbahn-Haltestellen. Für Bahnhöfe zeigt bahnhof.de (DB Info) den Status der Aufzüge, sonst bitte vor Ort prüfen.`.trim();
   return `${KEIN}${flow(null)}${dbSatz}`.trim();
 }
 // </direkt>
