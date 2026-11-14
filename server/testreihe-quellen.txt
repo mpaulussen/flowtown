@@ -49,7 +49,7 @@ Wie erreiche ich moBiel telefonisch? ;; muss: @absage, Website, nicht prüfen, m
 # Gespräch: Aufzug, Nachfrage, Ausweg
 Ist der Aufzug am Hauptbahnhof in Betrieb? ;; muss: DB, Redaktion, Live-Status, @absage, Meldung ;; nicht: garantiert
 Und am Jahnplatz? ;; muss: Live-Status, @absage, keine Meldung, vor Ort ;; nicht: laut moBiel, garantiert
-Gibt es dort einen anderen stufenlosen Weg? ;; muss: Weg, Rathaus, Hochbahnsteig, moBiel, vor Ort, Haltestelle, Plan ;; nicht: garantiert, Ich helfe dir bei
+Gibt es dort einen anderen stufenlosen Weg? ;; muss: Start und Ziel, Verbindung, Rathaus, moBiel, vor Ort, Personal, Plan ;; nicht: garantiert, Ich helfe dir bei
 
 # Gespräch: Barrierefreiheit, dann Zeiten
 Ist die Universität Bielefeld barrierefrei? ;; muss: einzelne Gebäude, nur Angaben, nicht für die ganze, Gelände, Gebäude, welches ;; nicht: garantiert, uneingeschränkt
