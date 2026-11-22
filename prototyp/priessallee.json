@@ -1,0 +1,267 @@
+{
+  "stop": {
+    "name": "Prießallee (Stadtbahn)",
+    "stand": "22.11.2026",
+    "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Vitrine mit Fahrplanhinweisen und Echtzeit-Anzeige. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls.",
+    "quelle": "Nutzerangaben vor Ort (Einstieg, Rampe, Information, Querung) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft)."
+  },
+  "items": [
+    {
+      "id": "einstieg",
+      "label": "Einstieg Stadtbahn",
+      "wert": "direkt, ebenerdig, Abstand max. 10 cm; Bahnsteig 1,20 m",
+      "herkunft": "Nutzer"
+    },
+    {
+      "id": "zugang",
+      "label": "Zugang",
+      "wert": "lange Rampe Richtung Innenstadt, an der Kreuzung Prießallee",
+      "herkunft": "Nutzer"
+    },
+    {
+      "id": "steigung",
+      "label": "Steigung der Rampe",
+      "wert": "rollstuhlgerecht laut Nutzer; Prozentwert nicht gemessen",
+      "herkunft": "Nutzer"
+    },
+    {
+      "id": "info",
+      "label": "Fahrgastinformation",
+      "wert": "Fahrplanhinweise und Echtzeit-Anzeige",
+      "herkunft": "Nutzer"
+    },
+    {
+      "id": "querung",
+      "label": "Querung",
+      "wert": "Taster vorhanden, kein Tonsignal",
+      "herkunft": "Nutzer"
+    },
+    {
+      "id": "leitlinie",
+      "label": "Leitstreifen",
+      "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, Zustand gut",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "aufmerksamkeit",
+      "label": "Aufmerksamkeitsfelder",
+      "wert": "an der Querung vorhanden",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "sitz",
+      "label": "Sitzplätze",
+      "wert": "drei Metallbänke unter dem Wartedach",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "handlauf",
+      "label": "Handläufe",
+      "wert": "an der Rampe beidseitig, am Wartebereich vorhanden",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "hindernis",
+      "label": "Hindernisse im Gehweg",
+      "wert": "Gullydeckel mit Schlitzen, Rinne quer, Laub am Rand",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "treppe",
+      "label": "Treppe",
+      "wert": "Treppe mit Handlauf an einem Zugang, Lage nicht geklärt",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "beleuchtung",
+      "label": "Beleuchtung",
+      "wert": "nur bei Tag beurteilt",
+      "herkunft": "unbekannt"
+    },
+    {
+      "id": "durchsage",
+      "label": "Durchsagen",
+      "wert": "nicht erfasst",
+      "herkunft": "unbekannt"
+    }
+  ],
+  "profiles": [
+    {
+      "id": "rollstuhl",
+      "name": "Rollstuhl",
+      "rules": [
+        [
+          "einstieg",
+          "passt",
+          "Ebenerdiger Einstieg, Abstand max. 10 cm"
+        ],
+        [
+          "zugang",
+          "passt",
+          "Lange Rampe Richtung Innenstadt"
+        ],
+        [
+          "steigung",
+          "passt",
+          "Laut Nutzer rollstuhlgerecht, Prozentwert nicht gemessen"
+        ],
+        [
+          "hindernis",
+          "beachten",
+          "Gullyschlitze und Gleisrillen sind für Rollen relevant"
+        ],
+        [
+          "treppe",
+          "passt nicht",
+          "Die Treppe ist für Rollstuhl nicht nutzbar, der Zugang über die Rampe schon"
+        ]
+      ]
+    },
+    {
+      "id": "rollator",
+      "name": "Rollator",
+      "rules": [
+        [
+          "einstieg",
+          "passt",
+          "Ebenerdiger Einstieg"
+        ],
+        [
+          "zugang",
+          "passt",
+          "Lange Rampe mit Handlauf"
+        ],
+        [
+          "sitz",
+          "passt",
+          "Drei Sitzbänke am Wartebereich (Vorschlag)"
+        ],
+        [
+          "handlauf",
+          "passt",
+          "Handläufe an der Rampe (Vorschlag)"
+        ],
+        [
+          "hindernis",
+          "beachten",
+          "Gullyschlitze für Rollatorräder relevant"
+        ]
+      ]
+    },
+    {
+      "id": "blind",
+      "name": "blind",
+      "rules": [
+        [
+          "querung",
+          "passt nicht",
+          "Kein Tonsignal, nur ein Taster"
+        ],
+        [
+          "leitlinie",
+          "vorschlag",
+          "Leitstreifen laut Fotos vorhanden, nicht geprüft"
+        ],
+        [
+          "aufmerksamkeit",
+          "vorschlag",
+          "Aufmerksamkeitsfelder an der Querung, nicht geprüft"
+        ],
+        [
+          "info",
+          "unbekannt",
+          "Die Echtzeit-Anzeige ist visuell, eine Sprachausgabe ist nicht bekannt"
+        ]
+      ]
+    },
+    {
+      "id": "sehbehindert",
+      "name": "sehbehindert",
+      "rules": [
+        [
+          "info",
+          "passt",
+          "Echtzeit-Anzeige vorhanden, Lesbarkeit nicht geprüft"
+        ],
+        [
+          "leitlinie",
+          "vorschlag",
+          "Helle Leitstreifen auf dunklerem Gehweg (Vorschlag)"
+        ],
+        [
+          "beleuchtung",
+          "unbekannt",
+          "Nur bei Tag beurteilt"
+        ]
+      ]
+    },
+    {
+      "id": "kinderwagen",
+      "name": "Kinderwagen",
+      "rules": [
+        [
+          "einstieg",
+          "passt",
+          "Ebenerdiger Einstieg"
+        ],
+        [
+          "zugang",
+          "passt",
+          "Lange Rampe"
+        ],
+        [
+          "steigung",
+          "passt",
+          "Laut Nutzer rollstuhlgerecht"
+        ],
+        [
+          "hindernis",
+          "beachten",
+          "Gullyschlitze für Kinderwagenräder relevant"
+        ]
+      ]
+    },
+    {
+      "id": "hoerbehindert",
+      "name": "hörbehindert",
+      "rules": [
+        [
+          "info",
+          "passt",
+          "Echtzeit-Anzeige vorhanden (visuell)"
+        ],
+        [
+          "durchsage",
+          "unbekannt",
+          "Durchsagen wurden nicht erfasst"
+        ]
+      ]
+    },
+    {
+      "id": "gehunsicher",
+      "name": "gehunsicher oder älter",
+      "rules": [
+        [
+          "einstieg",
+          "passt",
+          "Ebenerdiger Einstieg"
+        ],
+        [
+          "sitz",
+          "passt",
+          "Sitzbänke am Wartebereich (Vorschlag)"
+        ],
+        [
+          "handlauf",
+          "passt",
+          "Handläufe an der Rampe (Vorschlag)"
+        ],
+        [
+          "hindernis",
+          "beachten",
+          "Laub am Rand, bei Nässe rutschig (Vorschlag)"
+        ]
+      ]
+    }
+  ]
+}

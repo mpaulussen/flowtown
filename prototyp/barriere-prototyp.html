@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<title>Bahnsteig Prießallee</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<style>
+/* Ein Bahnsteig, sechs Profile: jede Angabe mit Herkunft, „unbekannt“ bleibt sichtbar */
+:root {
+  --bg: #f6f7f4; --surface: #ffffff; --fg: #15191e; --muted: #5b636b; --line: #d9ded6;
+  --ok: #1f6b45; --ok-bg: #e2f1e8; --no: #9b2c1f; --no-bg: #f8e3df;
+  --note: #6b4b00; --note-bg: #faf0d2; --vorschlag: #3b4a8a; --vorschlag-bg: #e6eaf7;
+  --unknown: #4d5560; --unknown-bg: #eceef0; --accent: #17784f;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0f1412; --surface: #172019; --fg: #eef2ee; --muted: #a3b0a8; --line: #2a372e;
+    --ok: #9fdcb9; --ok-bg: #1d3a2a; --no: #f2a79b; --no-bg: #3d2320;
+    --note: #f0cf86; --note-bg: #3a2f12; --vorschlag: #b9c4f0; --vorschlag-bg: #252d4a;
+    --unknown: #c4ccc7; --unknown-bg: #262e29; --accent: #3fb27f;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0f1412; --surface: #172019; --fg: #eef2ee; --muted: #a3b0a8; --line: #2a372e;
+  --ok: #9fdcb9; --ok-bg: #1d3a2a; --no: #f2a79b; --no-bg: #3d2320;
+  --note: #f0cf86; --note-bg: #3a2f12; --vorschlag: #b9c4f0; --vorschlag-bg: #252d4a;
+  --unknown: #c4ccc7; --unknown-bg: #262e29; --accent: #3fb27f;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg); color: var(--fg);
+  padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 640px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+h1 { font-size: 26px; line-height: 1.15; margin: 0; text-wrap: balance; }
+h2 { font-size: 17px; margin: 0 0 8px; }
+.stand { color: var(--muted); font-size: 14px; margin: 4px 0 0; }
+.card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 16px; }
+.beschreibung p { margin: 0; }
+.quelle { color: var(--muted); font-size: 13px; margin: 10px 0 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  font: inherit; font-size: 15px; min-height: 44px; padding: 8px 14px; border-radius: 999px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer;
+}
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.chip:focus-visible, button:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.fazit { font-size: 17px; margin: 0 0 12px; text-wrap: pretty; }
+.liste { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.zeile { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; align-items: start; padding-top: 10px; border-top: 1px solid var(--line); }
+.zeile:first-child { border-top: 0; padding-top: 0; }
+.badge { font-size: 13px; font-weight: 700; padding: 3px 9px; border-radius: 999px; white-space: nowrap; }
+.b-passt { background: var(--ok-bg); color: var(--ok); }
+.b-passt-nicht { background: var(--no-bg); color: var(--no); }
+.b-beachten { background: var(--note-bg); color: var(--note); }
+.b-vorschlag { background: var(--vorschlag-bg); color: var(--vorschlag); }
+.b-unbekannt { background: var(--unknown-bg); color: var(--unknown); }
+.zeile-text { margin: 0; }
+.herkunft { display: block; color: var(--muted); font-size: 13px; }
+.alle dt { font-weight: 700; font-size: 15px; }
+.alle dd { margin: 0 0 12px; }
+.alle .herkunft { margin-top: 2px; }
+.aktionen { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  font: inherit; font-size: 15px; min-height: 44px; padding: 8px 14px; border-radius: 12px;
+  border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer;
+}
+.hinweis { color: var(--muted); font-size: 13px; margin: 0; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1 id="titel"></h1>
+    <p class="stand" id="stand"></p>
+  </header>
+
+  <section class="card beschreibung" aria-labelledby="h-besch">
+    <h2 id="h-besch">Der Bahnsteig auf einen Blick</h2>
+    <p id="besch"></p>
+    <p class="quelle" id="quelle"></p>
+  </section>
+
+  <section aria-labelledby="h-profil">
+    <h2 id="h-profil">Für wen wird es bewertet?</h2>
+    <div class="chips" id="profile" role="group" aria-label="Profil wählen"></div>
+  </section>
+
+  <section class="card" aria-live="polite" aria-labelledby="h-ergebnis">
+    <h2 id="h-ergebnis">Bewertung</h2>
+    <p class="fazit" id="fazit"></p>
+    <ul class="liste" id="liste"></ul>
+  </section>
+
+  <section class="card" aria-labelledby="h-alle">
+    <div class="aktionen">
+      <button class="btn" id="btn-alle" aria-expanded="false" aria-controls="alle">Alle Angaben zeigen</button>
+      <button class="btn" id="btn-vorlesen">Fazit vorlesen</button>
+    </div>
+    <h2 id="h-alle" hidden>Alle Angaben</h2>
+    <dl class="alle" id="alle" hidden></dl>
+  </section>
+
+  <p class="hinweis">Prototyp. Angaben mit „KI-Vorschlag“ stammen aus Fotos und sind nicht geprüft. „Unbekannt“ heißt: keine Angabe vorhanden, nicht: passt.</p>
+</main>
+
+<script>
+const DATA = {"stop": {"name": "Prießallee (Stadtbahn)", "stand": "22.11.2026", "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Vitrine mit Fahrplanhinweisen und Echtzeit-Anzeige. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls.", "quelle": "Nutzerangaben vor Ort (Einstieg, Rampe, Information, Querung) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft)."}, "items": [{"id": "einstieg", "label": "Einstieg Stadtbahn", "wert": "direkt, ebenerdig, Abstand max. 10 cm; Bahnsteig 1,20 m", "herkunft": "Nutzer"}, {"id": "zugang", "label": "Zugang", "wert": "lange Rampe Richtung Innenstadt, an der Kreuzung Prießallee", "herkunft": "Nutzer"}, {"id": "steigung", "label": "Steigung der Rampe", "wert": "rollstuhlgerecht laut Nutzer; Prozentwert nicht gemessen", "herkunft": "Nutzer"}, {"id": "info", "label": "Fahrgastinformation", "wert": "Fahrplanhinweise und Echtzeit-Anzeige", "herkunft": "Nutzer"}, {"id": "querung", "label": "Querung", "wert": "Taster vorhanden, kein Tonsignal", "herkunft": "Nutzer"}, {"id": "leitlinie", "label": "Leitstreifen", "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, Zustand gut", "herkunft": "Vorschlag"}, {"id": "aufmerksamkeit", "label": "Aufmerksamkeitsfelder", "wert": "an der Querung vorhanden", "herkunft": "Vorschlag"}, {"id": "sitz", "label": "Sitzplätze", "wert": "drei Metallbänke unter dem Wartedach", "herkunft": "Vorschlag"}, {"id": "handlauf", "label": "Handläufe", "wert": "an der Rampe beidseitig, am Wartebereich vorhanden", "herkunft": "Vorschlag"}, {"id": "hindernis", "label": "Hindernisse im Gehweg", "wert": "Gullydeckel mit Schlitzen, Rinne quer, Laub am Rand", "herkunft": "Vorschlag"}, {"id": "treppe", "label": "Treppe", "wert": "Treppe mit Handlauf an einem Zugang, Lage nicht geklärt", "herkunft": "Vorschlag"}, {"id": "beleuchtung", "label": "Beleuchtung", "wert": "nur bei Tag beurteilt", "herkunft": "unbekannt"}, {"id": "durchsage", "label": "Durchsagen", "wert": "nicht erfasst", "herkunft": "unbekannt"}], "profiles": [{"id": "rollstuhl", "name": "Rollstuhl", "rules": [["einstieg", "passt", "Ebenerdiger Einstieg, Abstand max. 10 cm"], ["zugang", "passt", "Lange Rampe Richtung Innenstadt"], ["steigung", "passt", "Laut Nutzer rollstuhlgerecht, Prozentwert nicht gemessen"], ["hindernis", "beachten", "Gullyschlitze und Gleisrillen sind für Rollen relevant"], ["treppe", "passt nicht", "Die Treppe ist für Rollstuhl nicht nutzbar, der Zugang über die Rampe schon"]]}, {"id": "rollator", "name": "Rollator", "rules": [["einstieg", "passt", "Ebenerdiger Einstieg"], ["zugang", "passt", "Lange Rampe mit Handlauf"], ["sitz", "passt", "Drei Sitzbänke am Wartebereich (Vorschlag)"], ["handlauf", "passt", "Handläufe an der Rampe (Vorschlag)"], ["hindernis", "beachten", "Gullyschlitze für Rollatorräder relevant"]]}, {"id": "blind", "name": "blind", "rules": [["querung", "passt nicht", "Kein Tonsignal, nur ein Taster"], ["leitlinie", "vorschlag", "Leitstreifen laut Fotos vorhanden, nicht geprüft"], ["aufmerksamkeit", "vorschlag", "Aufmerksamkeitsfelder an der Querung, nicht geprüft"], ["info", "unbekannt", "Die Echtzeit-Anzeige ist visuell, eine Sprachausgabe ist nicht bekannt"]]}, {"id": "sehbehindert", "name": "sehbehindert", "rules": [["info", "passt", "Echtzeit-Anzeige vorhanden, Lesbarkeit nicht geprüft"], ["leitlinie", "vorschlag", "Helle Leitstreifen auf dunklerem Gehweg (Vorschlag)"], ["beleuchtung", "unbekannt", "Nur bei Tag beurteilt"]]}, {"id": "kinderwagen", "name": "Kinderwagen", "rules": [["einstieg", "passt", "Ebenerdiger Einstieg"], ["zugang", "passt", "Lange Rampe"], ["steigung", "passt", "Laut Nutzer rollstuhlgerecht"], ["hindernis", "beachten", "Gullyschlitze für Kinderwagenräder relevant"]]}, {"id": "hoerbehindert", "name": "hörbehindert", "rules": [["info", "passt", "Echtzeit-Anzeige vorhanden (visuell)"], ["durchsage", "unbekannt", "Durchsagen wurden nicht erfasst"]]}, {"id": "gehunsicher", "name": "gehunsicher oder älter", "rules": [["einstieg", "passt", "Ebenerdiger Einstieg"], ["sitz", "passt", "Sitzbänke am Wartebereich (Vorschlag)"], ["handlauf", "passt", "Handläufe an der Rampe (Vorschlag)"], ["hindernis", "beachten", "Laub am Rand, bei Nässe rutschig (Vorschlag)"]]}]};
+const BADGE = {
+  "passt": ["b-passt", "passt"],
+  "passt nicht": ["b-passt-nicht", "passt nicht"],
+  "beachten": ["b-beachten", "beachten"],
+  "hinweis": ["b-beachten", "beachten"],
+  "vorschlag": ["b-vorschlag", "Vorschlag, nicht geprüft"],
+  "unbekannt": ["b-unbekannt", "unbekannt"]
+};
+const HERKUNFT = { "Nutzer": "Nutzerangabe vor Ort", "Vorschlag": "KI-Vorschlag aus Foto, ungeprüft", "unbekannt": "keine Angabe" };
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; };
+const ITEM = Object.fromEntries(DATA.items.map(i => [i.id, i]));
+let aktiv = DATA.profiles[0];
+
+$("titel").textContent = "Bahnsteig " + DATA.stop.name.replace(" (Stadtbahn)", "");
+$("stand").textContent = "Stand " + DATA.stop.stand + " · Stadtbahn";
+$("besch").textContent = DATA.stop.beschreibung;
+$("quelle").textContent = DATA.stop.quelle;
+
+function zeigeProfile() {
+  const box = $("profile"); box.innerHTML = "";
+  DATA.profiles.forEach(p => {
+    const b = el("button", "chip", p.name);
+    b.type = "button";
+    b.setAttribute("aria-pressed", String(p === aktiv));
+    b.addEventListener("click", () => { aktiv = p; zeigeProfile(); zeigeErgebnis(); });
+    box.appendChild(b);
+  });
+}
+
+function fazitText(p) {
+  const z = p.rules;
+  const nicht = z.filter(r => r[1] === "passt nicht").length;
+  const passt = z.filter(r => r[1] === "passt").length;
+  const vorschlag = z.filter(r => r[1] === "vorschlag").length;
+  const unbek = z.filter(r => r[1] === "unbekannt").length;
+  let t = (nicht ? "Achtung: " + nicht + " Punkt" + (nicht > 1 ? "e" : "") + " passt nicht. " : "") + passt + " Punkt" + (passt === 1 ? " passt" : "e passen") + " laut Angaben.";
+  if (vorschlag) t += " " + vorschlag + " Punkt" + (vorschlag > 1 ? "e" : "") + " nur als Vorschlag aus Fotos.";
+  if (unbek) t += " " + unbek + " ohne Angabe.";
+  return t;
+}
+
+function zeigeErgebnis() {
+  $("fazit").textContent = "Profil „" + aktiv.name + "“: " + fazitText(aktiv);
+  const liste = $("liste"); liste.innerHTML = "";
+  aktiv.rules.forEach(([id, status, grund]) => {
+    const item = ITEM[id];
+    const [cls, label] = BADGE[status] || BADGE["unbekannt"];
+    const li = el("li", "zeile");
+    const b = el("span", "badge " + cls, label);
+    const txt = el("div");
+    txt.appendChild(el("p", "zeile-text", (item ? item.label + ": " : "") + grund));
+    if (item) txt.appendChild(el("span", "herkunft", HERKUNFT[item.herkunft] + " · " + item.wert));
+    li.appendChild(b); li.appendChild(txt);
+    liste.appendChild(li);
+  });
+}
+
+function zeigeAlle() {
+  const dl = $("alle"); dl.innerHTML = "";
+  DATA.items.forEach(i => {
+    dl.appendChild(el("dt", "", i.label));
+    const dd = el("dd"); dd.appendChild(el("span", "", i.wert));
+    dd.appendChild(el("span", "herkunft", HERKUNFT[i.herkunft]));
+    dl.appendChild(dd);
+  });
+}
+
+$("btn-alle").addEventListener("click", () => {
+  const offen = $("alle").hidden;
+  $("alle").hidden = !offen; $("h-alle").hidden = !offen;
+  $("btn-alle").setAttribute("aria-expanded", String(offen));
+  $("btn-alle").textContent = offen ? "Alle Angaben ausblenden" : "Alle Angaben zeigen";
+  if (offen) zeigeAlle();
+});
+
+$("btn-vorlesen").addEventListener("click", () => {
+  try {
+    if (!("speechSynthesis" in window)) return;
+    speechSynthesis.cancel();
+    const u = new SpeechSynthesisUtterance($("fazit").textContent);
+    u.lang = "de-DE";
+    speechSynthesis.speak(u);
+  } catch (e) { /* ohne Sprachausgabe bleibt der Text */ }
+});
+
+zeigeProfile(); zeigeErgebnis();
+</script>
+</body>
+</html>
