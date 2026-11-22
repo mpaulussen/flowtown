@@ -2,8 +2,8 @@
   "stop": {
     "name": "Prießallee (Stadtbahn)",
     "stand": "22.11.2026",
-    "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Vitrine mit Fahrplanhinweisen und Echtzeit-Anzeige. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls.",
-    "quelle": "Nutzerangaben vor Ort (Einstieg, Rampe, Information, Querung) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft)."
+    "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Ein elektronischer Fahrkartenautomat enthält die Fahrplanhinweise, dazu eine Echtzeit-Anzeige ohne Sprachausgabe. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung; beides ist vor Ort geprüft. Beleuchtung vorhanden. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls. Durchsagen können erfolgen, meist in den Stadtbahnen.",
+    "quelle": "Angaben von Nutzer vor Ort (Einstieg, Rampe, Information, Querung, Leitstreifen, Beleuchtung, Durchsagen) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft, außer wo als vor Ort geprüft angegeben)."
   },
   "items": [
     {
@@ -27,7 +27,7 @@
     {
       "id": "info",
       "label": "Fahrgastinformation",
-      "wert": "Fahrplanhinweise und Echtzeit-Anzeige",
+      "wert": "Echtzeit-Anzeige vorhanden, ohne Sprachausgabe",
       "herkunft": "Nutzer"
     },
     {
@@ -39,14 +39,14 @@
     {
       "id": "leitlinie",
       "label": "Leitstreifen",
-      "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, Zustand gut",
-      "herkunft": "Vorschlag"
+      "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, vor Ort geprüft",
+      "herkunft": "Nutzer"
     },
     {
       "id": "aufmerksamkeit",
       "label": "Aufmerksamkeitsfelder",
-      "wert": "an der Querung vorhanden",
-      "herkunft": "Vorschlag"
+      "wert": "an der Querung vorhanden, vor Ort geprüft",
+      "herkunft": "Nutzer"
     },
     {
       "id": "sitz",
@@ -75,14 +75,20 @@
     {
       "id": "beleuchtung",
       "label": "Beleuchtung",
-      "wert": "nur bei Tag beurteilt",
-      "herkunft": "unbekannt"
+      "wert": "vorhanden (Helligkeit nicht gemessen)",
+      "herkunft": "Nutzer"
     },
     {
       "id": "durchsage",
       "label": "Durchsagen",
-      "wert": "nicht erfasst",
-      "herkunft": "unbekannt"
+      "wert": "können erfolgen, meist in den Stadtbahnen",
+      "herkunft": "Nutzer"
+    },
+    {
+      "id": "automat",
+      "label": "Fahrkartenautomat",
+      "wert": "elektronisch, enthält die Fahrplanhinweise; Fotos noch offen",
+      "herkunft": "Nutzer"
     }
   ],
   "profiles": [
@@ -159,18 +165,23 @@
         ],
         [
           "leitlinie",
-          "vorschlag",
-          "Leitstreifen laut Fotos vorhanden, nicht geprüft"
+          "passt",
+          "Leitstreifen vor Ort geprüft"
         ],
         [
           "aufmerksamkeit",
-          "vorschlag",
-          "Aufmerksamkeitsfelder an der Querung, nicht geprüft"
+          "passt",
+          "Aufmerksamkeitsfelder an der Querung vor Ort geprüft"
         ],
         [
           "info",
+          "passt nicht",
+          "Die Echtzeit-Anzeige hat keine Sprachausgabe"
+        ],
+        [
+          "automat",
           "unbekannt",
-          "Die Echtzeit-Anzeige ist visuell, eine Sprachausgabe ist nicht bekannt"
+          "Ob der Fahrkartenautomat Sprachausgabe hat, ist noch nicht geprüft"
         ]
       ]
     },
@@ -185,13 +196,18 @@
         ],
         [
           "leitlinie",
-          "vorschlag",
-          "Helle Leitstreifen auf dunklerem Gehweg (Vorschlag)"
+          "passt",
+          "Leitstreifen vor Ort geprüft"
         ],
         [
           "beleuchtung",
+          "passt",
+          "Beleuchtung vorhanden, Helligkeit nicht gemessen"
+        ],
+        [
+          "automat",
           "unbekannt",
-          "Nur bei Tag beurteilt"
+          "Kontrast und Bedienung des Automaten noch nicht fotografiert"
         ]
       ]
     },
@@ -232,8 +248,8 @@
         ],
         [
           "durchsage",
-          "unbekannt",
-          "Durchsagen wurden nicht erfasst"
+          "beachten",
+          "Durchsagen meist nur in den Stadtbahnen, an der Haltestelle nicht sicher"
         ]
       ]
     },
