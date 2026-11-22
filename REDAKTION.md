@@ -59,6 +59,18 @@ cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowt
 
 Danach die Datei prüfen und erst dann als `data/steckbrief.json` ins Repo übernehmen. Objekte ohne Angaben fehlen in der Datei. Nur Objekte, die im Objektkatalog stehen, werden gefunden.
 
+**Haltestelle in den Katalog aufnehmen** (wenn sie fehlt, einmal pro Haltestelle; Breite und Länge aus einer Karte):
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs objekt-anlegen "Prießallee" <Breite> <Länge>' && sudo chown -R flowtown: /var/lib/flowtown
+```
+
+Achtung: `objektkatalog` schreibt die Datei neu. Danach Haltestellen erneut anlegen.
+
+**Grenzen für Maße** (cm): Spalt und Höhenunterschied bis 5 cm passt, bis 7,5 cm beachten, darüber passt nicht. Platz zum Wenden ab 150 cm passt. Quellen: TSI PRM (höchstens 75 mm Spalt, 50 mm Höhe) und die Empfehlung von 5 cm (ADAC). Die Grenzen stehen in `server/steckbrief-export.mjs`.
+
+**„Aktuell“:** Eine Angabe gilt als aktuell, wenn sie in den letzten sieben Tagen vor Ort geprüft wurde. Der Filter „Nur Neues und aktuelle“ zeigt dann diese Angaben und alles, was seit dem letzten Besuch neu geprüft wurde.
+
 ## Redaktions-App (Version 0.1.0)
 
 Eigene Web-App, getrennt von der Nutzer-App: **https://mpaulussen.github.io/flowtown/redaktion/** (Dateien in `redaktion/`). Sie spricht mit `/api/redaktion/*` des Flowtown-Servers.

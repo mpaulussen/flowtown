@@ -35,8 +35,18 @@ assert.equal(e[0].items.length, 2);
 assert.deepEqual(e[0].profiles.map((p) => p.id), ['rollstuhl', 'rollator', 'blind', 'sehbehindert']);
 assert.deepEqual(e[0].profiles[0].rules, [['hochbahnsteig', 'passt', 'ja']]);
 assert.deepEqual(e[0].profiles[2].rules, [['querung', 'passt nicht', 'nein']]);
-assert.equal(e[0].items[0].art, 'dauerhaft');
+assert.equal(e[0].items[0].art, 'aktuell', 'vor einer Stunde geprüft');
 assert.equal(e[0].items[0].herkunft, 'Nutzer');
+
+// Maße mit Grenzen (cm)
+assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'spalt_cm' }, { ...heute, wert: '4' }, jetzt).status, 'passt');
+assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'spalt_cm' }, { ...heute, wert: '6' }, jetzt).status, 'beachten');
+assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'spalt_cm' }, { ...heute, wert: '10' }, jetzt).status, 'passt nicht');
+assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'hoehe_cm' }, { ...heute, wert: '-4' }, jetzt).status, 'passt', 'Höhe zählt mit Vorzeichen als Betrag');
+assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'platz_cm' }, { ...heute, wert: '160' }, jetzt).status, 'passt');
+assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'platz_cm' }, { ...heute, wert: '120' }, jetzt).status, 'passt nicht');
+// aktuell nur innerhalb von sieben Tagen
+assert.equal(steckbriefAus([{ id: 'a', name: 'X' }], cl, { a: { hochbahnsteig: { ...heute, wert: 'ja', geprueft: jetzt - 8 * 864e5 } } }, jetzt)[0].items[0].art, 'dauerhaft');
 
 assert.equal(slug('Prießallee Süd'), 'priessallee-sued');
 console.log('steckbrief-export: alle Tests bestanden');

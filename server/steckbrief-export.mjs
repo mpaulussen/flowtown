@@ -24,6 +24,11 @@ export function profileAus(text) {
 }
 
 const STATUS = { ja: 'passt', teilweise: 'beachten', nein: 'passt nicht' };
+// Grenzen in cm. Spalt und Höhenunterschied: bis 5 cm passt (Empfehlung, ADAC), bis 7,5 cm beachten (TSI PRM
+// erlaubt höchstens 75 mm Spalt und 50 mm Höhe), darüber passt nicht. Platz: 150 cm zum Wenden (Checkliste).
+const GRENZE = { spalt_cm: { passt: 5, beachten: 7.5 }, hoehe_cm: { passt: 5, beachten: 7.5, abs: true }, platz_cm: { passt_ab: 150 } };
+// „aktuell“: vor Ort in den letzten sieben Tagen geprüft
+const AKTUELL = 7 * 864e5;
 const datum = (t) => new Date(t).toISOString().slice(0, 10);
 const frisch = (fakt, klasse, jetzt) => (fakt.gilt_bis || fakt.geprueft + (FRIST[klasse] || FRIST.D)) > jetzt;
 
@@ -35,8 +40,13 @@ export function bewerte(merkmal, fakt, jetzt = Date.now()) {
   if (fakt.vorschlag) return { status: 'vorschlag', wert, grund: 'Vorschlag aus Foto, nicht geprüft' };
   if (!frisch(fakt, merkmal.klasse, jetzt)) return { status: 'unbekannt', wert, grund: `nicht mehr geprüft (Stand ${datum(fakt.geprueft)})` };
   if (/^Zahl/.test(merkmal.antwort || '')) {
-    // Maße werden angezeigt, aber noch nicht bewertet: Schwellen fehlen (offen in ERFASSUNG-AUSGABE.md)
-    return { status: 'beachten', wert: `${wert} ${merkmal.einheit || ''}`.trim(), grund: `Maß: ${wert} ${merkmal.einheit || ''}`.trim() };
+    const maß = `${wert} ${merkmal.einheit || ''}`.trim(), g = GRENZE[merkmal.merkmal], n = Number(wert.replace(',', '.'));
+    if (g && isFinite(n)) {
+      if (g.passt_ab != null) return { status: n >= g.passt_ab ? 'passt' : 'passt nicht', wert: maß, grund: `Maß: ${maß}` };
+      const v = g.abs ? Math.abs(n) : n;
+      return { status: v <= g.passt ? 'passt' : v <= g.beachten ? 'beachten' : 'passt nicht', wert: maß, grund: `Maß: ${maß}` };
+    }
+    return { status: 'beachten', wert: maß, grund: `Maß: ${maß}` };   // ohne Grenze: nur anzeigen
   }
   const k = wert.toLowerCase();
   if (STATUS[k]) return { status: STATUS[k], wert: k, grund: k };
@@ -52,7 +62,7 @@ export function eintragAus({ id, name, beschreibung, quelle }, checkliste, fakte
     items.push({
       id: m.merkmal, label: m.kurzname || m.frage, wert: b.wert || b.grund,
       herkunft: f.vorschlag ? 'Vorschlag' : 'Nutzer', stand: datum(f.geprueft),
-      art: ['A', 'B'].includes(m.klasse) ? 'aktuell' : 'dauerhaft',
+      art: jetzt - f.geprueft < AKTUELL ? 'aktuell' : 'dauerhaft',
     });
   }
   const profile = Object.keys(PROFILE).filter((p) => checkliste.some((m) => profileAus(m.profile).includes(p)))

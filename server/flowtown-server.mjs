@@ -9,7 +9,7 @@ import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import readline from 'node:readline';
-import { steckbriefAus } from './steckbrief-export.mjs';
+import { steckbriefAus, slug } from './steckbrief-export.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -4703,6 +4703,20 @@ if (cli === 'echtzeit-leg') {
   console.log(`Echtzeit-Datenstrom: Stand vor ${Math.round((Date.now() - rt.ts) / 60000)} min, ${rt.n || 0} Meldungen insgesamt; Fahrten mit Meldung je Auszug:`,
     Object.keys(fahrplaene).map((id) => { const m = rt.staedte[id] || {}, v = Object.values(m); return `${id}: ${v.length} von ${(fpData(id) || { trips: [] }).trips.length} (davon verspätet: ${v.filter((e) => e[1] > 60 || (e[2] || []).some((q) => q[1] > 60)).length}, ausgefallen: ${v.filter((e) => e[0]).length})`; }).join(' | '));
   console.log('Ergebnis:', JSON.stringify(rtLeg({ vonPos: [Number(lat), Number(lon)], linie, ab }) || null), '(null = keine eindeutige Zuordnung)');
+  process.exit(0);
+}
+if (cli === 'objekt-anlegen') {
+  // Eine Haltestelle in den Pilot-Katalog eintragen, wenn sie fehlt. Aufruf: objekt-anlegen <Name> <Breite> <Länge>
+  // ID: stadtbahn_haltestelle-<Kürzel des Namens>. Achtung: der Befehl objektkatalog schreibt die Datei neu; danach dieses Objekt erneut anlegen.
+  const name = process.argv[3], lat = process.argv[4], lon = process.argv[5];
+  if (!name || !isFinite(Number(lat)) || !isFinite(Number(lon))) { console.error('Aufruf: node flowtown-server.mjs objekt-anlegen <Name> <Breite> <Länge>'); process.exit(1); }
+  const id = `stadtbahn_haltestelle-${slug(name)}`;
+  const file = path.join(Q_DIR, 'objektkatalog-pilot.csv');
+  fs.mkdirSync(Q_DIR, { recursive: true });
+  const alt = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : '\uFEFFID;Objektart;Name;Gebiet;Breite;Länge;Priorität;Fehlt (Zahl);Fehlt;Bekannt;Quelle;Status\n';
+  if (alt.split(/\r?\n/).some((z) => z.split(';')[0] === id)) { console.log(`${id} steht schon im Katalog.`); process.exit(0); }
+  fs.writeFileSync(file, alt.replace(/\n?$/, '\n') + [id, 'stadtbahn_haltestelle', name, 'Bielefeld', lat, lon, 1, '', '', '', 'von Hand', 'offen'].join(';') + '\n');
+  console.log(`Angelegt: ${id} (${lat}, ${lon})`);
   process.exit(0);
 }
 if (cli === 'steckbrief-export') {
