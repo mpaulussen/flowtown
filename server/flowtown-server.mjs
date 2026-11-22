@@ -9,6 +9,7 @@ import { spawn } from 'node:child_process';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import readline from 'node:readline';
+import { steckbriefAus } from './steckbrief-export.mjs';
 
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
@@ -4158,7 +4159,7 @@ function rChecklisten() {
   try {
     const r = rCsv(path.join(path.dirname(new URL(import.meta.url).pathname), 'checklisten.csv')), h = r[0].map((x) => x.trim().toLowerCase()), c = (n) => h.indexOf(n);
     const out = {};
-    for (const x of r.slice(1)) { const a = x[c('objektart')]; if (a) (out[a] = out[a] || []).push({ merkmal: x[c('merkmal')], frage: x[c('frage')], antwort: x[c('antwort')], einheit: x[c('einheit')], klasse: x[c('klasse')] || 'D', profile: x[c('profile')], osm: x[c('osm-tag')], hinweis: x[c('messhinweis')] }); }
+    for (const x of r.slice(1)) { const a = x[c('objektart')]; if (a) (out[a] = out[a] || []).push({ merkmal: x[c('merkmal')], frage: x[c('frage')], antwort: x[c('antwort')], einheit: x[c('einheit')], klasse: x[c('klasse')] || 'D', profile: x[c('profile')], osm: x[c('osm-tag')], hinweis: x[c('messhinweis')], kurzname: x[c('kurzname')] || '' }); }
     return out;
   } catch (e) { return {}; }
 }
@@ -4702,6 +4703,18 @@ if (cli === 'echtzeit-leg') {
   console.log(`Echtzeit-Datenstrom: Stand vor ${Math.round((Date.now() - rt.ts) / 60000)} min, ${rt.n || 0} Meldungen insgesamt; Fahrten mit Meldung je Auszug:`,
     Object.keys(fahrplaene).map((id) => { const m = rt.staedte[id] || {}, v = Object.values(m); return `${id}: ${v.length} von ${(fpData(id) || { trips: [] }).trips.length} (davon verspätet: ${v.filter((e) => e[1] > 60 || (e[2] || []).some((q) => q[1] > 60)).length}, ausgefallen: ${v.filter((e) => e[0]).length})`; }).join(' | '));
   console.log('Ergebnis:', JSON.stringify(rtLeg({ vonPos: [Number(lat), Number(lon)], linie, ab }) || null), '(null = keine eindeutige Zuordnung)');
+  process.exit(0);
+}
+if (cli === 'steckbrief-export') {
+  // Bahnsteig-Steckbrief aus den Angaben der Redaktion: alle Objekte der Art stadtbahn_haltestelle mit Angaben.
+  // Aufruf: steckbrief-export [Datei]   (ohne Datei: auf die Konsole). Die Datei wird danach ins Repo unter data/steckbrief.json übernommen.
+  const cl = rChecklisten().stadtbahn_haltestelle || [];
+  const obj = rKatalog().filter((o) => o.art === 'stadtbahn_haltestelle').map((o) => ({ id: o.id, name: o.name }));
+  const eintraege = steckbriefAus(obj, cl, rFakt);
+  const text = JSON.stringify(eintraege, null, 1) + '\n';
+  if (process.argv[3]) { fs.writeFileSync(process.argv[3], text); console.log(`${eintraege.length} Haltestelle(n) nach ${process.argv[3]} geschrieben.`); }
+  else process.stdout.write(text);
+  if (!eintraege.length) console.error('Keine Haltestelle mit Angaben im Katalog gefunden. Prüfe, ob das Objekt im Objektkatalog steht (Befehl objektkatalog).');
   process.exit(0);
 }
 if (cli === 'redaktion-satz') {

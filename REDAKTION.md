@@ -49,6 +49,16 @@ Zweiter Lauf: 675 OSM-Elemente zu 482 Objekten zusammengefasst, 487 Objekte insg
 
 Wer anfangen will: **Priorität 1 (34 Objekte) zuerst**, das sind die Aufzüge und Stadtbahn-Haltestellen und damit der Fall Jahnplatz. Danach Priorität 2, zuerst die öffentlichen Einrichtungen. Priorität 3 später.
 
+## Bahnsteig-Steckbrief exportieren
+
+Die Angaben zu Stadtbahn-Haltestellen werden als Steckbrief für die App gebraucht (Probe unter Mehr → Bahnsteige). Der Befehl liest den Objektkatalog und die Angaben der Redaktion und erzeugt die Datei im Format von `data/steckbrief.json`. Die Bewertung je Profil kommt aus `server/checklisten.csv` (Spalte „Profile“), nicht von Hand.
+
+```bash
+cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs steckbrief-export /tmp/steckbrief.json'
+```
+
+Danach die Datei prüfen und erst dann als `data/steckbrief.json` ins Repo übernehmen. Objekte ohne Angaben fehlen in der Datei. Nur Objekte, die im Objektkatalog stehen, werden gefunden.
+
 ## Redaktions-App (Version 0.1.0)
 
 Eigene Web-App, getrennt von der Nutzer-App: **https://mpaulussen.github.io/flowtown/redaktion/** (Dateien in `redaktion/`). Sie spricht mit `/api/redaktion/*` des Flowtown-Servers.

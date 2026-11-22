@@ -75,6 +75,17 @@ Welche Merkmale für welches Profil zählen, steht schon in der Spalte „Profil
 
 **Einspeisen in Flowtown.** Die Redaktions-Daten werden als `steckbrief.json` exportiert. Die Redaktions-App hat bisher nur einen CSV-Export (`REDAKTION.md`), der Export nach `steckbrief.json` muss also noch gebaut werden. Die Nutzer-App lädt nur diese Datei. Sie kennt keine Fotos und keine Erfassung.
 
+## Stand: umgesetzt (22.11.2026)
+
+- **Checkliste:** `server/checklisten.csv`, Objektart `stadtbahn_haltestelle`, hat jetzt die 14 Merkmale des Steckbriefs plus die Messfelder. Neu ist die Spalte „Kurzname“. Bestehende Merkmalsnamen bleiben unverändert, damit gespeicherte Angaben nicht verloren gehen.
+- **Export:** `server/steckbrief-export.mjs`, Befehl `steckbrief-export [Datei]` im Server. Er erzeugt den Eintrag im Format von `data/steckbrief.json`. Tests: `node server/test-steckbrief-export.mjs`.
+- **Vergleich mit der Probe** (aus den Angaben der Probe nachgebaut): 16 von 35 Regeln stimmen überein. Die Abweichungen:
+  - **Vorschläge aus Fotos** (9 Regeln): Die Probe zeigte sie teils als „passt“. Nach der Regel ist ein Vorschlag „nicht geprüft“. Die Probe war hier falsch.
+  - **Regelumfang** (5 Regeln): Die Checkliste sagt für einige Merkmale mehr oder weniger Profile als die Probe, zum Beispiel Steigung für den Rollator oder Aufmerksamkeitsfelder für Sehbehinderte.
+  - **Schwelle fehlt** (1 Regel): „Spalt 10 cm“ ist für den Rollstuhl nur „beachten“, weil keine Grenze definiert ist.
+  - **Eine Statusfrage:** Der Fahrkartenautomat ist für Sehbehinderte in der Probe „beachten“, nach der Regel „passt nicht“.
+- **Noch offen:** `data/steckbrief.json` ist unverändert, bis du den Vergleich gesehen hast. Die Redaktions-App legt keine neuen Objekte an. Die Prießallee muss also im Objektkatalog stehen, bevor der Export sie findet.
+
 ## Entscheidungen, die du treffen musst
 
 1. **Erfassung in der bestehenden Redaktions-App** (empfohlen), statt einer zweiten App. Die Liste der Rollen und der Zugang bleiben, nur die Objektart kommt dazu.
