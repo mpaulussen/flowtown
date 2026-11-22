@@ -2,7 +2,7 @@
   "stop": {
     "name": "Prießallee (Stadtbahn)",
     "stand": "22.11.2026",
-    "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Ein elektronischer Fahrkartenautomat enthält die Fahrplanhinweise, dazu eine Echtzeit-Anzeige ohne Sprachausgabe. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung; beides ist vor Ort geprüft. Beleuchtung vorhanden. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls. Durchsagen können erfolgen, meist in den Stadtbahnen.",
+    "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Ein elektronischer Fahrkartenautomat enthält die Echtzeit-Anzeige ohne Sprachausgabe; er ist nicht barrierefrei bedienbar, ohne Kopfhörerbuchse und ohne Brailleschrift. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung; beides ist vor Ort geprüft. Beleuchtung vorhanden. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls. Durchsagen können erfolgen, meist in den Stadtbahnen.",
     "quelle": "Angaben von Nutzer vor Ort (Einstieg, Rampe, Information, Querung, Leitstreifen, Beleuchtung, Durchsagen) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft, außer wo als vor Ort geprüft angegeben). Fotos 26–29: Taster, Haltestellenschild, Fahrkartenautomat, Bedienfeld."
   },
   "items": [
@@ -93,8 +93,8 @@
     {
       "id": "automat",
       "label": "Fahrkartenautomat",
-      "wert": "Ziffernfeld beschriftet, Kartenleser und Münzeinwurf, Kopfhörer-Anschluss und Sprachausgabe nicht erkennbar, Höhe nicht gemessen",
-      "herkunft": "Vorschlag"
+      "wert": "nicht barrierefrei bedienbar: keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe; Höhe nicht gemessen",
+      "herkunft": "Nutzer"
     },
     {
       "id": "schild",
@@ -140,8 +140,8 @@
         ],
         [
           "automat",
-          "unbekannt",
-          "Höhe von Anzeige und Tasten nicht gemessen"
+          "beachten",
+          "Nicht barrierefrei bedienbar laut Nutzer, Höhe nicht gemessen"
         ]
       ]
     },
@@ -202,8 +202,8 @@
         ],
         [
           "automat",
-          "unbekannt",
-          "Ob sich der Automat mit Sprachausgabe bedienen lässt, zeigen die Fotos nicht"
+          "passt nicht",
+          "Keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe"
         ]
       ]
     },
@@ -228,8 +228,8 @@
         ],
         [
           "automat",
-          "unbekannt",
-          "Kontrast der Tasten nicht beurteilt"
+          "beachten",
+          "Nicht barrierefrei bedienbar laut Nutzer, Anzeige auf dem Foto gut lesbar"
         ]
       ]
     },
