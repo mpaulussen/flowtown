@@ -65,7 +65,7 @@ Danach die Datei prüfen und erst dann als `data/steckbrief.json` ins Repo über
 cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowtown-server.mjs objekt-anlegen "Prießallee" <Breite> <Länge>' && sudo chown -R flowtown: /var/lib/flowtown
 ```
 
-Achtung: `objektkatalog` schreibt die Datei neu. Danach Haltestellen erneut anlegen.
+`objektkatalog` behält von Hand angelegte Haltestellen (Quelle „von Hand“), wenn er die Datei neu erzeugt.
 
 **Grenzen für Maße** (cm): Spalt und Höhenunterschied bis 5 cm passt, bis 7,5 cm beachten, darüber passt nicht. Platz zum Wenden ab 150 cm passt. Quellen: TSI PRM (höchstens 75 mm Spalt, 50 mm Höhe) und die Empfehlung von 5 cm (ADAC). Die Grenzen stehen in `server/steckbrief-export.mjs`.
 

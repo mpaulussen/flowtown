@@ -5020,8 +5020,20 @@ if (cli === 'faq') {
     const gOrd = gebiete.map((g) => g.name);
     rows.sort((a, b) => a.prio - b.prio || gOrd.indexOf(a.o.gebiet) - gOrd.indexOf(b.o.gebiet) || a.rel - b.rel || b.fehlt.length - a.fehlt.length || String(a.o.name).localeCompare(String(b.o.name), 'de'));
     for (const { o, prio, fehlt, bekannt, lage } of rows) out.push([o.id, LABEL[o.typ], o.name || '(ohne Namen)', o.gebiet, o.pos[0].toFixed(5), o.pos[1].toFixed(5), prio, fehlt.length, fehlt.join(', '), bekannt.join('; '), o.quelle, 'offen', lage, o.osm || ''].map(q).join(';'));
-    fs.mkdirSync(Q_DIR, { recursive: true });
+    // Von Hand angelegte Objekte (Befehl objekt-anlegen, Quelle „von Hand“) bleiben beim Neu-Erzeugen erhalten
     const file = path.join(Q_DIR, nur ? `objektkatalog-pilot-${nur}.csv` : 'objektkatalog-pilot.csv');
+    if (fs.existsSync(file)) {
+      const zeilen = fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/).filter((z) => z.trim());
+      const kopf = zeilen[0] || '', neu = new Set(rows.map((r) => r.o.id));
+      for (const z of zeilen.slice(1)) {
+        const f = parseCsv(kopf + '\n' + z)[1] || [];
+        if (f[0] && f[10] === 'von Hand' && !neu.has(f[0])) {
+          out.push([f[0], f[1], f[2], f[3], f[4], f[5], f[6], f[7] || '', f[8] || '', f[9] || '', 'von Hand', f[11] || 'offen', '', ''].map(q).join(';'));
+          console.log(`Von Hand angelegt, bleibt erhalten: ${f[2]}`);
+        }
+      }
+    }
+    fs.mkdirSync(Q_DIR, { recursive: true });
     fs.writeFileSync(file, '﻿' + out.join('\r\n') + '\r\n');
     const zaehl = {};
     for (const { o } of rows) { const k = `${o.gebiet} / ${LABEL[o.typ]}`; zaehl[k] = (zaehl[k] || 0) + 1; }
