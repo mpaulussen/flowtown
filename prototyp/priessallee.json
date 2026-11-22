@@ -3,7 +3,7 @@
     "name": "Prießallee (Stadtbahn)",
     "stand": "22.11.2026",
     "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Ein elektronischer Fahrkartenautomat enthält die Fahrplanhinweise, dazu eine Echtzeit-Anzeige ohne Sprachausgabe. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung; beides ist vor Ort geprüft. Beleuchtung vorhanden. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls. Durchsagen können erfolgen, meist in den Stadtbahnen.",
-    "quelle": "Angaben von Nutzer vor Ort (Einstieg, Rampe, Information, Querung, Leitstreifen, Beleuchtung, Durchsagen) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft, außer wo als vor Ort geprüft angegeben)."
+    "quelle": "Angaben von Nutzer vor Ort (Einstieg, Rampe, Information, Querung, Leitstreifen, Beleuchtung, Durchsagen) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft, außer wo als vor Ort geprüft angegeben). Fotos 26–29: Taster, Haltestellenschild, Fahrkartenautomat, Bedienfeld."
   },
   "items": [
     {
@@ -26,14 +26,20 @@
     },
     {
       "id": "info",
-      "label": "Fahrgastinformation",
-      "wert": "Echtzeit-Anzeige vorhanden, ohne Sprachausgabe",
+      "label": "Vitrine",
+      "wert": "Linienplan und gedruckte Fahrpläne",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "anzeige",
+      "label": "Echtzeit-Anzeige im Automaten",
+      "wert": "integriert in den Fahrkartenautomaten, ohne Sprachausgabe",
       "herkunft": "Nutzer"
     },
     {
       "id": "querung",
       "label": "Querung",
-      "wert": "Taster vorhanden, kein Tonsignal",
+      "wert": "Taster mit Hand-Symbol und Aufschrift „Bitte drücken“, kein Tonsignal",
       "herkunft": "Nutzer"
     },
     {
@@ -87,8 +93,14 @@
     {
       "id": "automat",
       "label": "Fahrkartenautomat",
-      "wert": "elektronisch, enthält die Fahrplanhinweise; Fotos noch offen",
-      "herkunft": "Nutzer"
+      "wert": "Ziffernfeld beschriftet, Kartenleser und Münzeinwurf, Kopfhörer-Anschluss und Sprachausgabe nicht erkennbar, Höhe nicht gemessen",
+      "herkunft": "Vorschlag"
+    },
+    {
+      "id": "schild",
+      "label": "Haltestellenschild",
+      "wert": "Name Prießallee mit Rollstuhl-Symbol und Pfeil",
+      "herkunft": "Vorschlag"
     }
   ],
   "profiles": [
@@ -120,6 +132,16 @@
           "treppe",
           "passt nicht",
           "Die Treppe ist für Rollstuhl nicht nutzbar, der Zugang über die Rampe schon"
+        ],
+        [
+          "schild",
+          "passt",
+          "Rollstuhl-Symbol am Haltestellenschild (Vorschlag)"
+        ],
+        [
+          "automat",
+          "unbekannt",
+          "Höhe von Anzeige und Tasten nicht gemessen"
         ]
       ]
     },
@@ -174,14 +196,14 @@
           "Aufmerksamkeitsfelder an der Querung vor Ort geprüft"
         ],
         [
-          "info",
+          "anzeige",
           "passt nicht",
-          "Die Echtzeit-Anzeige hat keine Sprachausgabe"
+          "Die Echtzeit-Anzeige im Automaten hat keine Sprachausgabe"
         ],
         [
           "automat",
           "unbekannt",
-          "Ob der Fahrkartenautomat Sprachausgabe hat, ist noch nicht geprüft"
+          "Ob sich der Automat mit Sprachausgabe bedienen lässt, zeigen die Fotos nicht"
         ]
       ]
     },
@@ -190,9 +212,9 @@
       "name": "sehbehindert",
       "rules": [
         [
-          "info",
+          "anzeige",
           "passt",
-          "Echtzeit-Anzeige vorhanden, Lesbarkeit nicht geprüft"
+          "Anzeige im Automaten auf dem Foto gut lesbar, vor Ort nicht gemessen"
         ],
         [
           "leitlinie",
@@ -207,7 +229,7 @@
         [
           "automat",
           "unbekannt",
-          "Kontrast und Bedienung des Automaten noch nicht fotografiert"
+          "Kontrast der Tasten nicht beurteilt"
         ]
       ]
     },
@@ -242,9 +264,9 @@
       "name": "hörbehindert",
       "rules": [
         [
-          "info",
+          "anzeige",
           "passt",
-          "Echtzeit-Anzeige vorhanden (visuell)"
+          "Echtzeit-Anzeige im Automaten (visuell)"
         ],
         [
           "durchsage",
