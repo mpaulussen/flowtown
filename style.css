@@ -1740,3 +1740,21 @@ body.talk-in-view .fab-mic{display:none}
 .talk-btn:active{transform:scale(.99)}
 @media (max-width:360px){.talk-btn{min-height:92px;padding:16px 18px;gap:14px}.talk-btn .tb-ic{width:58px;height:58px}.talk-btn .tb-ic .ic{width:30px;height:30px}.talk-btn .tb-tx b{font-size:21px}.talk-btn .tb-tx small{display:block;font-size:14px}}
 .talk-btn .tb-tx b,.talk-btn .tb-tx small{text-wrap:balance}
+
+/* Bahnsteig-Steckbrief (Probe) */
+.sb-text { margin: 0 0 8px; }
+.sb-quelle { color: var(--muted); font-size: 13px; margin: 0 0 10px; }
+.sb-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 0 0 10px; }
+.sb-chip { font: inherit; font-size: 14px; min-height: 44px; padding: 6px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); color: var(--fg); cursor: pointer; }
+.sb-chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: #fff; }
+.sb-fazit { font-weight: 700; margin: 0 0 8px; }
+.sb-liste { list-style: none; margin: 0 0 10px; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.sb-liste li { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; align-items: start; border-top: 1px solid var(--line); padding-top: 8px; }
+.sb-liste li:first-child { border-top: 0; padding-top: 0; }
+.sb-badge { font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+.sb-passt { background: var(--ok-bg, #e2f1e8); color: var(--ok, #1f6b45); }
+.sb-passt-nicht { background: var(--no-bg, #f8e3df); color: var(--no, #9b2c1f); }
+.sb-beachten { background: var(--note-bg, #faf0d2); color: var(--note, #6b4b00); }
+.sb-vorschlag { background: var(--vorschlag-bg, #e6eaf7); color: var(--vorschlag, #3b4a8a); }
+.sb-unbekannt { background: var(--unknown-bg, #eceef0); color: var(--unknown, #4d5560); }
+.sb-herkunft { display: block; color: var(--muted); font-size: 13px; }

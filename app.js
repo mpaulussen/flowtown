@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.111.12';
+  const VERSION = '0.112.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6426,6 +6426,63 @@
     return added;
   }
   // Einstellungen: je Bereich eine Zeile, die sagt, was gerade gilt
+  // Bahnsteig-Steckbrief (Probe): Angaben aus data/steckbrief.json, Bewertung je Profil wie im Prototyp
+  const SB_PROFIL = { rollstuhl: 'rollstuhl', rollator: 'rollator', sehen: 'blind', hoeren: 'hoerbehindert', ruhe: 'gehunsicher' };
+  const SB_STATUS = { 'passt': ['sb-passt', 'passt'], 'passt nicht': ['sb-passt-nicht', 'passt nicht'], 'beachten': ['sb-beachten', 'beachten'], 'hinweis': ['sb-beachten', 'beachten'], 'vorschlag': ['sb-vorschlag', 'Vorschlag, nicht geprüft'], 'unbekannt': ['sb-unbekannt', 'unbekannt'] };
+  const SB_HER = { Nutzer: 'Nutzerangabe vor Ort', Vorschlag: 'KI-Vorschlag aus Foto, ungeprüft', unbekannt: 'keine Angabe' };
+  let sbDaten = null, sbLadeZ = null, sbStop = null, sbProfil = null;
+  function sbLaden() {
+    if (sbDaten) return Promise.resolve(sbDaten);
+    if (!sbLadeZ) sbLadeZ = fetch('data/steckbrief.json').then((r) => r.json()).then((d) => (sbDaten = Array.isArray(d) ? d : [])).catch(() => (sbDaten = []));
+    return sbLadeZ;
+  }
+  function sbEl(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
+  function sbFazit(p, items) {
+    const z = p.rules, n = (s) => z.filter((r) => r[1] === s).length;
+    let t = n('passt nicht') ? `Achtung: ${n('passt nicht')} Punkt${n('passt nicht') > 1 ? 'e' : ''} passt nicht. ` : '';
+    t += `${n('passt')} Punkt${n('passt') === 1 ? ' passt' : 'e passen'} laut Angaben.`;
+    if (n('vorschlag')) t += ` ${n('vorschlag')} nur als Vorschlag aus Fotos.`;
+    if (n('unbekannt')) t += ` ${n('unbekannt')} ohne Angabe.`;
+    return t;
+  }
+  function sbZeigen() {
+    const host = $('#steckbrief-host'); if (!host || !sbStop) return;
+    const st = sbStop, items = Object.fromEntries(st.items.map((i) => [i.id, i]));
+    const p = st.profiles.find((x) => x.id === sbProfil) || st.profiles[0];
+    host.innerHTML = '';
+    host.appendChild(sbEl('p', 'sb-text', st.beschreibung));
+    host.appendChild(sbEl('p', 'sb-quelle', st.quelle));
+    const chips = sbEl('div', 'sb-chips'); chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Profil wählen');
+    st.profiles.forEach((x) => {
+      const b = sbEl('button', 'sb-chip', x.name); b.type = 'button'; b.setAttribute('aria-pressed', String(x === p));
+      b.addEventListener('click', () => { sbProfil = x.id; sbZeigen(); });
+      chips.appendChild(b);
+    });
+    host.appendChild(chips);
+    host.appendChild(sbEl('p', 'sb-fazit', `Profil „${p.name}“: ${sbFazit(p, st.items)}`));
+    const liste = sbEl('ul', 'sb-liste');
+    p.rules.forEach(([id, status, grund]) => {
+      const item = items[id], [cls, label] = SB_STATUS[status] || SB_STATUS.unbekannt;
+      const li = sbEl('li'); li.appendChild(sbEl('span', 'sb-badge ' + cls, label));
+      const txt = sbEl('div'); txt.appendChild(sbEl('span', '', (item ? item.label + ': ' : '') + grund));
+      if (item) txt.appendChild(sbEl('span', 'sb-herkunft', (SB_HER[item.herkunft] || '') + ' · ' + item.wert));
+      li.appendChild(txt); liste.appendChild(li);
+    });
+    host.appendChild(liste);
+  }
+  function renderSteckbrief() {
+    sbLaden().then((stops) => {
+      sbStop = stops.find((s) => s.id === 'priessallee') || stops[0] || null;
+      if (!sbStop) { const h = $('#steckbrief-host'); if (h) h.textContent = 'Noch keine Bahnsteige erfasst.'; return; }
+      if (!sbProfil || !sbStop.profiles.some((x) => x.id === sbProfil)) {
+        const mein = settings.access && settings.access.on ? SB_PROFIL[settings.access.type] : null;
+        sbProfil = sbStop.profiles.some((x) => x.id === mein) ? mein : sbStop.profiles[0].id;
+      }
+      $('#steckbrief-sub').textContent = sbStop.name;
+      sbZeigen();
+    });
+  }
+  $('#box-steckbrief').addEventListener('toggle', (ev) => { if (ev.target.open) renderSteckbrief(); });
   function renderMoreSubs() {
     const sv = settings.server || {};
     let host = '';

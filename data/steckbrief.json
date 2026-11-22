@@ -1,0 +1,306 @@
+[
+ {
+  "id": "priessallee",
+  "name": "Prießallee",
+  "stand": "22.11.2026",
+  "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Ein elektronischer Fahrkartenautomat enthält die Echtzeit-Anzeige ohne Sprachausgabe; er ist nicht barrierefrei bedienbar, ohne Kopfhörerbuchse und ohne Brailleschrift. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung; beides ist vor Ort geprüft. Beleuchtung vorhanden. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls. Durchsagen können erfolgen, meist in den Stadtbahnen.",
+  "quelle": "Angaben von Nutzer vor Ort (Einstieg, Rampe, Information, Querung, Leitstreifen, Beleuchtung, Durchsagen) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft, außer wo als vor Ort geprüft angegeben). Fotos 26–29: Taster, Haltestellenschild, Fahrkartenautomat, Bedienfeld.",
+  "items": [
+   {
+    "id": "einstieg",
+    "label": "Einstieg Stadtbahn",
+    "wert": "direkt, ebenerdig, Abstand max. 10 cm; Bahnsteig 1,20 m",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "zugang",
+    "label": "Zugang",
+    "wert": "lange Rampe Richtung Innenstadt, an der Kreuzung Prießallee",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "steigung",
+    "label": "Steigung der Rampe",
+    "wert": "rollstuhlgerecht laut Nutzer; Prozentwert nicht gemessen",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "info",
+    "label": "Vitrine",
+    "wert": "Linienplan und gedruckte Fahrpläne",
+    "herkunft": "Vorschlag"
+   },
+   {
+    "id": "anzeige",
+    "label": "Echtzeit-Anzeige im Automaten",
+    "wert": "integriert in den Fahrkartenautomaten, ohne Sprachausgabe",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "querung",
+    "label": "Querung",
+    "wert": "Taster mit Hand-Symbol und Aufschrift „Bitte drücken“, kein Tonsignal",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "leitlinie",
+    "label": "Leitstreifen",
+    "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, vor Ort geprüft",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "aufmerksamkeit",
+    "label": "Aufmerksamkeitsfelder",
+    "wert": "an der Querung vorhanden, vor Ort geprüft",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "sitz",
+    "label": "Sitzplätze",
+    "wert": "drei Metallbänke unter dem Wartedach",
+    "herkunft": "Vorschlag"
+   },
+   {
+    "id": "handlauf",
+    "label": "Handläufe",
+    "wert": "an der Rampe beidseitig, am Wartebereich vorhanden",
+    "herkunft": "Vorschlag"
+   },
+   {
+    "id": "hindernis",
+    "label": "Hindernisse im Gehweg",
+    "wert": "Gullydeckel mit Schlitzen, Rinne quer, Laub am Rand",
+    "herkunft": "Vorschlag"
+   },
+   {
+    "id": "treppe",
+    "label": "Treppe",
+    "wert": "Treppe mit Handlauf an einem Zugang, Lage nicht geklärt",
+    "herkunft": "Vorschlag"
+   },
+   {
+    "id": "beleuchtung",
+    "label": "Beleuchtung",
+    "wert": "vorhanden (Helligkeit nicht gemessen)",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "durchsage",
+    "label": "Durchsagen",
+    "wert": "können erfolgen, meist in den Stadtbahnen",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "automat",
+    "label": "Fahrkartenautomat",
+    "wert": "nicht barrierefrei bedienbar: keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe; Höhe nicht gemessen",
+    "herkunft": "Nutzer"
+   },
+   {
+    "id": "schild",
+    "label": "Haltestellenschild",
+    "wert": "Name Prießallee mit Rollstuhl-Symbol und Pfeil",
+    "herkunft": "Vorschlag"
+   }
+  ],
+  "profiles": [
+   {
+    "id": "rollstuhl",
+    "name": "Rollstuhl",
+    "rules": [
+     [
+      "einstieg",
+      "passt",
+      "Ebenerdiger Einstieg, Abstand max. 10 cm"
+     ],
+     [
+      "zugang",
+      "passt",
+      "Lange Rampe Richtung Innenstadt"
+     ],
+     [
+      "steigung",
+      "passt",
+      "Laut Nutzer rollstuhlgerecht, Prozentwert nicht gemessen"
+     ],
+     [
+      "hindernis",
+      "beachten",
+      "Gullyschlitze und Gleisrillen sind für Rollen relevant"
+     ],
+     [
+      "treppe",
+      "passt nicht",
+      "Die Treppe ist für Rollstuhl nicht nutzbar, der Zugang über die Rampe schon"
+     ],
+     [
+      "schild",
+      "passt",
+      "Rollstuhl-Symbol am Haltestellenschild (Vorschlag)"
+     ],
+     [
+      "automat",
+      "beachten",
+      "Nicht barrierefrei bedienbar laut Nutzer, Höhe nicht gemessen"
+     ]
+    ]
+   },
+   {
+    "id": "rollator",
+    "name": "Rollator",
+    "rules": [
+     [
+      "einstieg",
+      "passt",
+      "Ebenerdiger Einstieg"
+     ],
+     [
+      "zugang",
+      "passt",
+      "Lange Rampe mit Handlauf"
+     ],
+     [
+      "sitz",
+      "passt",
+      "Drei Sitzbänke am Wartebereich (Vorschlag)"
+     ],
+     [
+      "handlauf",
+      "passt",
+      "Handläufe an der Rampe (Vorschlag)"
+     ],
+     [
+      "hindernis",
+      "beachten",
+      "Gullyschlitze für Rollatorräder relevant"
+     ]
+    ]
+   },
+   {
+    "id": "blind",
+    "name": "blind",
+    "rules": [
+     [
+      "querung",
+      "passt nicht",
+      "Kein Tonsignal, nur ein Taster"
+     ],
+     [
+      "leitlinie",
+      "passt",
+      "Leitstreifen vor Ort geprüft"
+     ],
+     [
+      "aufmerksamkeit",
+      "passt",
+      "Aufmerksamkeitsfelder an der Querung vor Ort geprüft"
+     ],
+     [
+      "anzeige",
+      "passt nicht",
+      "Die Echtzeit-Anzeige im Automaten hat keine Sprachausgabe"
+     ],
+     [
+      "automat",
+      "passt nicht",
+      "Keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe"
+     ]
+    ]
+   },
+   {
+    "id": "sehbehindert",
+    "name": "sehbehindert",
+    "rules": [
+     [
+      "anzeige",
+      "passt",
+      "Anzeige im Automaten auf dem Foto gut lesbar, vor Ort nicht gemessen"
+     ],
+     [
+      "leitlinie",
+      "passt",
+      "Leitstreifen vor Ort geprüft"
+     ],
+     [
+      "beleuchtung",
+      "passt",
+      "Beleuchtung vorhanden, Helligkeit nicht gemessen"
+     ],
+     [
+      "automat",
+      "beachten",
+      "Nicht barrierefrei bedienbar laut Nutzer, Anzeige auf dem Foto gut lesbar"
+     ]
+    ]
+   },
+   {
+    "id": "kinderwagen",
+    "name": "Kinderwagen",
+    "rules": [
+     [
+      "einstieg",
+      "passt",
+      "Ebenerdiger Einstieg"
+     ],
+     [
+      "zugang",
+      "passt",
+      "Lange Rampe"
+     ],
+     [
+      "steigung",
+      "passt",
+      "Laut Nutzer rollstuhlgerecht"
+     ],
+     [
+      "hindernis",
+      "beachten",
+      "Gullyschlitze für Kinderwagenräder relevant"
+     ]
+    ]
+   },
+   {
+    "id": "hoerbehindert",
+    "name": "hörbehindert",
+    "rules": [
+     [
+      "anzeige",
+      "passt",
+      "Echtzeit-Anzeige im Automaten (visuell)"
+     ],
+     [
+      "durchsage",
+      "beachten",
+      "Durchsagen meist nur in den Stadtbahnen, an der Haltestelle nicht sicher"
+     ]
+    ]
+   },
+   {
+    "id": "gehunsicher",
+    "name": "gehunsicher oder älter",
+    "rules": [
+     [
+      "einstieg",
+      "passt",
+      "Ebenerdiger Einstieg"
+     ],
+     [
+      "sitz",
+      "passt",
+      "Sitzbänke am Wartebereich (Vorschlag)"
+     ],
+     [
+      "handlauf",
+      "passt",
+      "Handläufe an der Rampe (Vorschlag)"
+     ],
+     [
+      "hindernis",
+      "beachten",
+      "Laub am Rand, bei Nässe rutschig (Vorschlag)"
+     ]
+    ]
+   }
+  ]
+ }
+]
