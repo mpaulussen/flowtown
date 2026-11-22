@@ -2,137 +2,177 @@
  {
   "id": "priessallee",
   "name": "Prießallee",
-  "stand": "22.11.2026",
-  "beschreibung": "Überdachtes Wartehäuschen mit drei Metallsitzen und Abfallbehälter. Ein elektronischer Fahrkartenautomat enthält die Echtzeit-Anzeige ohne Sprachausgabe; er ist nicht barrierefrei bedienbar, ohne Kopfhörerbuchse und ohne Brailleschrift. Leitstreifen mit Rillen laufen parallel zur Fahrbahn bis zum Wartebereich, Aufmerksamkeitsfelder liegen an der Querung; beides ist vor Ort geprüft. Beleuchtung vorhanden. Gullydeckel und Rinnen im Gehweg, Straßenbahngleise quer zur Gehrichtung. Der Einstieg ist direkt und ebenerdig, der Bahnsteig liegt 1,20 m hoch. Der Zugang führt über eine lange Rampe an der Kreuzung Prießallee; eine Treppe mit Handlauf gibt es ebenfalls. Durchsagen können erfolgen, meist in den Stadtbahnen.",
-  "quelle": "Angaben von Nutzer vor Ort (Einstieg, Rampe, Information, Querung, Leitstreifen, Beleuchtung, Durchsagen) und Fotos vom 22.11.2026 (Vorschläge, ungeprüft, außer wo als vor Ort geprüft angegeben). Fotos 26–29: Taster, Haltestellenschild, Fahrkartenautomat, Bedienfeld.",
+  "stand": "2026-11-22",
+  "beschreibung": "Stadtbahn-Haltestelle Prießallee. Der Einstieg in die Bahn ist ebenerdig, der Spalt beträgt 5 cm, der Bahnsteig ist 4,5 m breit. Der Fahrkartenautomat ist nicht barrierefrei bedienbar.",
+  "quelle": "Angaben der Redaktion, vor Ort geprüft",
   "items": [
    {
-    "id": "einstieg",
+    "id": "hochbahnsteig",
     "label": "Einstieg Stadtbahn",
-    "wert": "direkt, ebenerdig, Abstand max. 10 cm; Bahnsteig 1,20 m",
+    "wert": "ja",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
-    "id": "zugang",
+    "id": "zugang_stufenlos",
     "label": "Zugang",
-    "wert": "lange Rampe Richtung Innenstadt, an der Kreuzung Prießallee",
+    "wert": "ja",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
-    "id": "steigung",
-    "label": "Steigung der Rampe",
-    "wert": "rollstuhlgerecht laut Nutzer; Prozentwert nicht gemessen",
+    "id": "aufzug_vorhanden",
+    "label": "Aufzug",
+    "wert": "nein",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
-    "id": "info",
-    "label": "Vitrine",
-    "wert": "Linienplan und gedruckte Fahrpläne",
-    "herkunft": "Vorschlag",
+    "id": "spalt_cm",
+    "label": "Spalt Bahn",
+    "wert": "5 cm",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "hoehe_cm",
+    "label": "Höhe Einstieg",
+    "wert": "1 cm",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "platz_cm",
+    "label": "Bahnsteigbreite",
+    "wert": "450 cm",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "leitstreifen",
+    "label": "Leitstreifen",
+    "wert": "ja",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "ansage",
+    "label": "Hörbare Ansage",
+    "wert": "nein",
+    "herkunft": "Nutzer",
     "stand": "2026-11-22",
     "art": "aktuell"
    },
    {
     "id": "anzeige",
-    "label": "Echtzeit-Anzeige im Automaten",
-    "wert": "integriert in den Fahrkartenautomaten, ohne Sprachausgabe",
+    "label": "Echtzeit-Anzeige",
+    "wert": "teilweise",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "sitz_dach",
+    "label": "Sitzplatz mit Dach",
+    "wert": "ja",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "steigung",
+    "label": "Steigung Rampe",
+    "wert": "ja",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "handlauf",
+    "label": "Handläufe",
+    "wert": "ja",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "treppe",
+    "label": "Treppe am Zugang",
+    "wert": "ja",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
+   },
+   {
+    "id": "hindernis",
+    "label": "Hindernisse im Gehweg",
+    "wert": "nein",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
     "art": "aktuell"
    },
    {
     "id": "querung",
-    "label": "Querung",
-    "wert": "Taster mit Hand-Symbol und Aufschrift „Bitte drücken“, kein Tonsignal",
+    "label": "Taster mit Tonsignal",
+    "wert": "nein",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
-   },
-   {
-    "id": "leitlinie",
-    "label": "Leitstreifen",
-    "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, vor Ort geprüft",
-    "herkunft": "Nutzer",
-    "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
     "id": "aufmerksamkeit",
     "label": "Aufmerksamkeitsfelder",
-    "wert": "an der Querung vorhanden, vor Ort geprüft",
+    "wert": "ja",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
-    "id": "sitz",
-    "label": "Sitzplätze",
-    "wert": "drei Metallbänke unter dem Wartedach",
-    "herkunft": "Vorschlag",
-    "stand": "2026-11-22",
-    "art": "dauerhaft"
-   },
-   {
-    "id": "handlauf",
-    "label": "Handläufe",
-    "wert": "an der Rampe beidseitig, am Wartebereich vorhanden",
-    "herkunft": "Vorschlag",
-    "stand": "2026-11-22",
-    "art": "dauerhaft"
-   },
-   {
-    "id": "hindernis",
-    "label": "Hindernisse im Gehweg",
-    "wert": "Gullydeckel mit Schlitzen, Rinne quer, Laub am Rand",
-    "herkunft": "Vorschlag",
-    "stand": "2026-11-22",
-    "art": "dauerhaft"
-   },
-   {
-    "id": "treppe",
-    "label": "Treppe",
-    "wert": "Treppe mit Handlauf an einem Zugang, Lage nicht geklärt",
-    "herkunft": "Vorschlag",
-    "stand": "2026-11-22",
-    "art": "dauerhaft"
-   },
-   {
-    "id": "beleuchtung",
-    "label": "Beleuchtung",
-    "wert": "vorhanden (Helligkeit nicht gemessen)",
+    "id": "info",
+    "label": "Vitrine mit Fahrplan",
+    "wert": "ja",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
     "id": "durchsage",
     "label": "Durchsagen",
-    "wert": "können erfolgen, meist in den Stadtbahnen",
+    "wert": "teilweise",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
+   },
+   {
+    "id": "beleuchtung",
+    "label": "Beleuchtung",
+    "wert": "ja",
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
    },
    {
     "id": "automat",
     "label": "Fahrkartenautomat",
-    "wert": "nicht barrierefrei bedienbar: keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe; Höhe nicht gemessen",
+    "wert": "nein",
     "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    },
    {
     "id": "schild",
     "label": "Haltestellenschild",
-    "wert": "Name Prießallee mit Rollstuhl-Symbol und Pfeil",
-    "herkunft": "Vorschlag",
+    "wert": "ja",
+    "herkunft": "Nutzer",
     "stand": "2026-11-22",
-    "art": "dauerhaft"
+    "art": "aktuell"
    }
   ],
   "profiles": [
@@ -141,39 +181,54 @@
     "name": "Rollstuhl",
     "rules": [
      [
-      "einstieg",
+      "hochbahnsteig",
       "passt",
-      "Ebenerdiger Einstieg, Abstand max. 10 cm"
+      "ja"
      ],
      [
-      "zugang",
+      "zugang_stufenlos",
       "passt",
-      "Lange Rampe Richtung Innenstadt"
+      "ja"
+     ],
+     [
+      "aufzug_vorhanden",
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "spalt_cm",
+      "passt",
+      "Maß: 5 cm"
+     ],
+     [
+      "hoehe_cm",
+      "passt",
+      "Maß: 1 cm"
+     ],
+     [
+      "platz_cm",
+      "passt",
+      "Maß: 450 cm"
      ],
      [
       "steigung",
       "passt",
-      "Laut Nutzer rollstuhlgerecht, Prozentwert nicht gemessen"
-     ],
-     [
-      "hindernis",
-      "beachten",
-      "Gullyschlitze und Gleisrillen sind für Rollen relevant"
+      "ja"
      ],
      [
       "treppe",
+      "passt",
+      "ja"
+     ],
+     [
+      "hindernis",
       "passt nicht",
-      "Die Treppe ist für Rollstuhl nicht nutzbar, der Zugang über die Rampe schon"
+      "nein"
      ],
      [
       "schild",
       "passt",
-      "Rollstuhl-Symbol am Haltestellenschild (Vorschlag)"
-     ],
-     [
-      "automat",
-      "beachten",
-      "Nicht barrierefrei bedienbar laut Nutzer, Höhe nicht gemessen"
+      "ja"
      ]
     ]
    },
@@ -182,86 +237,49 @@
     "name": "Rollator",
     "rules": [
      [
-      "einstieg",
+      "hochbahnsteig",
       "passt",
-      "Ebenerdiger Einstieg"
+      "ja"
      ],
      [
-      "zugang",
+      "zugang_stufenlos",
       "passt",
-      "Lange Rampe mit Handlauf"
+      "ja"
      ],
      [
-      "sitz",
+      "aufzug_vorhanden",
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "hoehe_cm",
       "passt",
-      "Drei Sitzbänke am Wartebereich (Vorschlag)"
+      "Maß: 1 cm"
+     ],
+     [
+      "sitz_dach",
+      "passt",
+      "ja"
+     ],
+     [
+      "steigung",
+      "passt",
+      "ja"
      ],
      [
       "handlauf",
       "passt",
-      "Handläufe an der Rampe (Vorschlag)"
+      "ja"
+     ],
+     [
+      "treppe",
+      "passt",
+      "ja"
      ],
      [
       "hindernis",
-      "beachten",
-      "Gullyschlitze für Rollatorräder relevant"
-     ]
-    ]
-   },
-   {
-    "id": "blind",
-    "name": "blind",
-    "rules": [
-     [
-      "querung",
       "passt nicht",
-      "Kein Tonsignal, nur ein Taster"
-     ],
-     [
-      "leitlinie",
-      "passt",
-      "Leitstreifen vor Ort geprüft"
-     ],
-     [
-      "aufmerksamkeit",
-      "passt",
-      "Aufmerksamkeitsfelder an der Querung vor Ort geprüft"
-     ],
-     [
-      "anzeige",
-      "passt nicht",
-      "Die Echtzeit-Anzeige im Automaten hat keine Sprachausgabe"
-     ],
-     [
-      "automat",
-      "passt nicht",
-      "Keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe"
-     ]
-    ]
-   },
-   {
-    "id": "sehbehindert",
-    "name": "sehbehindert",
-    "rules": [
-     [
-      "anzeige",
-      "passt",
-      "Anzeige im Automaten auf dem Foto gut lesbar, vor Ort nicht gemessen"
-     ],
-     [
-      "leitlinie",
-      "passt",
-      "Leitstreifen vor Ort geprüft"
-     ],
-     [
-      "beleuchtung",
-      "passt",
-      "Beleuchtung vorhanden, Helligkeit nicht gemessen"
-     ],
-     [
-      "automat",
-      "beachten",
-      "Nicht barrierefrei bedienbar laut Nutzer, Anzeige auf dem Foto gut lesbar"
+      "nein"
      ]
     ]
    },
@@ -270,66 +288,148 @@
     "name": "Kinderwagen",
     "rules": [
      [
-      "einstieg",
+      "hochbahnsteig",
       "passt",
-      "Ebenerdiger Einstieg"
+      "ja"
      ],
      [
-      "zugang",
+      "zugang_stufenlos",
       "passt",
-      "Lange Rampe"
+      "ja"
+     ],
+     [
+      "hoehe_cm",
+      "passt",
+      "Maß: 1 cm"
      ],
      [
       "steigung",
       "passt",
-      "Laut Nutzer rollstuhlgerecht"
+      "ja"
+     ],
+     [
+      "treppe",
+      "passt",
+      "ja"
      ],
      [
       "hindernis",
-      "beachten",
-      "Gullyschlitze für Kinderwagenräder relevant"
+      "passt nicht",
+      "nein"
+     ]
+    ]
+   },
+   {
+    "id": "blind",
+    "name": "Blind",
+    "rules": [
+     [
+      "leitstreifen",
+      "passt",
+      "ja"
+     ],
+     [
+      "ansage",
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "querung",
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "aufmerksamkeit",
+      "passt",
+      "ja"
+     ],
+     [
+      "automat",
+      "passt nicht",
+      "nein"
+     ]
+    ]
+   },
+   {
+    "id": "sehbehindert",
+    "name": "Sehbehindert",
+    "rules": [
+     [
+      "leitstreifen",
+      "passt",
+      "ja"
+     ],
+     [
+      "ansage",
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "querung",
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "aufmerksamkeit",
+      "passt",
+      "ja"
+     ],
+     [
+      "info",
+      "passt",
+      "ja"
+     ],
+     [
+      "beleuchtung",
+      "passt",
+      "ja"
+     ],
+     [
+      "automat",
+      "passt nicht",
+      "nein"
      ]
     ]
    },
    {
     "id": "hoerbehindert",
-    "name": "hörbehindert",
+    "name": "Hörbehindert",
     "rules": [
      [
       "anzeige",
+      "beachten",
+      "teilweise"
+     ],
+     [
+      "info",
       "passt",
-      "Echtzeit-Anzeige im Automaten (visuell)"
+      "ja"
      ],
      [
       "durchsage",
       "beachten",
-      "Durchsagen meist nur in den Stadtbahnen, an der Haltestelle nicht sicher"
+      "teilweise"
      ]
     ]
    },
    {
     "id": "gehunsicher",
-    "name": "gehunsicher oder älter",
+    "name": "Gehunsicher oder älter",
     "rules": [
-     [
-      "einstieg",
-      "passt",
-      "Ebenerdiger Einstieg"
-     ],
-     [
-      "sitz",
-      "passt",
-      "Sitzbänke am Wartebereich (Vorschlag)"
-     ],
      [
       "handlauf",
       "passt",
-      "Handläufe an der Rampe (Vorschlag)"
+      "ja"
      ],
      [
       "hindernis",
-      "beachten",
-      "Laub am Rand, bei Nässe rutschig (Vorschlag)"
+      "passt nicht",
+      "nein"
+     ],
+     [
+      "beleuchtung",
+      "passt",
+      "ja"
      ]
     ]
    }
