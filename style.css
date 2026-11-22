@@ -1758,3 +1758,6 @@ body.talk-in-view .fab-mic{display:none}
 .sb-vorschlag { background: var(--vorschlag-bg, #e6eaf7); color: var(--vorschlag, #3b4a8a); }
 .sb-unbekannt { background: var(--unknown-bg, #eceef0); color: var(--unknown, #4d5560); }
 .sb-herkunft { display: block; color: var(--muted); font-size: 13px; }
+
+.sb-frage { font-weight: 700; margin: 0 0 8px; }
+.sb-modus { color: var(--muted); font-size: 13px; margin: 0 0 6px; }

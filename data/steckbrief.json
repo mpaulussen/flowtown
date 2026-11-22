@@ -10,97 +10,129 @@
     "id": "einstieg",
     "label": "Einstieg Stadtbahn",
     "wert": "direkt, ebenerdig, Abstand max. 10 cm; Bahnsteig 1,20 m",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "zugang",
     "label": "Zugang",
     "wert": "lange Rampe Richtung Innenstadt, an der Kreuzung Prießallee",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "steigung",
     "label": "Steigung der Rampe",
     "wert": "rollstuhlgerecht laut Nutzer; Prozentwert nicht gemessen",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "info",
     "label": "Vitrine",
     "wert": "Linienplan und gedruckte Fahrpläne",
-    "herkunft": "Vorschlag"
+    "herkunft": "Vorschlag",
+    "stand": "2026-11-22",
+    "art": "aktuell"
    },
    {
     "id": "anzeige",
     "label": "Echtzeit-Anzeige im Automaten",
     "wert": "integriert in den Fahrkartenautomaten, ohne Sprachausgabe",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "aktuell"
    },
    {
     "id": "querung",
     "label": "Querung",
     "wert": "Taster mit Hand-Symbol und Aufschrift „Bitte drücken“, kein Tonsignal",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "leitlinie",
     "label": "Leitstreifen",
     "wert": "Rillen parallel zur Fahrbahn bis zum Wartebereich, vor Ort geprüft",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "aufmerksamkeit",
     "label": "Aufmerksamkeitsfelder",
     "wert": "an der Querung vorhanden, vor Ort geprüft",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "sitz",
     "label": "Sitzplätze",
     "wert": "drei Metallbänke unter dem Wartedach",
-    "herkunft": "Vorschlag"
+    "herkunft": "Vorschlag",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "handlauf",
     "label": "Handläufe",
     "wert": "an der Rampe beidseitig, am Wartebereich vorhanden",
-    "herkunft": "Vorschlag"
+    "herkunft": "Vorschlag",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "hindernis",
     "label": "Hindernisse im Gehweg",
     "wert": "Gullydeckel mit Schlitzen, Rinne quer, Laub am Rand",
-    "herkunft": "Vorschlag"
+    "herkunft": "Vorschlag",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "treppe",
     "label": "Treppe",
     "wert": "Treppe mit Handlauf an einem Zugang, Lage nicht geklärt",
-    "herkunft": "Vorschlag"
+    "herkunft": "Vorschlag",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "beleuchtung",
     "label": "Beleuchtung",
     "wert": "vorhanden (Helligkeit nicht gemessen)",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "durchsage",
     "label": "Durchsagen",
     "wert": "können erfolgen, meist in den Stadtbahnen",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "automat",
     "label": "Fahrkartenautomat",
     "wert": "nicht barrierefrei bedienbar: keine Kopfhörerbuchse, keine Brailleschrift, keine Sprachausgabe; Höhe nicht gemessen",
-    "herkunft": "Nutzer"
+    "herkunft": "Nutzer",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    },
    {
     "id": "schild",
     "label": "Haltestellenschild",
     "wert": "Name Prießallee mit Rollstuhl-Symbol und Pfeil",
-    "herkunft": "Vorschlag"
+    "herkunft": "Vorschlag",
+    "stand": "2026-11-22",
+    "art": "dauerhaft"
    }
   ],
   "profiles": [

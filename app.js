@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.0';
+  const VERSION = '0.112.1';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6426,30 +6426,50 @@
     return added;
   }
   // Einstellungen: je Bereich eine Zeile, die sagt, was gerade gilt
-  // Bahnsteig-Steckbrief (Probe): Angaben aus data/steckbrief.json, Bewertung je Profil wie im Prototyp
+  // Bahnsteig-Steckbrief (Probe): Angaben aus data/steckbrief.json, Bewertung je Profil.
+  // Jedes Mal beim Öffnen fragen: alle Hinweise oder nur Neues und aktuelle (Standard: alle).
   const SB_PROFIL = { rollstuhl: 'rollstuhl', rollator: 'rollator', sehen: 'blind', hoeren: 'hoerbehindert', ruhe: 'gehunsicher' };
   const SB_STATUS = { 'passt': ['sb-passt', 'passt'], 'passt nicht': ['sb-passt-nicht', 'passt nicht'], 'beachten': ['sb-beachten', 'beachten'], 'hinweis': ['sb-beachten', 'beachten'], 'vorschlag': ['sb-vorschlag', 'Vorschlag, nicht geprüft'], 'unbekannt': ['sb-unbekannt', 'unbekannt'] };
   const SB_HER = { Nutzer: 'Nutzerangabe vor Ort', Vorschlag: 'KI-Vorschlag aus Foto, ungeprüft', unbekannt: 'keine Angabe' };
-  let sbDaten = null, sbLadeZ = null, sbStop = null, sbProfil = null;
+  let sbDaten = null, sbLadeZ = null, sbStop = null, sbProfil = null, sbModus = 'alles', sbSeit = '';
   function sbLaden() {
     if (sbDaten) return Promise.resolve(sbDaten);
     if (!sbLadeZ) sbLadeZ = fetch('data/steckbrief.json').then((r) => r.json()).then((d) => (sbDaten = Array.isArray(d) ? d : [])).catch(() => (sbDaten = []));
     return sbLadeZ;
   }
+  // zuletzt gesehener Stand je Haltestelle, nur auf diesem Handy
+  function sbGesehen(id, setzen) {
+    try {
+      const m = JSON.parse(localStorage.getItem('sbGesehen') || '{}');
+      if (setzen) { m[id] = setzen; localStorage.setItem('sbGesehen', JSON.stringify(m)); }
+      return m[id] || '';
+    } catch (e) { return ''; }
+  }
   function sbEl(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text !== undefined) e.textContent = text; return e; }
-  function sbFazit(p, items) {
-    const z = p.rules, n = (s) => z.filter((r) => r[1] === s).length;
+  function sbFazit(rules) {
+    const n = (s) => rules.filter((r) => r[1] === s).length;
     let t = n('passt nicht') ? `Achtung: ${n('passt nicht')} Punkt${n('passt nicht') > 1 ? 'e' : ''} passt nicht. ` : '';
     t += `${n('passt')} Punkt${n('passt') === 1 ? ' passt' : 'e passen'} laut Angaben.`;
     if (n('vorschlag')) t += ` ${n('vorschlag')} nur als Vorschlag aus Fotos.`;
     if (n('unbekannt')) t += ` ${n('unbekannt')} ohne Angabe.`;
     return t;
   }
+  // Ansicht: Frage mit Auswahl (Standard „Alle Hinweise“), Profil, Angaben
   function sbZeigen() {
     const host = $('#steckbrief-host'); if (!host || !sbStop) return;
     const st = sbStop, items = Object.fromEntries(st.items.map((i) => [i.id, i]));
     const p = st.profiles.find((x) => x.id === sbProfil) || st.profiles[0];
+    const passt = (r) => { const it = items[r[0]]; return !it || sbModus === 'alles' || it.art === 'aktuell' || (it.stand || '') > sbSeit; };
+    const rules = p.rules.filter(passt);
     host.innerHTML = '';
+    host.appendChild(sbEl('p', 'sb-frage', 'Welche Hinweise sollen angezeigt werden?'));
+    const aus = sbEl('div', 'sb-chips'); aus.setAttribute('role', 'group'); aus.setAttribute('aria-label', 'Umfang der Hinweise');
+    [['alles', 'Alle Hinweise'], ['neu', 'Nur Neues und aktuelle']].forEach(([k, t]) => {
+      const b = sbEl('button', 'sb-chip', t); b.type = 'button'; b.setAttribute('aria-pressed', String(sbModus === k));
+      b.addEventListener('click', () => { sbModus = k; sbZeigen(); });
+      aus.appendChild(b);
+    });
+    host.appendChild(aus);
     host.appendChild(sbEl('p', 'sb-text', st.beschreibung));
     host.appendChild(sbEl('p', 'sb-quelle', st.quelle));
     const chips = sbEl('div', 'sb-chips'); chips.setAttribute('role', 'group'); chips.setAttribute('aria-label', 'Profil wählen');
@@ -6459,9 +6479,13 @@
       chips.appendChild(b);
     });
     host.appendChild(chips);
-    host.appendChild(sbEl('p', 'sb-fazit', `Profil „${p.name}“: ${sbFazit(p, st.items)}`));
+    if (!rules.length) {
+      host.appendChild(sbEl('p', 'sb-fazit', sbSeit ? `Seit deinem letzten Besuch (${sbSeit}) gibt es keine neuen oder aktuellen Hinweise.` : 'Keine Hinweise.'));
+      return;
+    }
+    host.appendChild(sbEl('p', 'sb-fazit', `Profil „${p.name}“: ${sbFazit(rules)}`));
     const liste = sbEl('ul', 'sb-liste');
-    p.rules.forEach(([id, status, grund]) => {
+    rules.forEach(([id, status, grund]) => {
       const item = items[id], [cls, label] = SB_STATUS[status] || SB_STATUS.unbekannt;
       const li = sbEl('li'); li.appendChild(sbEl('span', 'sb-badge ' + cls, label));
       const txt = sbEl('div'); txt.appendChild(sbEl('span', '', (item ? item.label + ': ' : '') + grund));
@@ -6479,10 +6503,19 @@
         sbProfil = sbStop.profiles.some((x) => x.id === mein) ? mein : sbStop.profiles[0].id;
       }
       $('#steckbrief-sub').textContent = sbStop.name;
+      // Stand des letzten Besuchs beim Öffnen festhalten; die Auswahl bleibt in diesem Besuch stabil
+      sbSeit = sbGesehen(sbStop.id);
+      sbGesehen(sbStop.id, sbStop.stand);
+      sbModus = 'alles';
       sbZeigen();
     });
   }
-  $('#box-steckbrief').addEventListener('toggle', (ev) => { if (ev.target.open) renderSteckbrief(); });
+  // Beim Öffnen einmal anzeigen; das Schließen merkt sich der Zustand wieder
+  let sbOffen = false;
+  $('#box-steckbrief').addEventListener('toggle', (ev) => {
+    if (ev.target.open && !sbOffen) { sbOffen = true; sbModus = 'alles'; renderSteckbrief(); }
+    else if (!ev.target.open) sbOffen = false;
+  });
   function renderMoreSubs() {
     const sv = settings.server || {};
     let host = '';
