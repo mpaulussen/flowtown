@@ -4176,12 +4176,12 @@ function rApply(ev) {
   const cur = (rFakt[ev.objekt] = rFakt[ev.objekt] || {});
   if (ev.art === 'erfassung') {
     if (ev.status === 'entwurf') rEntwurf[ev.eid] = ev;
-    else cur[ev.merkmal] = { wert: ev.wert, notiz: ev.notiz || '', t: ev.t, geprueft: ev.t, von: ev.von, stufe: 2, gilt_bis: ev.gilt_bis || null, eid: ev.eid };
+    else cur[ev.merkmal] = { wert: ev.wert, notiz: ev.notiz || '', lage: ev.lage || '', t: ev.t, geprueft: ev.t, von: ev.von, stufe: 2, gilt_bis: ev.gilt_bis || null, eid: ev.eid };
   } else if (ev.art === 'bestaetigung' && cur[ev.merkmal]) { cur[ev.merkmal].geprueft = ev.t; cur[ev.merkmal].von = ev.von; if (ev.gilt_bis) cur[ev.merkmal].gilt_bis = ev.gilt_bis; }
   else if (ev.art === 'zurueck') { if (ev.merkmal === '*') rFakt[ev.objekt] = {}; else delete cur[ev.merkmal]; }
   else if (ev.art === 'freigabe' && rEntwurf[ev.ziel]) {
     const e = rEntwurf[ev.ziel]; delete rEntwurf[ev.ziel];
-    if (ev.ok) (rFakt[e.objekt] = rFakt[e.objekt] || {})[e.merkmal] = { wert: e.wert, notiz: e.notiz || '', t: ev.t, geprueft: ev.t, von: `${e.von}, geprüft ${ev.von}`, stufe: 2, gilt_bis: e.gilt_bis || null, eid: e.eid };
+    if (ev.ok) (rFakt[e.objekt] = rFakt[e.objekt] || {})[e.merkmal] = { wert: e.wert, notiz: e.notiz || '', lage: e.lage || '', t: ev.t, geprueft: ev.t, von: `${e.von}, geprüft ${ev.von}`, stufe: 2, gilt_bis: e.gilt_bis || null, eid: e.eid };
   }
 }
 function rLade() {
@@ -4253,7 +4253,7 @@ async function rRoute(req, res, p, url, origin, ip) {
     }
     const wert = rWertOk(f, b.wert); if (wert == null) return send(res, 400, { fehler: 'Diese Antwort passt nicht zur Frage.' }, origin);
     const eid = 'E' + t.toString(36) + crypto.randomBytes(2).toString('hex');
-    rSchreibe({ t, art: 'erfassung', eid, objekt: o.id, merkmal: f.merkmal, wert, notiz: clip(b.notiz, 300), von: me.name, status: redakteur ? 'gueltig' : 'entwurf', gilt_bis: gilt || undefined });
+    rSchreibe({ t, art: 'erfassung', eid, objekt: o.id, merkmal: f.merkmal, wert, notiz: clip(b.notiz, 300), lage: clip(b.lage, 200), von: me.name, status: redakteur ? 'gueltig' : 'entwurf', gilt_bis: gilt || undefined });
     return send(res, 200, { ok: true, eid, status: redakteur ? 'gueltig' : 'entwurf' }, origin);
   }
   if (req.method === 'POST' && p === '/api/redaktion/zurueck') {

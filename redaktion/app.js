@@ -1,7 +1,7 @@
 // Flowtown Redaktion: Objekte erfassen, prüfen, Bericht. Spricht mit /api/redaktion/* des Flowtown-Servers.
 (function () {
   'use strict';
-  var VERSION = '0.1.0';
+  var VERSION = '0.1.1';
   var DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -191,7 +191,7 @@
       var bestaet = x && S.rolle === 'redaktion' ? '<div class="opts"><button type="button" class="btn" data-i="' + i + '" data-b="1">Stimmt noch</button><button type="button" class="btn" data-i="' + i + '" data-r="1">Zurückziehen</button></div>' : '';
       var klasseA = f.klasse === 'A' ? '<p class="hint">Gilt 12 Stunden, danach wieder fällig.</p>' : '';
       return '<section class="q' + (x && x.frisch ? ' done' : '') + '" id="q' + i + '"><h3>' + esc(f.frage) + '</h3>' + (f.hinweis ? '<p class="hint">' + esc(f.hinweis) + '</p>' : '') + hint + klasseA + now + ctl + bestaet
-        + '<details><summary>Notiz</summary><input id="n' + i + '" maxlength="300" autocomplete="off" aria-label="Notiz zu dieser Frage"></details></section>';
+        + '<details><summary>Lage und Notiz</summary><label class="hint" for="l' + i + '">Lage (wo genau?)</label><input id="l' + i + '" maxlength="200" autocomplete="off" placeholder="z. B. Ende des Bahnsteigs Richtung Innenstadt"><label class="hint" for="n' + i + '">Notiz</label><input id="n' + i + '" maxlength="300" autocomplete="off"></details></section>';
     }).join('');
     $('#verlauf').innerHTML = (j.verlauf || []).map(function (v) {
       var m = (j.checkliste.filter(function (c) { return c.merkmal === v.merkmal; })[0] || {}).frage || v.merkmal;
@@ -199,13 +199,13 @@
     }).join('') || '<li class="muted">Noch nichts erfasst.</li>';
   }
   function speichere(i, wert, bestaetigen) {
-    var j = S.data, f = j.checkliste[i], o = j.objekt, nt = $('#n' + i); var notiz = nt ? nt.value.trim() : '';
-    var body = { objekt: o.id, merkmal: f.merkmal, wert: wert, notiz: notiz }; if (f.klasse === 'A') body.gilt_h = 12;
+    var j = S.data, f = j.checkliste[i], o = j.objekt, nt = $('#n' + i), lt = $('#l' + i); var notiz = nt ? nt.value.trim() : ''; var lage = lt ? lt.value.trim() : '';
+    var body = { objekt: o.id, merkmal: f.merkmal, wert: wert, notiz: notiz, lage: lage }; if (f.klasse === 'A') body.gilt_h = 12;
     var msg = $('#objekt-msg'); msg.className = 'msg'; msg.textContent = 'Wird gespeichert …';
     var p = bestaetigen ? send('/api/redaktion/bestaetigen', { objekt: o.id, merkmal: f.merkmal, gilt_h: body.gilt_h }) : send('/api/redaktion/fakt', body);
     p.then(function (r) {
       var direkt = S.rolle === 'redaktion';
-      if (bestaetigen || direkt) f.fakt = { wert: bestaetigen ? f.fakt.wert : wert, notiz: notiz, geprueft: Date.now(), von: S.name, stufe: 2, frisch: true };
+      if (bestaetigen || direkt) f.fakt = { wert: bestaetigen ? f.fakt.wert : wert, notiz: notiz, lage: bestaetigen ? (f.fakt.lage || '') : lage, geprueft: Date.now(), von: S.name, stufe: 2, frisch: true };
       else (j.entwuerfe = j.entwuerfe || []).push({ merkmal: f.merkmal, wert: wert, von: S.name });
       j.verlauf = [{ t: Date.now(), art: bestaetigen ? 'bestaetigung' : 'erfassung', objekt: o.id, merkmal: f.merkmal, wert: wert, von: S.name, notiz: notiz, status: direkt ? 'gueltig' : 'entwurf' }].concat(j.verlauf || []);
       ls.set('rd.obj.' + o.id, j);

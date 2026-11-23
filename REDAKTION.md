@@ -69,6 +69,8 @@ cd /opt/flowtown/server && sudo bash -c 'set -a; . /etc/flowtown.env; node flowt
 
 **Grenzen für Maße** (cm): Spalt und Höhenunterschied bis 5 cm passt, bis 7,5 cm beachten, darüber passt nicht. Platz zum Wenden ab 150 cm passt. Quellen: TSI PRM (höchstens 75 mm Spalt, 50 mm Höhe) und die Empfehlung von 5 cm (ADAC). Die Grenzen stehen in `server/steckbrief-export.mjs`.
 
+**Lage:** Bei jeder Frage kann unter „Lage und Notiz“ die Lage eingetragen werden, zum Beispiel „Ende des Bahnsteigs Richtung Innenstadt“. Sie erscheint im Steckbrief unter der Angabe, damit man vor Ort den richtigen Bereich findet.
+
 **„Aktuell“:** Eine Angabe gilt als aktuell, wenn sie in den letzten sieben Tagen vor Ort geprüft wurde. Der Filter „Nur Neues und aktuelle“ zeigt dann diese Angaben und alles, was seit dem letzten Besuch neu geprüft wurde.
 
 ## Redaktions-App (Version 0.1.0)

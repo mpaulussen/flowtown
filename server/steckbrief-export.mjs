@@ -61,7 +61,7 @@ export function eintragAus({ id, name, beschreibung, quelle }, checkliste, fakte
     const b = bewerte(m, f, jetzt);
     items.push({
       id: m.merkmal, label: m.kurzname || m.frage, wert: b.wert || b.grund,
-      herkunft: f.vorschlag ? 'Vorschlag' : 'Nutzer', stand: datum(f.geprueft),
+      herkunft: f.vorschlag ? 'Vorschlag' : 'Nutzer', stand: datum(f.geprueft), lage: f.lage || '',
       art: jetzt - f.geprueft < AKTUELL ? 'aktuell' : 'dauerhaft',
     });
   }
@@ -69,7 +69,7 @@ export function eintragAus({ id, name, beschreibung, quelle }, checkliste, fakte
     .map((p) => ({
       id: p, name: PROFILE[p],
       rules: checkliste.filter((m) => profileAus(m.profile).includes(p))
-        .map((m) => { const b = bewerte(m, fakten[m.merkmal], jetzt); return [m.merkmal, b.status, b.grund]; }),
+        .map((m) => { const b = bewerte(m, fakten[m.merkmal], jetzt); return [m.merkmal, b.status, b.grund, (fakten[m.merkmal] || {}).lage || '']; }),
     }));
   const stand = Math.max(0, ...Object.values(fakten).map((f) => f.geprueft || 0));
   return { id, name, stand: datum(stand || jetzt), beschreibung: beschreibung || '', quelle: quelle || 'Angaben der Redaktion, vor Ort geprüft', items, profiles: profile };

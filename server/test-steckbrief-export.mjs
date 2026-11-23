@@ -33,8 +33,8 @@ assert.equal(e.length, 1, 'Objekte ohne Angaben fallen weg');
 assert.equal(e[0].id, 'priessallee');
 assert.equal(e[0].items.length, 2);
 assert.deepEqual(e[0].profiles.map((p) => p.id), ['rollstuhl', 'rollator', 'blind', 'sehbehindert']);
-assert.deepEqual(e[0].profiles[0].rules, [['hochbahnsteig', 'passt', 'ja']]);
-assert.deepEqual(e[0].profiles[2].rules, [['querung', 'passt nicht', 'nein']]);
+assert.deepEqual(e[0].profiles[0].rules, [['hochbahnsteig', 'passt', 'ja', '']]);
+assert.deepEqual(e[0].profiles[2].rules, [['querung', 'passt nicht', 'nein', '']]);
 assert.equal(e[0].items[0].art, 'aktuell', 'vor einer Stunde geprüft');
 assert.equal(e[0].items[0].herkunft, 'Nutzer');
 
@@ -47,6 +47,12 @@ assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'platz_cm' }, { ...heut
 assert.equal(bewerte({ ...m('D', 'Zahl', 'cm'), merkmal: 'platz_cm' }, { ...heute, wert: '120' }, jetzt).status, 'passt nicht');
 // aktuell nur innerhalb von sieben Tagen
 assert.equal(steckbriefAus([{ id: 'a', name: 'X' }], cl, { a: { hochbahnsteig: { ...heute, wert: 'ja', geprueft: jetzt - 8 * 864e5 } } }, jetzt)[0].items[0].art, 'dauerhaft');
+
+// Lage: wird je Merkmal mitgegeben und in Items und Regeln ausgegeben
+const mit = steckbriefAus([{ id: 'a', name: 'Prießallee' }], cl, { a: { hochbahnsteig: { ...heute, wert: 'ja', lage: 'Ende des Bahnsteigs Richtung Innenstadt' } } }, jetzt)[0];
+assert.equal(mit.items[0].lage, 'Ende des Bahnsteigs Richtung Innenstadt');
+assert.equal(mit.profiles[0].rules[0][3], 'Ende des Bahnsteigs Richtung Innenstadt');
+assert.equal(mit.items[0].wert, 'ja', 'der Wert bleibt unverändert');
 
 assert.equal(slug('Prießallee Süd'), 'priessallee-sued');
 console.log('steckbrief-export: alle Tests bestanden');

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.2';
+  const VERSION = '0.112.3';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -6485,10 +6485,11 @@
     }
     host.appendChild(sbEl('p', 'sb-fazit', `Profil „${p.name}“: ${sbFazit(rules)}`));
     const liste = sbEl('ul', 'sb-liste');
-    rules.forEach(([id, status, grund]) => {
+    rules.forEach(([id, status, grund, lage]) => {
       const item = items[id], [cls, label] = SB_STATUS[status] || SB_STATUS.unbekannt;
       const li = sbEl('li'); li.appendChild(sbEl('span', 'sb-badge ' + cls, label));
       const txt = sbEl('div'); txt.appendChild(sbEl('span', '', (item ? item.label + ': ' : '') + grund));
+      if (lage) txt.appendChild(sbEl('span', 'sb-herkunft', 'Lage: ' + lage));
       if (item) txt.appendChild(sbEl('span', 'sb-herkunft', (SB_HER[item.herkunft] || '') + ' · ' + item.wert));
       li.appendChild(txt); liste.appendChild(li);
     });
