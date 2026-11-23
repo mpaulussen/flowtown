@@ -1,7 +1,7 @@
 // Flowtown Redaktion: Objekte erfassen, prüfen, Bericht. Spricht mit /api/redaktion/* des Flowtown-Servers.
 (function () {
   'use strict';
-  var VERSION = '0.1.2';
+  var VERSION = '0.1.3';
   var DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -87,18 +87,21 @@
   function route() {
     var h = location.hash || '#/liste', m = /^#\/([a-z]+)(?:\/(.+))?$/.exec(h) || [0, 'liste'];
     var v = m[1];
-    if (!S.token) v = 'login';
+    if (!S.token && v !== 'aufnahme') v = 'login';
     else if (v === 'login') v = 'liste';
     if (VIEWS.indexOf(v) < 0) v = 'liste';
     if (v === 'entwuerfe' && S.rolle !== 'redaktion') v = 'liste';
     VIEWS.forEach(function (x) { $('#v-' + x).hidden = x !== v; });
-    $('#tabs').hidden = v === 'login';
+    $('#tabs').hidden = !S.token || v === 'login';
     document.querySelectorAll('#tabs a').forEach(function (a) { var on = a.dataset.t === (v === 'objekt' ? 'liste' : v); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     $('#t-entw').hidden = S.rolle !== 'redaktion';
     document.title = { login: 'Anmelden', liste: 'Objekte', objekt: 'Objekt', aufnahme: 'Hinweis aufnehmen', entwuerfe: 'Entwürfe', bericht: 'Bericht', mehr: 'Mehr' }[v] + ' – Flowtown Redaktion';
     if (v === 'liste') loadListe();
     else if (v === 'objekt') loadObjekt(decodeURIComponent(m[2] || ''));
-    else if (v === 'aufnahme') openCaptureMap();
+    else if (v === 'aufnahme') {
+      $('#aufnahme-lokal').hidden = !!S.token;
+      openCaptureMap();
+    }
     else if (v === 'entwuerfe') loadEntwuerfe();
     else if (v === 'bericht') loadBericht();
     else if (v === 'mehr') renderMehr();
@@ -300,11 +303,19 @@
   $('#f-aufnahme').addEventListener('submit', function (e) {
     e.preventDefault();
     var form = e.currentTarget, msg = $('#aufnahme-msg'), btn = $('#aufnahme-speichern');
-    if (btn.disabled || !S.token) return;
+    if (btn.disabled) return;
     var name = $('#aufnahme-name').value.trim(), text = $('#aufnahme-text').value.trim(), lage = $('#aufnahme-lage').value.trim();
     if (!name || !text) { msg.textContent = 'Bitte Ort und Beobachtung angeben.'; return; }
     captureId = captureId || 'ort-' + crypto.randomUUID();
     var body = { eid: captureId, name: name, text: text, lage: lage, lat: Number($('#aufnahme-lat').value), lon: Number($('#aufnahme-lon').value) };
+    function saveLocal() {
+      localStorage.setItem('rd.aufnahme.entwurf', JSON.stringify(body));
+      msg.textContent = 'Als Entwurf auf diesem Gerät gespeichert. Noch nicht an die Redaktion gesendet.';
+    }
+    if (!S.token) {
+      try { saveLocal(); } catch (e) { msg.textContent = 'Speichern war nicht möglich. Der Text bleibt im Formular.'; }
+      return;
+    }
     btn.disabled = true;
     msg.textContent = 'Wird gespeichert …';
     api('/api/redaktion/ortshinweis', { method: 'POST', body: body }).then(function () {
@@ -316,8 +327,7 @@
     }, function (err) {
       if (!err.status || err.status === 404 || err.status >= 500) {
         try {
-          localStorage.setItem('rd.aufnahme.entwurf', JSON.stringify(body));
-          msg.textContent = 'Als Entwurf auf diesem Gerät gespeichert. Noch nicht an die Redaktion gesendet.';
+          saveLocal();
           return;
         } catch (e) { /* Das ausgefüllte Formular bleibt geöffnet. */ }
       }
@@ -378,7 +388,7 @@
     var msg = $('#login-msg'); msg.textContent = 'Wird geprüft …';
     api('/api/redaktion/login', { method: 'POST', body: { code: $('#in-code').value } }).then(function (j) {
       S.token = j.token; S.rolle = j.rolle; S.name = j.name; ls.set('rd.sitzung', { token: j.token, rolle: j.rolle, name: j.name });
-      msg.textContent = ''; $('#in-code').value = ''; S.objekte = []; go(location.hash === '#/aufnahme' ? '#/aufnahme' : '#/liste'); flush();
+      msg.textContent = ''; $('#in-code').value = ''; S.objekte = []; go(location.hash === '#/aufnahme' || ls.get('rd.aufnahme.entwurf', null) ? '#/aufnahme' : '#/liste'); flush();
     }, function (er) { msg.textContent = er.status ? er.message : 'Keine Verbindung zum Server. Stimmt die Adresse unter „Server“?'; });
   });
 
