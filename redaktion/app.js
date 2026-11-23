@@ -1,7 +1,7 @@
 // Flowtown Redaktion: Objekte erfassen, prüfen, Bericht. Spricht mit /api/redaktion/* des Flowtown-Servers.
 (function () {
   'use strict';
-  var VERSION = '0.1.4';
+  var VERSION = '0.1.5';
   var DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
