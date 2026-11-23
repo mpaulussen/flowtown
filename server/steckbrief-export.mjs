@@ -79,7 +79,15 @@ export function eintragAus({ id, name, beschreibung, quelle }, checkliste, fakte
 export function steckbriefAus(objekte, checkliste, fakten, jetzt = Date.now()) {
   return objekte
     .filter((o) => fakten[o.id] && Object.keys(fakten[o.id]).length)
-    .map((o) => eintragAus({ id: slug(o.name), name: o.name }, checkliste, fakten[o.id], jetzt));
+    .map((o) => {
+      const entry = eintragAus({ id: slug(o.name), name: o.name }, checkliste, fakten[o.id], jetzt);
+      if (Number.isFinite(o.lat) && Number.isFinite(o.lon) && (o.lat !== 0 || o.lon !== 0)
+          && Math.abs(o.lat) <= 90 && Math.abs(o.lon) <= 180) {
+        entry.lat = o.lat;
+        entry.lon = o.lon;
+      }
+      return entry;
+    });
 }
 
 export function slug(s) {
