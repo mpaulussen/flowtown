@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.5';
+  const VERSION = '0.112.6';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3754,18 +3754,22 @@
 
   const mapLayerOn = (key) => mapLayers[key] && mapLayerAvailable(key);
 
-  function syncMapSources() {
+  let visibleMapSourceKeys = '';
+  function syncMapSources({ moved = false } = {}) {
     for (const button of $$('#map-layers button')) {
       const key = button.dataset.layer;
       button.hidden = !mapLayerAvailable(key);
       button.setAttribute('aria-pressed', String(!!mapLayers[key]));
     }
+    drawMapCoverage();
+    const sourceKeys = ['tram', 'lage', 'stau', 'acc'].filter(mapLayerOn).join(',');
+    if (moved && sourceKeys === visibleMapSourceKeys) { renderMapLegend(); return; }
+    visibleMapSourceKeys = sourceKeys;
     if (mapLayerOn('tram')) drawTram(); else groups.tram.clearLayers();
     if (mapLayerOn('lage') || mapLayerOn('stau')) drawLage();
     else { groups.lage.clearLayers(); groups.stau.clearLayers(); lageCounts = {}; }
     if (mapLayerOn('acc')) drawAcc(); else groups.acc.clearLayers();
     $('#btn-melden').hidden = !mapLayerOn('acc') || !apiBase();
-    drawMapCoverage();
     renderMapLegend();
   }
 
@@ -3856,17 +3860,24 @@
     syncMapSources();
   }
 
+  let coverageMarkersFor = null;
+  let coverageListHtml = '';
   function drawMapCoverage() {
     const group = groups.coverage;
-    group.clearLayers();
+    const enabled = mapLayers.coverage ? mapCoverage : null;
     const list = $('#map-coverage-list');
-    const visible = mapLayerOn('coverage') ? mapCoverage.filter(({ point }) => map.getBounds().contains(point)) : [];
+    const visible = (enabled || []).filter(({ point }) => map.getBounds().contains(point));
     list.hidden = !visible.length;
     const details = (notes) => notes.map((note) =>
       `<details class="faq-mini"><summary>${esc(note.frage)}</summary><p>${esc(note.text)}</p><p class="small muted">${esc(noteSource(note))}</p>${canSpeak ? `<button type="button" class="btn quiet" data-coverage-read="${esc(note.text + ' ' + noteSource(note))}">Vorlesen</button>` : ''}</details>`).join('');
-    list.innerHTML = visible.length ? '<summary>Orte mit Angaben zur Barrierefreiheit</summary><ul>' + visible.map(({ name, notes }) =>
+    const html = visible.length ? '<summary>Orte mit Angaben zur Barrierefreiheit</summary><ul>' + visible.map(({ name, notes }) =>
       `<li><strong>${esc(name)}</strong>${details(notes)}</li>`).join('') + '</ul>' : '';
-    for (const { name, point, notes } of visible) {
+    if (html !== coverageListHtml) { list.innerHTML = html; coverageListHtml = html; }
+    // Leaflet verschiebt die Karte beim Öffnen eines Popups. Dabei muss dessen Marker erhalten bleiben.
+    if (enabled === coverageMarkersFor) return;
+    coverageMarkersFor = enabled;
+    group.clearLayers();
+    for (const { name, point, notes } of enabled || []) {
       const popup = document.createElement('div');
       popup.innerHTML = `<strong>${esc(name)}</strong><br>Angaben zur Barrierefreiheit vorhanden${details(notes)}`;
       popup.addEventListener('click', (event) => {
@@ -3888,7 +3899,7 @@
       map.setView([52.0211, 8.5325], 13);
       MAP_LAYERS.forEach((k) => { groups[k] = L.layerGroup().addTo(map); });
       let radT = null;
-      map.on('moveend', () => { syncMapSources(); if (mapLayers.rad) { clearTimeout(radT); radT = setTimeout(drawRad, 300); } });
+      map.on('moveend', () => { syncMapSources({ moved: true }); if (mapLayers.rad) { clearTimeout(radT); radT = setTimeout(drawRad, 300); } });
     }
     setTimeout(() => map.invalidateSize(), 50);
     if (!mapCoverage || Date.now() - accessibilityLoadedAt >= 30 * 60000) loadMapCoverage();
