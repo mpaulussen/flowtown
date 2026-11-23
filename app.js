@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.7';
+  const VERSION = '0.112.8';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3729,8 +3729,14 @@
     return hinw.filter((h) => h.art !== 'gut' && pts.some((p, i) => i % 2 === 0 && dist({ lat: p[0], lon: p[1] }, h) <= 20));
   }
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
-  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc', 'coverage'];
-  let mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: false, coverage: true }, settings.mapLayers || {});
+  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc', 'coverage', 'parking'];
+  const savedMapLayers = settings.mapLayers || {};
+  const mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: true, parking: false }, savedMapLayers);
+  if (!Object.hasOwn(savedMapLayers, 'parking')) {
+    mapLayers.acc = Boolean(savedMapLayers.acc || savedMapLayers.coverage !== false);
+    mapLayers.parking = Boolean(savedMapLayers.acc);
+  }
+  delete mapLayers.coverage;
   const groups = {};
   const mapStatus = (t) => { $('#map-status').textContent = t || ''; $('#map-status').hidden = !t; };
   // Die Karte als Liste: für Screenreader, ohne Internet und für alle, die lieber lesen als suchen
@@ -3750,18 +3756,22 @@
   }
   // Quellenbereiche der lokal gebundenen Kartenebenen; unabhängig von aktuellen Meldungen.
   const mapSourceAreas = [
-    { bounds: [[51.89, 8.36], [52.12, 8.68]], layers: ['tram', 'lage', 'stau', 'acc'] }
+    { bounds: [[51.89, 8.36], [52.12, 8.68]], layers: ['tram', 'lage', 'stau', 'acc', 'parking'] }
   ];
   let mapCoverage = null;
 
   function mapLayerAvailable(key) {
-    if (key === 'coverage') return !!mapCoverage?.some(({ point }) => map.getBounds().contains(point));
+    if (key === 'acc' && coverageInView()) return true;
+    if (key === 'parking' && !apiBase() && !bpp) return false;
     if ((key === 'lage' || key === 'stau' || key === 'tram') && !lageOn()) return false;
     if (key === 'acc' && !apiBase() && !bfData) return false;
     return !mapSourceAreas.some((area) => area.layers.includes(key))
       || mapSourceAreas.some((area) => area.layers.includes(key) && map.getBounds().intersects(area.bounds));
   }
 
+  const coverageInView = () => mapCoverage?.some(({ point }) => map.getBounds().contains(point));
+  const mapAccessServicesOn = () => mapLayers.acc && (apiBase() || bfData) &&
+    mapSourceAreas.some((area) => area.layers.includes('acc') && map.getBounds().intersects(area.bounds));
   const mapLayerOn = (key) => mapLayers[key] && mapLayerAvailable(key);
 
   let visibleMapSourceKeys = '';
@@ -3772,13 +3782,14 @@
       button.setAttribute('aria-pressed', String(!!mapLayers[key]));
     }
     drawMapCoverage();
-    const sourceKeys = ['tram', 'lage', 'stau', 'acc'].filter(mapLayerOn).join(',');
+    const sourceKeys = ['tram', 'lage', 'stau', 'parking'].filter(mapLayerOn).concat(mapAccessServicesOn() ? 'acc' : []).join(',');
     if (moved && sourceKeys === visibleMapSourceKeys) { renderMapLegend(); return; }
     visibleMapSourceKeys = sourceKeys;
     if (mapLayerOn('tram')) drawTram(); else groups.tram.clearLayers();
     if (mapLayerOn('lage') || mapLayerOn('stau')) drawLage();
     else { groups.lage.clearLayers(); groups.stau.clearLayers(); lageCounts = {}; }
-    if (mapLayerOn('acc')) drawAcc(); else groups.acc.clearLayers();
+    if (mapAccessServicesOn()) drawAcc(); else groups.acc.clearLayers();
+    if (mapLayerOn('parking')) drawMapParking(); else groups.parking.clearLayers();
     $('#btn-melden').hidden = !mapLayerOn('acc') || !apiBase();
     renderMapLegend();
   }
@@ -3878,7 +3889,7 @@
   let coverageListHtml = '';
   function drawMapCoverage() {
     const group = groups.coverage;
-    const enabled = mapLayers.coverage ? mapCoverage : null;
+    const enabled = mapLayers.acc ? mapCoverage : null;
     const list = $('#map-coverage-list');
     const visible = (enabled || []).filter(({ point }) => map.getBounds().contains(point));
     list.hidden = !visible.length;
@@ -3961,9 +3972,10 @@
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}${stadt2 ? '<span class="rad-key"><i class="dash dark"></i>Radverkehrsnetz der Stadt</span>' : ''}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig${stadt2 ? '; Radverkehrsnetz: Stadt Bielefeld (Open Data)' : ''}.</p>`);
     }
-    if (mapLayerOn('acc')) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' (Profil: ' + esc(ACCESS_LABEL[settings.access.type]) + ')' : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Hinweise aus der Altstadt-FAQ findest du unter „Erfasste Orte“${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
+    if (mapAccessServicesOn()) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' (Profil: ' + esc(ACCESS_LABEL[settings.access.type]) + ')' : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten.${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
     if (mapLayerOn('tram')) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}${stadt2 && stadt2.pr.length ? '<p class="muted">Blaues P+R: Park + Ride mit Anzahl der Plätze (Stadt Bielefeld).</p>' : ''}`);
-    if (mapLayerOn('coverage')) parts.push('<div class="rad-keys"><span class="rad-key"><i style="background:#f49732"></i>Angaben zur Barrierefreiheit vorhanden</span></div>');
+    if (mapLayers.acc && coverageInView()) parts.push('<div class="rad-keys"><span class="rad-key"><i style="background:#f49732"></i>Angaben zur Barrierefreiheit vorhanden</span></div>');
+    if (mapLayerOn('parking')) parts.push('<p><b>Behindertenparkplätze:</b> Blaues P, nur mit Parkausweis. Quellen: Stadt Bielefeld und OpenStreetMap.</p>');
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
     if (mapLayerOn('lage')) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#e0a326"></i>Baustelle${n('baustelle')}</span><span class="rad-key"><i class="dash"></i>Sperrung${n('sperrung')}</span></div>`);
     if (mapLayerOn('stau')) parts.push(`<div class="rad-keys"><span class="rad-key"><i style="background:#d64933"></i>Stau</span><span class="rad-key"><i style="background:#e0a326;opacity:.75"></i>stockend</span></div><p class="muted">Stau jetzt${n('stau')}: Verkehrsfluss von HERE, alle paar Minuten neu.</p>`);
@@ -4037,19 +4049,15 @@
     if (!bfData || Date.now() - bfAt > 2 * 60000) {
       if (!bfData) mapStatus('Barrierefreie Orte werden geladen …');
       try { await loadBf(); } catch (e) { if (!bfData) { mapStatus(/404|geladen/.test(e.message) ? 'Der Server lädt die Angaben gerade, bitte in ein paar Minuten noch einmal.' : 'Die Angaben zur Barrierefreiheit sind gerade nicht erreichbar.'); return; } }
-      if (!mapLayerOn('acc')) return;
+      if (!mapAccessServicesOn()) return;
       mapStatus('');
       g.clearLayers();
     }
+    if (!bfData) return;
     for (const w of bfData.wc || []) {
       if (w[2] !== 1) continue;
       L.circleMarker([w[0], w[1]], { radius: 6, color: '#ffffff', weight: 2, fillColor: '#1d5fa6', fillOpacity: 1 })
         .bindPopup(`<strong>Rollstuhlgerechte Toilette</strong>${w[3] ? '<br>' + esc(w[3]) : ''}${w[8] ? ', ' + esc(w[8]) : ''}${w[5] ? '<br>' + esc(w[5]) : ''}${w[6] ? (/^nein/i.test(w[6]) ? '<br>kostenlos' : /^ja/i.test(w[6]) ? '<br>kostenpflichtig' : '<br>' + esc(w[6])) : ''}${w[4] ? '<br>mit Euroschlüssel' : ''}${w[9] ? '<br>' + esc(w[9]) : ''}<br><span class="muted">${w[7] === 's' ? 'Stadt Bielefeld (Open Data)' : 'Laut OpenStreetMap'}</span>`).addTo(g);
-    }
-    if (!bpp) await loadBpp();
-    for (const p of (bpp && bpp.plaetze) || []) {
-      L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'bpp-pin', html: '<span>P</span>', iconSize: [22, 22] }), title: 'Behindertenparkplatz' })
-        .bindPopup(`<strong>Behindertenparkplatz</strong>${p[3] ? '<br>' + esc(p[3]) : ''}${p[2] ? `<br>${p[2]} ${p[2] === 1 ? 'Platz' : 'Plätze'}` : ''}<br><span class="muted">Nur mit Parkausweis · ${esc(bppSrc(p))}</span>`).addTo(g);
     }
     for (const a of bfData.lift || []) {
       // DB-Aufzüge mit Status (OpenStation): rot außer Betrieb, gelb eingeschränkt
@@ -4060,10 +4068,20 @@
           : '<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
     }
     try { await loadHinweise(); } catch (e) { /* ohne Hinweise weiter */ }
-    if (!mapLayerOn('acc')) return;
+    if (!mapAccessServicesOn()) return;
     for (const h of hinw || []) L.marker([h.lat, h.lon], { icon: hinwIcon(h.art, h.geprueft), title: HINW[h.art] || h.art }).bindPopup(() => hinwPopup(h), { maxWidth: 260 }).addTo(g);
     for (const o of bfData.orte || []) {
       L.circleMarker([o.lat, o.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: bfColor(bfScore(o)), fillOpacity: 1 }).bindPopup(() => bfPopup(o), { maxWidth: 280, maxHeight: 260, autoPanPaddingTopLeft: [10, 60] }).addTo(g);
+    }
+  }
+  async function drawMapParking() {
+    if (!bpp) await loadBpp();
+    if (!mapLayerOn('parking')) return;
+    const g = groups.parking;
+    g.clearLayers();
+    for (const p of (bpp && bpp.plaetze) || []) {
+      L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'bpp-pin', html: '<span>P</span>', iconSize: [22, 22] }), title: 'Behindertenparkplatz' })
+        .bindPopup(`<strong>Behindertenparkplatz</strong>${p[3] ? '<br>' + esc(p[3]) : ''}${p[2] ? `<br>${p[2]} ${p[2] === 1 ? 'Platz' : 'Plätze'}` : ''}<br><span class="muted">Nur mit Parkausweis · ${esc(bppSrc(p))}</span>`).addTo(g);
     }
   }
   // Stadtbahn aus dem Fahrplan: je Linie die längste Haltefolge, Haltestellen mit den nächsten Abfahrten
