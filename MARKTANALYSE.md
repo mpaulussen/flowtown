@@ -19,7 +19,7 @@ Stand: 13.11.2026. Recherche per Websuche, **ohne eigene Tests der Apps** und oh
 | **BlindSquare, Lazarillo, Ariadne GPS, GoodMaps Outdoors (früher Seeing Eye GPS), Envision** | Blinden-Navigation zu Fuß, Orte in der Nähe, teils Abbiegehinweise; Envision eher KI-Sehhilfe. Quellenlage dünn und teils alt. | Fokus Fußweg und Orte, nicht geprüfte ÖPNV-Fragen. |
 | **Moovit** | Stufenfreie Routen und Rollstuhlinfos laut Meldungen 2017 bis 2021 (damals wenige Städte), Screenreader-Unterstützung, Be-My-Eyes-Anbindung. | Aktueller Umfang in Deutschland nicht belegt. |
 | **Deutsche Bahn** | „DB Bahnhof live“ ab 31.12.2024 nicht mehr als App, Funktionen (Aufzugsstatus mit Push, Wagenreihung) in die Web-App bahnhof.de verlagert; **DB Info** (Web und App) soll Mitte 11/2026 starten (Ankündigung, nennt Aufzugsverfügbarkeit). „DB Barrierefrei“ 2018 vorgestellt, heutiger Stand unklar. Zum DB Navigator fand ich **keinen** Sprachassistenten. Kritik: Informationen zu defekten Aufzügen fehlen oft. | Aufzugsdaten kommen von der DB selbst; DB Info startet in diesen Tagen und ist ein Ausgangspunkt für Vergleich und evtl. Datenquelle. |
-| **Deutsche Projekte** | VBB-App „Bus & Bahn“ für Blinde (Sprachein- und -ausgabe über das Betriebssystem); **Sinn2** (Baden-Württemberg, Mobilitätspreis); **OD2Guide** (mFUND, contagt, 2021 bis 2024, Audio-Chatbot mit KI-Dialog und Beacons; Ergebnisse des Chatbots nicht gefunden); **LOC.id** (Hannover, Pilot); **SmartAIs** (Hinderniserkennung, Preis); Wheelmap; „Hürdenlose Navigation“ (Heidelberg). | Zeigt, dass das Thema gefördert wird; meist regional, Beacon-basiert oder ohne freie Sprachfragen. Aktuelle Verfügbarkeit nicht geprüft. |
+| **Deutsche Projekte** | VBB-App „Bus & Bahn“ für Blinde (Sprachein- und -ausgabe über das Betriebssystem); **Sinn2** (Baden-Württemberg, Mobilitätspreis);  Ergebnisse des Chatbots nicht gefunden); **LOC.id** (Hannover, Pilot); **SmartAIs** (Hinderniserkennung, Preis); Wheelmap; „Hürdenlose Navigation“ (Heidelberg). | Zeigt, dass das Thema gefördert wird; meist regional, Beacon-basiert oder ohne freie Sprachfragen. Aktuelle Verfügbarkeit nicht geprüft. |
 
 ## Was die Forschung sagt
 
@@ -48,7 +48,7 @@ Das passt zu Flowtowns Ansatz (Quellenprüfung, „Dazu habe ich keine Angabe“
 1. **Direktvergleich:** Dieselben 30 bis 40 Fragen aus `server/testreihe.txt` in Google Maps (Gemini) und, wo möglich, anderen Apps stellen, Antworten festhalten und mit dem echten Fahrplan prüfen. Ergebnis: eine belegte Aussage „X % der Antworten falsch oder unbelegt bei Google, Y % bei Flowtown“. Das wäre der stärkste Beleg für den USP.
 2. **Nutzertest** mit fünf bis zehn Menschen aus der Zielgruppe (blind, sehbehindert, Rollstuhl), reale Wege.
 3. **Positionierung:** nicht „KI-Sprachassistent“, sondern „Auskunft, die nur sagt, was belegt ist, mit Barrierefreiheit vor Ort“. Das Versprechen sichtbar machen (z. B. Quelle und Stand an jeder Antwort).
-4. **Beobachten:** DB Info (Start Mitte 11/2026), Ask Maps in Deutschland, OD2Guide-Schlussbericht.
+4. **Beobachten:** DB Info (Start Mitte 11/2026), Ask Maps in Deutschland, (OD2Guide ist aus dem Projekt ausgeschieden, siehe TODO V14.)
 
 ## Quellen (Auswahl)
 
@@ -61,5 +61,5 @@ Hinweis: Die Links stammen aus den Suchergebnissen. Welche Zahl genau in welchem
 - Navigations-Apps für Blinde: <https://www.incobs.de/tests-english/items/ios-navigation-apps.html>, <https://acb-indiana.org/news/news/2026/orientation-and-mobility-apps/>
 - Moovit: <https://moovit.com/blog/moovit-makes-london-more-accessible/>
 - Deutsche Bahn: <https://www.bahnhof.de/entdecken/bahnhof-de-wird-dbinfo>, <https://www.bahnhof.de/entdecken/db-bahnhof-live>, <https://railway-news.com/db-launches-new-app-for-passengers-with-impairments/>
-- Deutsche Projekte: <https://www.bmv.de/SharedDocs/DE/Artikel/mFUND/Projekte/od2guide.html>, <https://www.vbb.de/vbb-services/barrierefreiheit/bus-bahn-app-barrierefrei/>, <https://www.bundesregierung.de/breg-de/aktuelles/barrierefreiheit-im-strassenverkehr-2322608>
+- Deutsche Projekte: <https://www.vbb.de/vbb-services/barrierefreiheit/bus-bahn-app-barrierefrei/>, <https://www.bundesregierung.de/breg-de/aktuelles/barrierefreiheit-im-strassenverkehr-2322608>
 - Forschung: <https://arxiv.org/html/2605.13579v1>, <https://arxiv.org/abs/2601.15291v1>, <https://afb.org/sites/default/files/2026-06/Navigating%20Toward%20AI%20-%20Transportation%20Report%20-%20Accessible.pdf>
