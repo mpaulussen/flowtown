@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.6';
+  const VERSION = '0.112.7';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3371,14 +3371,24 @@
   }
   // ---------- Gut zu wissen: Altstadt-FAQ von barrierefrAI, nach Profil ----------
   let faq = null, faqOpen = null;
-  // zuerst die Redaktions-Tabelle vom Server, sonst die mitgelieferte Altstadt-FAQ
+  // Die Redaktions-Tabelle hat bei gleichen Einträgen Vorrang vor der Altstadt-FAQ im App-Paket.
   let faqAt = 0;
   async function loadFaq() {
     if (faq && Date.now() - faqAt < 30 * 60000) return faq;
-    if (apiBase()) {
-      try { const j = await api('/api/faq', { cache: 'no-cache' }); if (j.eintraege && j.eintraege.length) { faq = j; faqAt = Date.now(); return faq; } } catch (e) { /* weiter mit der mitgelieferten Fassung */ }
+    const bundled = fetch('data/altstadt-faq.json').then((r) => r.ok ? r.json() : null).catch(() => null);
+    const remote = apiBase() ? api('/api/faq', { cache: 'no-cache' }).catch(() => null) : null;
+    const [local, live] = await Promise.all([bundled, remote]);
+    if (live?.eintraege?.length || local?.eintraege?.length) {
+      const current = live?.eintraege || [];
+      const ids = new Set(current.map((entry) => entry.id).filter(Boolean));
+      const questions = new Set(current.map((entry) => stemKey(entry.frage)));
+      const withSource = (entry, source) => ({ ...entry, quelle: entry.quelle || source.quelle, stand: entry.stand || source.stand });
+      faq = { ...(live?.eintraege?.length ? live : local), eintraege: [
+        ...current.map((entry) => withSource(entry, live)),
+        ...(local?.eintraege || []).filter((entry) => !ids.has(entry.id) && !questions.has(stemKey(entry.frage)))
+          .map((entry) => withSource(entry, local))
+      ] };
     }
-    if (!faq) { try { faq = await (await fetch('data/altstadt-faq.json')).json(); } catch (e) { faq = null; } }
     faqAt = Date.now();
     return faq;
   }
@@ -3813,7 +3823,11 @@
   async function findAccessibilityAnswer(question) {
     const key = stemKey(question);
     const notes = await accessibilityNotes();
-    const exact = notes.find((note) => stemKey(note.frage) === key && note.names.length);
+    // Eine konkrete Einrichtung geht vor allgemeinen Hinweisen zum Platz und vor dem Profilfilter.
+    const pharmacy = /apotheke/i.test(question) && /\balt(?:e[nrms]?)? markt\b/i.test(question);
+    if (pharmacy && /öffnungszeit|wann|geöffnet|geschlossen|telefon|notdienst|adresse/i.test(question)) return '';
+    const exact = notes.find((note) => stemKey(note.frage) === key && note.names.length)
+      || (pharmacy && notes.find((note) => note.names.includes('Alter Markt') && /apotheke/i.test(note.frage)));
     let matches = exact ? [exact] : [];
     if (!exact && /barriere|rollstuhl|rampe|querung|leitstreifen|leitsystem|pflaster|taster/i.test(question)) {
       const place = notes.flatMap((note) => note.names).sort((a, b) => b.length - a.length)
