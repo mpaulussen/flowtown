@@ -4170,8 +4170,18 @@ function rKatalog() {
   } catch (e) { return []; }
 }
 // Fakten: Protokoll lesen und den aktuellen Stand bauen
-let rFakt = {}, rEntwurf = {}, rVerlauf = {};
+let rFakt = {}, rEntwurf = {}, rVerlauf = {}, rOrtsHinweise = {}, rOrtsHinweisIds = new Set();
 function rApply(ev) {
+  if (ev.art === 'ortshinweis') { rOrtsHinweisIds.add(ev.eid); rEntwurf[ev.eid] = ev; return; }
+  const entwurf = ev.art === 'freigabe' && rEntwurf[ev.ziel];
+  if (entwurf && entwurf.art === 'ortshinweis') {
+    delete rEntwurf[ev.ziel];
+    if (ev.ok) rOrtsHinweise[entwurf.eid] = {
+      id: entwurf.eid, name: entwurf.name, lat: entwurf.lat, lon: entwurf.lon,
+      text: entwurf.wert, lage: entwurf.lage, stand: new Date(ev.t).toISOString().slice(0, 10)
+    };
+    return;
+  }
   (rVerlauf[ev.objekt] = rVerlauf[ev.objekt] || []).push(ev);
   const cur = (rFakt[ev.objekt] = rFakt[ev.objekt] || {});
   if (ev.art === 'erfassung') {
@@ -4185,7 +4195,7 @@ function rApply(ev) {
   }
 }
 function rLade() {
-  rFakt = {}; rEntwurf = {}; rVerlauf = {};
+  rFakt = {}; rEntwurf = {}; rVerlauf = {}; rOrtsHinweise = {}; rOrtsHinweisIds.clear();
   try { for (const l of fs.readFileSync(R_FAKTEN, 'utf8').split('\n')) if (l.trim()) { try { rApply(JSON.parse(l)); } catch (e) { /* kaputte Zeile überspringen */ } } } catch (e) { /* noch keine Datei */ }
 }
 rLade();
@@ -4227,6 +4237,18 @@ async function rRoute(req, res, p, url, origin, ip) {
   if (!me) return send(res, 401, { fehler: 'Bitte anmelden.' }, origin);
   const redakteur = me.rolle === 'redaktion';
   if (req.method === 'GET' && p === '/api/redaktion/me') return send(res, 200, { rolle: me.rolle, name: me.name, entwuerfe: redakteur ? Object.keys(rEntwurf).length : 0 }, origin);
+  if (req.method === 'POST' && p === '/api/redaktion/ortshinweis') {
+    const b = await readBody(req, 8192);
+    const { lat, lon, eid } = b;
+    const name = clip(b.name, 100), wert = clip(b.text, 700), lage = clip(b.lage, 250);
+    if (typeof eid !== 'string' || !/^ort-[a-f0-9-]{36}$/.test(eid) || !name || !wert
+        || !Number.isFinite(lat) || Math.abs(lat) > 90 || !Number.isFinite(lon) || Math.abs(lon) > 180) {
+      return send(res, 400, { fehler: 'Ort, gültigen Kartenpunkt und Beobachtung angeben.' }, origin);
+    }
+    if (!rOrtsHinweisIds.has(eid)) rSchreibe({ t: Date.now(), art: 'ortshinweis', eid,
+      objekt: eid, merkmal: 'ortshinweis', name, lat, lon, wert, lage, von: me.name, status: 'entwurf' });
+    return send(res, 200, { ok: true }, origin);
+  }
   const cl = rChecklisten();
   if (req.method === 'GET' && p === '/api/redaktion/objekte') {
     const kat = rKatalog();
@@ -4266,7 +4288,7 @@ async function rRoute(req, res, p, url, origin, ip) {
   if (req.method === 'GET' && p === '/api/redaktion/entwuerfe') {
     if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
     const kat = rKatalog();
-    return send(res, 200, { entwuerfe: Object.values(rEntwurf).map((e) => { const o = kat.find((x) => x.id === e.objekt) || {}; const f = (cl[o.typ] || []).find((x) => x.merkmal === e.merkmal) || {}; const alt = (rFakt[e.objekt] || {})[e.merkmal]; return Object.assign({}, e, { objekt_name: o.name || e.objekt, frage: f.frage, vorher: alt ? alt.wert : null }); }) }, origin);
+    return send(res, 200, { entwuerfe: Object.values(rEntwurf).map((e) => { if (e.art === 'ortshinweis') return { ...e, objekt_name: e.name, frage: 'Hinweis von der Begehung' }; const o = kat.find((x) => x.id === e.objekt) || {}; const f = (cl[o.typ] || []).find((x) => x.merkmal === e.merkmal) || {}; const alt = (rFakt[e.objekt] || {})[e.merkmal]; return Object.assign({}, e, { objekt_name: o.name || e.objekt, frage: f.frage, vorher: alt ? alt.wert : null }); }) }, origin);
   }
   if (req.method === 'POST' && p === '/api/redaktion/freigabe') {
     if (!redakteur) return send(res, 403, { fehler: 'Nur für die Redaktion.' }, origin);
@@ -4314,6 +4336,7 @@ const server = http.createServer(async (req, res) => {
   const ip = (req.headers['x-forwarded-for'] || req.socket.remoteAddress || '').split(',')[0].trim();
   try {
     if (req.method === 'OPTIONS') return send(res, 204, null, origin);
+    if (req.method === 'GET' && p === '/api/ortshinweise') return send(res, 200, { hinweise: Object.values(rOrtsHinweise) }, origin);
     if (p.startsWith('/api/redaktion/')) return await rRoute(req, res, p, url, origin, ip);
     if (req.method === 'GET' && p === '/api/health') return send(res, 200, { ok: true, db_timetables: DB_ON ? (dbErr ? 'an, letzter Fehler: ' + dbErr : 'an') : 'aus', qualitaet: { schreibbar: (() => { try { fs.mkdirSync(Q_DIR, { recursive: true }); fs.accessSync(Q_DIR, fs.constants.W_OK); return true; } catch (e) { return false; } })(), objekte: rKatalog().length, fakten: Object.values(rFakt).reduce((n, o) => n + Object.keys(o).length, 0) }, werkzeuge: ['vergleich', 'weg_check', 'oepnv_stoerungen', 'ampeln_mit_ton', 'ort_info', 'abfahrten_in_der_naehe', 'rueckweg', 'hilfe_menschen', 'redaktion_fakten'], beispiele: beispiele.length, ki: !!MISTRAL_KEY, modell: MISTRAL_MODEL, kMin: K_MIN, lage: { here: !!HERE_KEY, autobahn: LAGE_ROADS }, ziel: !!HERE_KEY, pilot: true, oepnv: true, radnetz: true, fussnetz: true, hinweise: true, barrierefrei: !!(bf && bf.t), faqOrte: bf && bf.faqOrte ? Object.keys(bf.faqOrte) : [], redaktion: faqData && faqData.eintraege ? { hinweise: faqData.eintraege.length, stand: new Date(faqData.t).toISOString(), tabellenhinweise: (faqData.fehler || []).length } : false, fahrplan: fahrplan ? { stand: fahrplan.stand, gilt: fahrplan.gilt, staedte: Object.values(fahrplaene).map((x) => ({ id: x.id, name: x.name, box: x.box })) } : false, haltestellen: hst ? { anzahl: hst.liste.length, quelle: hst.quelle, tabellenhinweise: hst.fehler.length } : false, behindertenparkplaetze: bpp ? { stadt: bpp.stadt, osm: bpp.osm, stand: new Date(bpp.t).toISOString() } : false, ampelanlagen: lsa ? { anzahl: lsa.anlagen.length, stand: new Date(lsa.t).toISOString() } : false, toilettenStadt: swc ? { anzahl: swc.wc.length, stand: new Date(swc.t).toISOString() } : false, strassenNrw: MOBI_ON ? Object.fromEntries(Object.entries(nrw).map(([k, q]) => [k, q.t ? { meldungen: q.items.length, stand: new Date(q.t).toISOString(), fehler: q.err || undefined } : (q.err || (q.try ? 'lädt' : 'noch nicht angefragt'))])) : false, echtzeit: MOBI_ON ? { stand: rt.t ? new Date(rt.ts).toISOString() : null, fahrten: rt.n || 0, mb: rt.bytes ? Math.round(rt.bytes / 1e5) / 10 : 0, fehler: rtErr || undefined, kennungen: Object.values(fahrplaene).every((f) => f.ids) } : false, aufzuegeDb: MOBI_ON ? (dba ? { anlagen: dba.anlagen.length, stand: dba.stand, status: dbaStatus.t ? new Date(dbaStatus.t).toISOString() : null, ausser_betrieb: Object.values(dbaStatus.s).filter((x) => x === 'notAvailable').length } : 'wird geladen') : false, assistenz: !!MISTRAL_KEY, parkRide: stadt2 ? stadt2.pr.length : false, radnetzStadt: stadt2 ? stadt2.netz.length : false, baustellenStadt: lage.stadt.t ? { anzahl: lage.stadt.items.length, stand: new Date(lage.stadt.t).toISOString() } : false }, origin);
     if (req.method === 'POST' && p === '/api/wir') return send(res, 200, { ok: true, n: addWir(await readBody(req, 64 * 1024)) }, origin);
