@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.9';
+  const VERSION = '0.112.10';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3729,7 +3729,7 @@
     return hinw.filter((h) => h.art !== 'gut' && pts.some((p, i) => i % 2 === 0 && dist({ lat: p[0], lon: p[1] }, h) <= 20));
   }
   // ---------- Karte: Ebenen zum An- und Ausschalten ----------
-  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc', 'coverage', 'parking'];
+  const MAP_LAYERS = ['signals', 'grid', 'rad', 'tram', 'lage', 'stau', 'acc', 'coverage', 'parking', 'localDraft'];
   const savedMapLayers = settings.mapLayers || {};
   const mapLayers = Object.assign({ signals: true, grid: false, rad: false, tram: false, lage: false, stau: false, acc: true, parking: false }, savedMapLayers);
   if (!Object.hasOwn(savedMapLayers, 'parking')) {
@@ -3921,6 +3921,37 @@
     }
   }
 
+  let localDraftMarkerKey = '', localDraftMarker = null;
+  function localMapDraft() {
+    try {
+      const draft = JSON.parse(localStorage.getItem('rd.aufnahme.entwurf'));
+      if (draft && typeof draft.text === 'string' && draft.text.trim() &&
+          Number.isFinite(draft.lat) && Math.abs(draft.lat) <= 90 &&
+          Number.isFinite(draft.lon) && Math.abs(draft.lon) <= 180) return draft;
+    } catch (e) { /* Lokaler Speicher ist nicht verfügbar. */ }
+    return null;
+  }
+
+  function drawLocalMapDraft(draft, open) {
+    const key = draft ? JSON.stringify(draft) : '';
+    if (key !== localDraftMarkerKey) {
+      groups.localDraft.clearLayers();
+      localDraftMarker = null;
+      localDraftMarkerKey = key;
+      if (draft) {
+        const popup = '<strong>Dein lokaler Entwurf</strong><br>' + esc(draft.name || 'Hinweis vor Ort')
+          + '<p>' + esc(draft.text) + (draft.lage ? '<br>' + esc(draft.lage) : '') + '</p>'
+          + '<a href="redaktion/#/aufnahme">Entwurf bearbeiten</a>';
+        localDraftMarker = L.circleMarker([draft.lat, draft.lon], { radius: 11, color: '#50317d',
+          fillColor: '#a880e0', fillOpacity: 0.9, weight: 3 }).bindPopup(popup).addTo(groups.localDraft);
+      }
+    }
+    if (open && localDraftMarker) {
+      map.setView(localDraftMarker.getLatLng(), 18, { animate: false });
+      localDraftMarker.openPopup();
+    }
+  }
+
   function renderMap() {
     renderMapList();
     if (typeof L === 'undefined') { mapStatus('Die Karte braucht eine Internetverbindung.'); return; }
@@ -3966,9 +3997,16 @@
     if (mapLayers.rad) drawRad(); else { groups.rad.clearLayers(); radDrawn = ''; }
     drawNetz();
     syncMapSources();
-    mapHasData = fit.length > 0;
+    const draft = localMapDraft();
+    const openDraft = location.hash === '#entwurf' && !!draft;
+    drawLocalMapDraft(draft, false);
+    mapHasData = fit.length > 0 || openDraft;
     if (!mapFitted && fit.length && !mapLayers.rad) { map.fitBounds(fit, { padding: [40, 40], maxZoom: 16 }); mapFitted = true; }
-    startMyLocation();
+    if (openDraft) {
+      history.replaceState(null, '', location.pathname + location.search);
+      meCenterNext = false;
+      setTimeout(() => { if (!$('#view-map').hidden) drawLocalMapDraft(localMapDraft(), true); }, 60);
+    } else startMyLocation();
   }
   function renderMapLegend() {
     const parts = [];
@@ -7476,7 +7514,8 @@
   renderToday();
   renderLastTrip();
   renderA2hs();
-  if (!settings.onboarded || new URLSearchParams(location.search).get('code')) openWelcome();
+  if (location.hash === '#entwurf' && localMapDraft()) showView('map');
+  else if (!settings.onboarded || new URLSearchParams(location.search).get('code')) openWelcome();
   else if (new URLSearchParams(location.search).get('sprechen') === '1' || location.hash === '#sprechen') {
     // Link zum Startbildschirm: gleich der Sprachmodus; zum Sprechen genügt ein Tipp (Handys erlauben das Mikrofon nur nach einer Berührung)
     document.title = 'Flowtown sprechen';

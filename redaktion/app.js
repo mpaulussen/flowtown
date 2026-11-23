@@ -1,7 +1,7 @@
 // Flowtown Redaktion: Objekte erfassen, prüfen, Bericht. Spricht mit /api/redaktion/* des Flowtown-Servers.
 (function () {
   'use strict';
-  var VERSION = '0.1.3';
+  var VERSION = '0.1.4';
   var DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -252,6 +252,7 @@
   }
   function openCaptureMap() {
     var saved = ls.get('rd.aufnahme.entwurf', null);
+    $('#aufnahme-karte-link').hidden = !saved;
     if (saved && !captureId) {
       captureId = saved.eid;
       $('#aufnahme-name').value = saved.name;
@@ -305,12 +306,13 @@
     var form = e.currentTarget, msg = $('#aufnahme-msg'), btn = $('#aufnahme-speichern');
     if (btn.disabled) return;
     var name = $('#aufnahme-name').value.trim(), text = $('#aufnahme-text').value.trim(), lage = $('#aufnahme-lage').value.trim();
-    if (!name || !text) { msg.textContent = 'Bitte Ort und Beobachtung angeben.'; return; }
+    if (!text) { msg.textContent = 'Bitte eine Beobachtung angeben.'; return; }
     captureId = captureId || 'ort-' + crypto.randomUUID();
     var body = { eid: captureId, name: name, text: text, lage: lage, lat: Number($('#aufnahme-lat').value), lon: Number($('#aufnahme-lon').value) };
     function saveLocal() {
       localStorage.setItem('rd.aufnahme.entwurf', JSON.stringify(body));
-      msg.textContent = 'Als Entwurf auf diesem Gerät gespeichert. Noch nicht an die Redaktion gesendet.';
+      $('#aufnahme-karte-link').hidden = false;
+      msg.textContent = 'Gespeichert. Du kannst den Entwurf auf deiner Karte öffnen.';
     }
     if (!S.token) {
       try { saveLocal(); } catch (e) { msg.textContent = 'Speichern war nicht möglich. Der Text bleibt im Formular.'; }
@@ -318,9 +320,10 @@
     }
     btn.disabled = true;
     msg.textContent = 'Wird gespeichert …';
-    api('/api/redaktion/ortshinweis', { method: 'POST', body: body }).then(function () {
+    api('/api/redaktion/ortshinweis', { method: 'POST', body: Object.assign({}, body, { name: name || 'Hinweis vor Ort' }) }).then(function () {
       captureId = null;
       ls.del('rd.aufnahme.entwurf');
+      $('#aufnahme-karte-link').hidden = true;
       form.reset();
       showCapturePoint();
       msg.textContent = 'Als Entwurf gespeichert. Die Redaktion prüft ihn vor der Veröffentlichung.';

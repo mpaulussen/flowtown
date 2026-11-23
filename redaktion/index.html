@@ -66,8 +66,8 @@
         <label>Breitengrad<input id="aufnahme-lat" type="number" step="any" min="-90" max="90" required></label>
         <label>Längengrad<input id="aufnahme-lon" type="number" step="any" min="-180" max="180" required></label>
       </div>
-      <label for="aufnahme-name">Ort oder Straße</label>
-      <input id="aufnahme-name" maxlength="100" required>
+      <label for="aufnahme-name">Ort oder Straße (freiwillig)</label>
+      <input id="aufnahme-name" maxlength="100">
       <label for="aufnahme-text">Was hast du beobachtet?</label>
       <p class="muted">Zum Diktieren kannst du auch das Mikrofon deiner Handy-Tastatur verwenden.</p>
       <textarea id="aufnahme-text" maxlength="700" rows="4" required></textarea>
@@ -75,6 +75,7 @@
       <label for="aufnahme-lage">Woran erkennt man die Stelle? (freiwillig)</label>
       <input id="aufnahme-lage" maxlength="250" placeholder="Zum Beispiel direkt neben dem Ampelmast">
       <button class="btn primary" id="aufnahme-speichern" type="submit">Als Entwurf speichern</button>
+      <p id="aufnahme-karte-link" hidden><a class="btn" href="../#entwurf">Entwurf auf meiner Karte zeigen</a></p>
       <p id="aufnahme-msg" class="msg" role="status" aria-live="polite"></p>
     </form>
   </section>
