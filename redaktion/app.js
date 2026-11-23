@@ -1,7 +1,7 @@
 // Flowtown Redaktion: Objekte erfassen, prüfen, Bericht. Spricht mit /api/redaktion/* des Flowtown-Servers.
 (function () {
   'use strict';
-  var VERSION = '0.1.1';
+  var VERSION = '0.1.2';
   var DEFAULT_SERVER = 'https://songdeepdive.de/flowtown-api';
   var $ = function (s, r) { return (r || document).querySelector(s); };
   var esc = function (t) { return String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); };
@@ -82,7 +82,7 @@
   var ABBILD = { yes: 'ja', no: 'nein', limited: 'teilweise' };
 
   // ---------- Navigation
-  var VIEWS = ['login', 'liste', 'objekt', 'entwuerfe', 'bericht', 'mehr'];
+  var VIEWS = ['login', 'liste', 'objekt', 'aufnahme', 'entwuerfe', 'bericht', 'mehr'];
   function go(h) { if (location.hash === h) route(); else location.hash = h; }
   function route() {
     var h = location.hash || '#/liste', m = /^#\/([a-z]+)(?:\/(.+))?$/.exec(h) || [0, 'liste'];
@@ -95,9 +95,10 @@
     $('#tabs').hidden = v === 'login';
     document.querySelectorAll('#tabs a').forEach(function (a) { var on = a.dataset.t === (v === 'objekt' ? 'liste' : v); if (on) a.setAttribute('aria-current', 'page'); else a.removeAttribute('aria-current'); });
     $('#t-entw').hidden = S.rolle !== 'redaktion';
-    document.title = { login: 'Anmelden', liste: 'Objekte', objekt: 'Objekt', entwuerfe: 'Entwürfe', bericht: 'Bericht', mehr: 'Mehr' }[v] + ' – Flowtown Redaktion';
+    document.title = { login: 'Anmelden', liste: 'Objekte', objekt: 'Objekt', aufnahme: 'Hinweis aufnehmen', entwuerfe: 'Entwürfe', bericht: 'Bericht', mehr: 'Mehr' }[v] + ' – Flowtown Redaktion';
     if (v === 'liste') loadListe();
     else if (v === 'objekt') loadObjekt(decodeURIComponent(m[2] || ''));
+    else if (v === 'aufnahme') openCaptureMap();
     else if (v === 'entwuerfe') loadEntwuerfe();
     else if (v === 'bericht') loadBericht();
     else if (v === 'mehr') renderMehr();
@@ -229,11 +230,106 @@
     if (b.dataset.w != null) speichere(i, b.dataset.w);
   });
 
+  // ---------- Ortsbezogene Beobachtung
+  var captureMap, captureMarker, captureId;
+  function setCapturePoint(lat, lon) {
+    $('#aufnahme-lat').value = lat.toFixed(5);
+    $('#aufnahme-lon').value = lon.toFixed(5);
+    showCapturePoint();
+  }
+  function showCapturePoint() {
+    var lat = $('#aufnahme-lat'), lon = $('#aufnahme-lon');
+    if (!captureMap || !lat.value || !lon.value || !lat.validity.valid || !lon.validity.valid) {
+      if (captureMarker) { captureMarker.remove(); captureMarker = null; }
+      return;
+    }
+    var point = [+lat.value, +lon.value];
+    if (captureMarker) captureMarker.setLatLng(point);
+    else captureMarker = L.circleMarker(point, { radius: 9, color: '#813700', fillColor: '#f49732', fillOpacity: 1 }).addTo(captureMap);
+  }
+  function openCaptureMap() {
+    var saved = ls.get('rd.aufnahme.entwurf', null);
+    if (saved && !captureId) {
+      captureId = saved.eid;
+      $('#aufnahme-name').value = saved.name;
+      $('#aufnahme-text').value = saved.text;
+      $('#aufnahme-lage').value = saved.lage;
+      setCapturePoint(saved.lat, saved.lon);
+      $('#aufnahme-msg').textContent = 'Lokaler Entwurf wieder geöffnet. Du kannst ihn erneut senden.';
+    }
+    if (typeof L === 'undefined') return;
+    if (!captureMap) {
+      captureMap = L.map('aufnahme-karte').setView([52.0211, 8.5325], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '© OpenStreetMap-Mitwirkende' }).addTo(captureMap);
+      captureMap.on('click', function (e) { setCapturePoint(e.latlng.lat, e.latlng.lng); });
+    }
+    captureMap.invalidateSize();
+    showCapturePoint();
+  }
+  $('#aufnahme-lat').addEventListener('change', showCapturePoint);
+  $('#aufnahme-lon').addEventListener('change', showCapturePoint);
+  $('#aufnahme-gps').addEventListener('click', function () {
+    var msg = $('#aufnahme-msg');
+    if (!navigator.geolocation) { msg.textContent = 'Standort ist nicht verfügbar. Setze den Punkt auf der Karte.'; return; }
+    msg.textContent = 'Standort wird ermittelt …';
+    navigator.geolocation.getCurrentPosition(function (p) {
+      var c = p.coords;
+      setCapturePoint(c.latitude, c.longitude);
+      if (captureMap) captureMap.setView([c.latitude, c.longitude], 18);
+      msg.textContent = 'Standort gesetzt (Genauigkeit etwa ' + Math.round(c.accuracy) + ' m). Prüfe den Punkt auf der Karte.';
+    }, function () { msg.textContent = 'Standort konnte nicht bestimmt werden. Setze den Punkt auf der Karte.'; },
+    { enableHighAccuracy: true, timeout: 10000 });
+  });
+  var CaptureSpeech = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (CaptureSpeech) {
+    var dictate = $('#aufnahme-stimme');
+    dictate.hidden = false;
+    dictate.addEventListener('click', function () {
+      var sr = new CaptureSpeech(), field = $('#aufnahme-text'), msg = $('#aufnahme-msg');
+      sr.lang = 'de-DE';
+      dictate.disabled = true;
+      sr.onresult = function (e) {
+        field.value = (field.value.trim() + ' ' + e.results[0][0].transcript).trim().slice(0, field.maxLength);
+        msg.textContent = 'Diktat übernommen. Prüfe den Text.';
+      };
+      sr.onerror = function () { msg.textContent = 'Diktat nicht verfügbar. Du kannst tippen oder das Tastaturmikrofon verwenden.'; };
+      sr.onend = function () { dictate.disabled = false; };
+      try { sr.start(); } catch (e) { dictate.disabled = false; sr.onerror(); }
+    });
+  }
+  $('#f-aufnahme').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var form = e.currentTarget, msg = $('#aufnahme-msg'), btn = $('#aufnahme-speichern');
+    if (btn.disabled || !S.token) return;
+    var name = $('#aufnahme-name').value.trim(), text = $('#aufnahme-text').value.trim(), lage = $('#aufnahme-lage').value.trim();
+    if (!name || !text) { msg.textContent = 'Bitte Ort und Beobachtung angeben.'; return; }
+    captureId = captureId || 'ort-' + crypto.randomUUID();
+    var body = { eid: captureId, name: name, text: text, lage: lage, lat: Number($('#aufnahme-lat').value), lon: Number($('#aufnahme-lon').value) };
+    btn.disabled = true;
+    msg.textContent = 'Wird gespeichert …';
+    api('/api/redaktion/ortshinweis', { method: 'POST', body: body }).then(function () {
+      captureId = null;
+      ls.del('rd.aufnahme.entwurf');
+      form.reset();
+      showCapturePoint();
+      msg.textContent = 'Als Entwurf gespeichert. Die Redaktion prüft ihn vor der Veröffentlichung.';
+    }, function (err) {
+      if (!err.status || err.status === 404 || err.status >= 500) {
+        try {
+          localStorage.setItem('rd.aufnahme.entwurf', JSON.stringify(body));
+          msg.textContent = 'Als Entwurf auf diesem Gerät gespeichert. Noch nicht an die Redaktion gesendet.';
+          return;
+        } catch (e) { /* Das ausgefüllte Formular bleibt geöffnet. */ }
+      }
+      msg.textContent = err.message + ' Der Text bleibt im Formular.';
+    }).finally(function () { btn.disabled = false; });
+  });
+
   // ---------- Entwürfe
   function loadEntwuerfe() {
     api('/api/redaktion/entwuerfe').then(function (j) {
       $('#entwuerfe').innerHTML = j.entwuerfe.map(function (e) {
-        return '<li><div class="item"><span class="t">' + esc(e.objekt_name) + '</span><br><span class="s">' + esc(e.frage || e.merkmal) + '</span><p>Neu: <b>' + esc(e.wert) + '</b>' + (e.vorher ? ' (bisher: ' + esc(e.vorher) + ')' : '') + ' · ' + esc(e.von) + ', ' + ago(e.t) + (e.notiz ? '<br>Notiz: ' + esc(e.notiz) : '') + '</p>'
+        return '<li><div class="item"><span class="t">' + esc(e.objekt_name) + '</span><br><span class="s">' + esc(e.frage || e.merkmal) + '</span><p>Neu: <b>' + esc(e.wert) + '</b>' + (e.vorher ? ' (bisher: ' + esc(e.vorher) + ')' : '') + ' · ' + esc(e.von) + ', ' + ago(e.t) + (e.notiz ? '<br>Notiz: ' + esc(e.notiz) : '') + (e.art === 'ortshinweis' ? '<br>' + esc(e.lage || '') + ' <a href="' + esc(osmLink(e)) + '">Kartenpunkt prüfen</a>' : '') + '</p>'
           + '<button class="btn primary" data-e="' + esc(e.eid) + '" data-ok="1">Freigeben</button> <button class="btn" data-e="' + esc(e.eid) + '" data-ok="0">Ablehnen</button></div></li>';
       }).join('') || '<li class="muted">Keine Entwürfe.</li>';
       $('#t-entw').textContent = 'Entwürfe' + (j.entwuerfe.length ? ' (' + j.entwuerfe.length + ')' : '');
@@ -282,7 +378,7 @@
     var msg = $('#login-msg'); msg.textContent = 'Wird geprüft …';
     api('/api/redaktion/login', { method: 'POST', body: { code: $('#in-code').value } }).then(function (j) {
       S.token = j.token; S.rolle = j.rolle; S.name = j.name; ls.set('rd.sitzung', { token: j.token, rolle: j.rolle, name: j.name });
-      msg.textContent = ''; $('#in-code').value = ''; S.objekte = []; go('#/liste'); flush();
+      msg.textContent = ''; $('#in-code').value = ''; S.objekte = []; go(location.hash === '#/aufnahme' ? '#/aufnahme' : '#/liste'); flush();
     }, function (er) { msg.textContent = er.status ? er.message : 'Keine Verbindung zum Server. Stimmt die Adresse unter „Server“?'; });
   });
 
