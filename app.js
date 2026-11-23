@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.4';
+  const VERSION = '0.112.5';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -2061,6 +2061,20 @@
     if (st && st.msg) { assistAct = null; showAssist(frage, st.msg);   // assistLast und der Verlauf bleiben bei der letzten echten Antwort, damit „das“ sich darauf bezieht
        if (st.sprich && (spoken || voiceOn())) speak(st.msg, { now: true, force: true }); return; }
     if (st && st.frage) frage = st.frage;
+    if (!st?.frage && !/wann fährt|nächste[nr]? (?:bahn|bus|zug|stadtbahn)|abfahrt|heute .* (?:offen|defekt)/i.test(frage)) {
+      assistBusy = true;
+      let local;
+      try { local = await findAccessibilityAnswer(frage); }
+      finally { assistBusy = false; }
+      if (local) {
+        assistAct = null;
+        assistLast = local;
+        assistHist = assistHist.concat([{ role: 'user', content: frage }, { role: 'assistant', content: local }]).slice(-6);
+        showAssist(shown, local);
+        say(local, spoken ? { onend: () => { if (!$('#assist').hidden) listenAfter('Noch eine Frage? Ich höre zu …'); } } : null);
+        return;
+      }
+    }
     if (settings.assist !== 2) {   // 2 = Einwilligung zur genauen Standortnutzung (ab 0.100.0); ältere Einwilligungen fragen neu
       const ok = window.confirm('Für freie Fragen gehen deine Frage, dein Profil und dein genauer Standort an den Flowtown-Server, und die Frage, dein Profil und Wegdaten an Mistral (KI-Anbieter, Rechenzentren in der EU). Dein genauer Standort geht nur an den Flowtown-Server und an HERE für Adresse und Wege, nie an Mistral. Gespeichert wird nichts. Einverstanden?');
       if (!ok) { speak('Gut, dann ohne Assistenz.', { now: true, force: true }); return; }
@@ -3755,15 +3769,90 @@
     renderMapLegend();
   }
 
+  // Gemeinsamer Bestand für Karte und Assistenz. Ortsmittelpunkte sind nur Kartenanker.
+  let accessibilityLoading, accessibilityLoadedAt = 0;
+  function accessibilityNotes() {
+    if (accessibilityLoading && (!accessibilityLoadedAt || Date.now() - accessibilityLoadedAt < 30 * 60000)) return accessibilityLoading;
+    accessibilityLoading = Promise.all([loadFaq(), sbLaden()]).then(([editorial, stops]) => {
+      const notes = [];
+      for (const { id, frage, antwort, orte, gruppen, lat, lon, stand, quelle } of editorial?.eintraege || []) {
+        if (id === 'AS-35' || !frage || !antwort) continue; // Krisenhilfe bleibt im Hilfebereich.
+        const point = [lat, lon].every(Number.isFinite) ? [lat, lon] : null;
+        notes.push({ frage, text: antwort, names: orte || [], groups: gruppen || [], point,
+          source: quelle || editorial.quelle, stand: stand || editorial.stand });
+      }
+      for (const stop of stops) {
+        // Koordinate für den älteren Pilotexport: https://www.openstreetmap.org/node/6473446805
+        const point = [stop.lat, stop.lon].every(Number.isFinite) ? [stop.lat, stop.lon]
+          : stop.id === 'priessallee' ? [52.0062764, 8.5491011] : null;
+        for (const item of stop.items || []) {
+          if (item.herkunft !== 'Nutzer' || !item.stand || !item.wert || /^(?:unbekannt|weiß nicht)$/i.test(item.wert)) continue;
+          const rules = (stop.profiles || []).flatMap((profile) => profile.rules.filter((rule) => rule[0] === item.id));
+          if (rules.length && rules.every((rule) => ['unbekannt', 'vorschlag'].includes(rule[1]))) continue;
+          const types = Object.keys(SB_PROFIL).filter((type) => stop.profiles?.some((profile) =>
+            profile.id === SB_PROFIL[type] && profile.rules.some((rule) => rule[0] === item.id)));
+          notes.push({ frage: item.label, text: `${item.label}: ${item.wert}.${item.lage ? ' Lage: ' + item.lage : ''}`,
+            names: [stop.name], point, groups: types.length ? types.flatMap((type) => FAQ_GROUPS[type] || []) : ['Alle'],
+            source: stop.quelle, stand: item.stand });
+        }
+      }
+      accessibilityLoadedAt = Date.now();
+      return notes;
+    }).catch(() => { accessibilityLoading = null; return []; });
+    return accessibilityLoading;
+  }
+
+  const noteSource = (note) => [note.source && 'Quelle: ' + note.source, note.stand && 'Stand: ' + note.stand].filter(Boolean).join('. ');
+  const noteMatchesProfile = (note) => !settings.access.on || note.groups.includes('Alle')
+    || note.groups.some((group) => (FAQ_GROUPS[settings.access.type] || []).includes(group));
+
+  async function findAccessibilityAnswer(question) {
+    const key = stemKey(question);
+    const notes = await accessibilityNotes();
+    const exact = notes.find((note) => stemKey(note.frage) === key && note.names.length);
+    let matches = exact ? [exact] : [];
+    if (!exact && /barriere|rollstuhl|rampe|querung|leitstreifen|leitsystem|pflaster|taster/i.test(question)) {
+      const place = notes.flatMap((note) => note.names).sort((a, b) => b.length - a.length)
+        .find((name) => stemKey(name).length > 4 && key.includes(stemKey(name)));
+      if (place) {
+        const topic = question.match(/rampe|querung|leitstreifen|leitsystem|pflaster|taster/i)?.[0].toLowerCase();
+        matches = notes.filter((note) => note.names.includes(place) && noteMatchesProfile(note)
+          && (!topic || (note.frage + ' ' + note.text).toLowerCase().includes(topic))).slice(0, topic ? 1 : 3);
+      }
+    }
+    if (!matches.length && /(?:barrieren? (?:gibt es|sind)|angaben (?:zur|über) barrierefreiheit)/i.test(question)
+        && /\b(hier|in der nähe|um mich herum)\b/i.test(question)) {
+      const current = rec?.last ? [rec.last.lat, rec.last.lon] : await myStart();
+      if (current) {
+        const near = notes.flatMap((note) => {
+          if (!noteMatchesProfile(note)) return [];
+          const point = note.point || faqPlace(note.names[0]);
+          if (!point) return [];
+          const distance = dist({ lat: current[0], lon: current[1] }, { lat: point[0], lon: point[1] });
+          return distance <= 200 ? [{ note, distance }] : [];
+        }).sort((a, b) => a.distance - b.distance);
+        matches = near.slice(0, 3).map(({ note }) => note);
+      }
+    }
+    return matches.map((note) => `${note.names[0]}. ${note.text} ${noteSource(note)}.`).join(' ');
+  }
+
   async function loadMapCoverage() {
-    const stops = await sbLaden();
-    mapCoverage = stops.flatMap((stop) => {
-      if (!stop.items?.some((item) => item.herkunft === 'Nutzer' && item.stand && item.wert && !/^(?:unbekannt|weiß nicht)$/i.test(item.wert))) return [];
-      // Der bestehende Pilotexport hat noch keine Koordinaten: https://www.openstreetmap.org/node/6473446805
-      const point = [stop.lat, stop.lon].every(Number.isFinite) ? [stop.lat, stop.lon]
-        : stop.id === 'priessallee' ? [52.0062764, 8.5491011] : [];
-      return point.length ? [{ stop, point }] : [];
-    });
+    const notes = await accessibilityNotes();
+    const locations = new Map();
+    for (const note of notes) {
+      for (const name of note.names) {
+        if (name === 'Bielefeld (allgemein)' && !note.point) continue;
+        const center = note.point || faqPlace(name);
+        if (!center) continue;
+        const point = center.slice(0, 2);
+        const key = point.join(',');
+        if (!locations.has(key)) locations.set(key, { name, point, notes: [] });
+        const group = locations.get(key);
+        if (!group.notes.includes(note)) group.notes.push(note);
+      }
+    }
+    mapCoverage = [...locations.values()];
     syncMapSources();
   }
 
@@ -3773,11 +3862,19 @@
     const list = $('#map-coverage-list');
     const visible = mapLayerOn('coverage') ? mapCoverage.filter(({ point }) => map.getBounds().contains(point)) : [];
     list.hidden = !visible.length;
-    list.innerHTML = visible.length ? '<summary>Orte mit Angaben zur Barrierefreiheit</summary><ul>' + visible.map(({ stop }) =>
-      `<li><strong>${esc(stop.name)}</strong> · ${esc(stop.quelle)} · Stand: ${esc(stop.stand)}</li>`).join('') + '</ul>' : '';
-    for (const { stop, point } of visible) {
+    const details = (notes) => notes.map((note) =>
+      `<details class="faq-mini"><summary>${esc(note.frage)}</summary><p>${esc(note.text)}</p><p class="small muted">${esc(noteSource(note))}</p>${canSpeak ? `<button type="button" class="btn quiet" data-coverage-read="${esc(note.text + ' ' + noteSource(note))}">Vorlesen</button>` : ''}</details>`).join('');
+    list.innerHTML = visible.length ? '<summary>Orte mit Angaben zur Barrierefreiheit</summary><ul>' + visible.map(({ name, notes }) =>
+      `<li><strong>${esc(name)}</strong>${details(notes)}</li>`).join('') + '</ul>' : '';
+    for (const { name, point, notes } of visible) {
+      const popup = document.createElement('div');
+      popup.innerHTML = `<strong>${esc(name)}</strong><br>Angaben zur Barrierefreiheit vorhanden${details(notes)}`;
+      popup.addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-coverage-read]');
+        if (button) speak(button.dataset.coverageRead, { now: true, force: true });
+      });
       L.circleMarker(point, { radius: 11, color: '#813700', weight: 2, fillColor: '#f49732', fillOpacity: 0.7 })
-        .bindPopup(`<strong>${esc(stop.name)}</strong><br>Angaben zur Barrierefreiheit vorhanden<br>${esc(stop.quelle)} · Stand: ${esc(stop.stand)}<br>${esc(stop.beschreibung)}`)
+        .bindPopup(popup, { maxWidth: 290, maxHeight: 300 })
         .addTo(group);
     }
   }
@@ -3794,7 +3891,7 @@
       map.on('moveend', () => { syncMapSources(); if (mapLayers.rad) { clearTimeout(radT); radT = setTimeout(drawRad, 300); } });
     }
     setTimeout(() => map.invalidateSize(), 50);
-    if (!mapCoverage) loadMapCoverage();
+    if (!mapCoverage || Date.now() - accessibilityLoadedAt >= 30 * 60000) loadMapCoverage();
     mapStatus('');
     const fit = [];
     // Meine Ampeln
@@ -3839,7 +3936,7 @@
       const keyText = { gut: 'Radweg, Fahrradstraße', ruhig: 'ruhige Straße', mittel: 'Radstreifen, Tempo 30', schlecht: 'ohne Radweg' };
       parts.push(`<div class="rad-keys">${Object.keys(RAD_CLS).map((k) => `<span class="rad-key"><i style="background:${RAD_CLS[k].col}"></i>${keyText[k]}</span>`).join('')}${stadt2 ? '<span class="rad-key"><i class="dash dark"></i>Radverkehrsnetz der Stadt</span>' : ''}</div><p class="muted">Radwege laut OpenStreetMap, nicht überall vollständig${stadt2 ? '; Radverkehrsnetz: Stadt Bielefeld (Open Data)' : ''}.</p>`);
     }
-    if (mapLayerOn('acc')) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' (Profil: ' + esc(ACCESS_LABEL[settings.access.type]) + ')' : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Blaues i mit gestrichelter Linie: Straße oder Platz mit Hinweisen aus der Altstadt-FAQ, die Linie zeigt, welcher Bereich gemeint ist${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
+    if (mapLayerOn('acc')) parts.push(`<p><b>Barrierefrei${settings.access.on ? ' (Profil: ' + esc(ACCESS_LABEL[settings.access.type]) + ')' : ''}:</b> Orte von „Bielefeld barrierefrei erleben“ (Bethel). Grün: passt, gelb: teilweise, rot: eher nicht, grau: keine Angabe. Blaue Punkte: rollstuhlgerechte Toiletten. Blaues P: Behindertenparkplatz (Stadt Bielefeld, OpenStreetMap). Hinweise aus der Altstadt-FAQ findest du unter „Erfasste Orte“${settings.access.on ? '' : '. Wähle in den Einstellungen dein Profil, dann zeigt die Karte, was für dich zählt'}.</p>`);
     if (mapLayerOn('tram')) parts.push(`<p><b>Stadtbahn:</b> Linien von Haltestelle zu Haltestelle, vereinfacht. Tippe auf eine Haltestelle für die nächsten Abfahrten.</p>${hst && Object.keys(hst.map).length ? `<div class="rad-keys"><span class="rad-key"><i style="background:${HST_COL.ja}"></i>Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.nein}"></i>kein Hochbahnsteig</span><span class="rad-key"><i style="background:${HST_COL.teilweise}"></i>teilweise</span></div><p class="muted">Laut Liste der Redaktion barrierefrAI, die Quelle steht bei der Haltestelle. Weiße Punkte: noch keine Angabe.</p>` : ''}${stadt2 && stadt2.pr.length ? '<p class="muted">Blaues P+R: Park + Ride mit Anzahl der Plätze (Stadt Bielefeld).</p>' : ''}`);
     if (mapLayerOn('coverage')) parts.push('<div class="rad-keys"><span class="rad-key"><i style="background:#f49732"></i>Angaben zur Barrierefreiheit vorhanden</span></div>');
     const n = (k) => (lageCounts[k] != null ? ` (${lageCounts[k]})` : '');
@@ -3937,34 +4034,9 @@
         .bindPopup(db ? `<strong>Aufzug: ${esc(stTxt)}</strong><br>${esc(a[3] || '')}${a[6] ? `<br>Innenbreite ${fmtNum(a[6], 2)} m` : ''}<br><span class="muted">DB InfraGO (OpenStation), Status alle 5 Minuten</span>`
           : '<strong>Aufzug</strong><br><span class="muted">Laut OpenStreetMap, ohne Angabe, ob er gerade geht</span>').addTo(g);
     }
-    await loadFaq();
-    if (faq && mapLayerOn('acc')) {
-      const type = settings.access.on ? settings.access.type : null;
-      for (const name of Object.keys(FAQ_PLACES)) {
-        if (name === 'Altstadt' || name === 'Innenstadt') continue;
-        const p = faqPlace(name);
-        const list = faq.eintraege.filter((e) => e.orte.includes(name) && e.id !== 'AS-35' && (!type || e.gruppen.includes('Alle') || e.gruppen.some((g) => (FAQ_GROUPS[type] || []).includes(g))));
-        if (!p || !list.length) continue;
-        const geo = bfData && bfData.faqOrte && bfData.faqOrte[name] && bfData.faqOrte[name].g;
-        if (geo) for (const l of geo) if (l.length > 1) L.polyline(l, { color: '#1d5fa6', weight: 4, opacity: 0.45, dashArray: '6 6', interactive: false }).addTo(g);
-        L.marker([p[0], p[1]], { icon: L.divIcon({ className: 'faq-pin', html: '<span>i</span>', iconSize: [26, 26] }), keyboard: true, title: 'Gut zu wissen: ' + name })
-          .bindPopup(`<strong>${esc(name)}</strong>${list.map((e) => `<details class="faq-mini"><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}<p class="small muted">Aus der Altstadt-FAQ von barrierefrAI</p>`, { maxWidth: 290, maxHeight: 300 }).addTo(g);
-      }
-    }
     try { await loadHinweise(); } catch (e) { /* ohne Hinweise weiter */ }
+    if (!mapLayerOn('acc')) return;
     for (const h of hinw || []) L.marker([h.lat, h.lon], { icon: hinwIcon(h.art, h.geprueft), title: HINW[h.art] || h.art }).bindPopup(() => hinwPopup(h), { maxWidth: 260 }).addTo(g);
-    if (faq && mapLayerOn('acc')) {
-      const type = settings.access.on ? settings.access.type : null;
-      const by = {};
-      for (const e of faqPunkte()) {
-        if (type && !e.gruppen.includes('Alle') && !e.gruppen.some((gr) => (FAQ_GROUPS[type] || []).includes(gr))) continue;
-        (by[e.lat + ',' + e.lon] = by[e.lat + ',' + e.lon] || []).push(e);
-      }
-      for (const list of Object.values(by)) {
-        L.marker([list[0].lat, list[0].lon], { icon: L.divIcon({ className: 'faq-pin punkt', html: '<span>i</span>', iconSize: [22, 22] }), title: 'Gut zu wissen: ' + list[0].frage })
-          .bindPopup(`${list.map((e) => `<details class="faq-mini"${list.length === 1 ? ' open' : ''}><summary>${esc(e.frage)}</summary>${faqHtml(e)}</details>`).join('')}<p class="small muted">Redaktion barrierefrAI</p>`, { maxWidth: 290, maxHeight: 300 }).addTo(g);
-      }
-    }
     for (const o of bfData.orte || []) {
       L.circleMarker([o.lat, o.lon], { radius: 9, color: '#ffffff', weight: 2, fillColor: bfColor(bfScore(o)), fillOpacity: 1 }).bindPopup(() => bfPopup(o), { maxWidth: 280, maxHeight: 260, autoPanPaddingTopLeft: [10, 60] }).addTo(g);
     }
@@ -4085,6 +4157,10 @@
   function stopMyLocation() {
     if (meWatch != null) { navigator.geolocation.clearWatch(meWatch); meWatch = null; }
   }
+  $('#map-coverage-list').addEventListener('click', (event) => {
+    const button = event.target.closest('button[data-coverage-read]');
+    if (button) speak(button.dataset.coverageRead, { now: true, force: true });
+  });
   $('#map-layers').addEventListener('click', (ev) => {
     const b = ev.target.closest('button[data-layer]');
     if (!b) return;
