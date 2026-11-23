@@ -71,3 +71,8 @@ main{min-width:0}
 .item,.kopf,.q{overflow-wrap:anywhere}
 .tabs a{white-space:nowrap;font-size:.88rem;padding:14px 2px}
 #objekt-msg{margin:.2em 0}
+
+#aufnahme-karte{height:clamp(200px,36vh,340px);margin:12px 0;border-radius:8px;isolation:isolate}
+#f-aufnahme>label{display:block;margin-top:12px}
+#f-aufnahme>input,#aufnahme-text{display:block;width:100%;margin-bottom:8px}
+#aufnahme-speichern{margin-top:12px}
