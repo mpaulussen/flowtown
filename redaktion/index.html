@@ -9,6 +9,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="../icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../icon-192.png">
+<link rel="stylesheet" href="../vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -32,6 +33,7 @@
 
   <section id="v-liste" class="view" hidden aria-labelledby="h-liste">
     <h1 id="h-liste">Objekte</h1>
+    <p><a class="btn primary" href="#/aufnahme">Hinweis aufnehmen (Probe)</a></p>
     <form class="filter" id="f-filter" aria-label="Filter">
       <label>Gebiet<select id="fl-gebiet"></select></label>
       <label>Priorität<select id="fl-prio"><option value="1">1 (zuerst)</option><option value="2">2</option><option value="3">3</option><option value="">alle</option></select></label>
@@ -50,6 +52,30 @@
     <p id="objekt-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="checkliste"></div>
     <details class="verlauf"><summary>Verlauf</summary><ul id="verlauf"></ul></details>
+  </section>
+
+  <section id="v-aufnahme" class="view" hidden aria-labelledby="h-aufnahme">
+    <a class="back" href="#/liste">‹ Liste</a>
+    <h1 id="h-aufnahme">Hinweis aufnehmen</h1>
+    <form id="f-aufnahme">
+      <button class="btn" type="button" id="aufnahme-gps">Meinen Standort setzen</button>
+      <p class="muted">Tippe auf die Karte oder gib die Koordinaten ein. Prüfe, ob der Punkt auf der richtigen Wegseite liegt.</p>
+      <div id="aufnahme-karte" role="region" aria-label="Karte zum Setzen des Hinweispunkts"></div>
+      <div class="filter">
+        <label>Breitengrad<input id="aufnahme-lat" type="number" step="any" min="-90" max="90" required></label>
+        <label>Längengrad<input id="aufnahme-lon" type="number" step="any" min="-180" max="180" required></label>
+      </div>
+      <label for="aufnahme-name">Ort oder Straße</label>
+      <input id="aufnahme-name" maxlength="100" required>
+      <label for="aufnahme-text">Was hast du beobachtet?</label>
+      <p class="muted">Zum Diktieren kannst du auch das Mikrofon deiner Handy-Tastatur verwenden.</p>
+      <textarea id="aufnahme-text" maxlength="700" rows="4" required></textarea>
+      <button class="btn" type="button" id="aufnahme-stimme" hidden>Diktieren</button>
+      <label for="aufnahme-lage">Woran erkennt man die Stelle? (freiwillig)</label>
+      <input id="aufnahme-lage" maxlength="250" placeholder="Zum Beispiel direkt neben dem Ampelmast">
+      <button class="btn primary" id="aufnahme-speichern" type="submit">Als Entwurf speichern</button>
+      <p id="aufnahme-msg" class="msg" role="status" aria-live="polite"></p>
+    </form>
   </section>
 
   <section id="v-entwuerfe" class="view" hidden aria-labelledby="h-entw">
@@ -78,6 +104,7 @@
   <a href="#/bericht" data-t="bericht">Bericht</a>
   <a href="#/mehr" data-t="mehr">Mehr</a>
 </nav>
+<script src="../vendor/leaflet/leaflet.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

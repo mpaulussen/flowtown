@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.8';
+  const VERSION = '0.112.9';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3798,7 +3798,8 @@
   let accessibilityLoading, accessibilityLoadedAt = 0;
   function accessibilityNotes() {
     if (accessibilityLoading && (!accessibilityLoadedAt || Date.now() - accessibilityLoadedAt < 30 * 60000)) return accessibilityLoading;
-    accessibilityLoading = Promise.all([loadFaq(), sbLaden()]).then(([editorial, stops]) => {
+    const fieldNotes = apiBase() ? api('/api/ortshinweise', { cache: 'no-cache' }).catch(() => null) : null;
+    accessibilityLoading = Promise.all([loadFaq(), sbLaden(), fieldNotes]).then(([editorial, stops, field]) => {
       const notes = [];
       for (const { id, frage, antwort, orte, gruppen, lat, lon, stand, quelle } of editorial?.eintraege || []) {
         if (id === 'AS-35' || !frage || !antwort) continue; // Krisenhilfe bleibt im Hilfebereich.
@@ -3821,6 +3822,11 @@
             source: stop.quelle, stand: item.stand });
         }
       }
+      for (const note of field?.hinweise || []) {
+        if (!note.name || !note.text || ![note.lat, note.lon].every(Number.isFinite)) continue;
+        notes.push({ frage: 'Hinweis von der Begehung', text: note.text + (note.lage ? ' Lage: ' + note.lage : ''),
+          names: [note.name], groups: ['Alle'], point: [note.lat, note.lon], source: 'Flowtown-Redaktion', stand: note.stand });
+      }
       accessibilityLoadedAt = Date.now();
       return notes;
     }).catch(() => { accessibilityLoading = null; return []; });
@@ -3840,11 +3846,11 @@
     const exact = notes.find((note) => stemKey(note.frage) === key && note.names.length)
       || (pharmacy && notes.find((note) => note.names.includes('Alter Markt') && /apotheke/i.test(note.frage)));
     let matches = exact ? [exact] : [];
-    if (!exact && /barriere|rollstuhl|rampe|querung|leitstreifen|leitsystem|pflaster|taster/i.test(question)) {
+    if (!exact && /barriere|rollstuhl|rampe|querung|leitstreifen|leitsystem|pflaster|gehwegplatten?|taster/i.test(question)) {
       const place = notes.flatMap((note) => note.names).sort((a, b) => b.length - a.length)
         .find((name) => stemKey(name).length > 4 && key.includes(stemKey(name)));
       if (place) {
-        const topic = question.match(/rampe|querung|leitstreifen|leitsystem|pflaster|taster/i)?.[0].toLowerCase();
+        const topic = question.match(/rampe|querung|leitstreifen|leitsystem|pflaster|gehwegplatten?|taster/i)?.[0].toLowerCase();
         matches = notes.filter((note) => note.names.includes(place) && noteMatchesProfile(note)
           && (!topic || (note.frage + ' ' + note.text).toLowerCase().includes(topic))).slice(0, topic ? 1 : 3);
       }
