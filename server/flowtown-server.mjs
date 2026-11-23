@@ -4723,7 +4723,7 @@ if (cli === 'steckbrief-export') {
   // Bahnsteig-Steckbrief aus den Angaben der Redaktion: alle Objekte der Art stadtbahn_haltestelle mit Angaben.
   // Aufruf: steckbrief-export [Datei]   (ohne Datei: auf die Konsole). Die Datei wird danach ins Repo unter data/steckbrief.json übernommen.
   const cl = rChecklisten().stadtbahn_haltestelle || [];
-  const obj = rKatalog().filter((o) => o.art === 'stadtbahn_haltestelle').map((o) => ({ id: o.id, name: o.name }));
+  const obj = rKatalog().filter((o) => o.art === 'stadtbahn_haltestelle');
   const eintraege = steckbriefAus(obj, cl, rFakt);
   const text = JSON.stringify(eintraege, null, 1) + '\n';
   if (process.argv[3]) { fs.writeFileSync(process.argv[3], text); console.log(`${eintraege.length} Haltestelle(n) nach ${process.argv[3]} geschrieben.`); }
