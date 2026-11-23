@@ -662,6 +662,7 @@ details.setbox>summary::after{color:var(--muted);flex:none;margin-right:6px}
 .map-layers{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;margin:0 -16px;padding:2px 16px 4px;-webkit-overflow-scrolling:touch}
 .map-layers::-webkit-scrollbar{display:none}
 .layer-chip{flex:none;white-space:nowrap;font:inherit;font-size:15px;font-weight:700;min-height:44px;padding:8px 14px;border-radius:999px;border:1.5px solid var(--line);background:var(--surface);color:var(--fg);display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.layer-chip[hidden]{display:none}
 .layer-chip .ic{width:20px;height:20px}
 .layer-chip[aria-pressed="true"]{background:var(--accent);border-color:var(--accent);color:#fff}
 .layer-chip:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
