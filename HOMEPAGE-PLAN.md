@@ -71,7 +71,9 @@ Eine Startseite darf nur versprechen, was heute funktioniert. Diese Liste stammt
 ├── bielefeld/            Pilotgebiet und Stand        (NEU)
 ├── mitmachen/            Erfassen vor Ort, Kontakt    (NEU)
 ├── faq/                  Fragen und Antworten         (NEU)
-├── ueber-uns/            barrierefrAI, Partner, Förderer (NEU)
+├── aktuelles/            Beiträge zu Barrierefreiheit und Stand (NEU)
+├── fuer-kommunen/        Angebot für Kommunen und Betreiber (NEU)
+├── ueber-uns/            Team, Partner, Förderer      (NEU)
 ├── kontakt/              Kontakt                      (NEU)
 ├── app/                  Die Web-App (bisherige index.html, umgezogen)
 │   └── ?sprechen=1       Sprachmodus (Shortcut in der Manifest-Datei)
@@ -150,6 +152,22 @@ Die Texte sind Entwürfe. Sie folgen den Schreibregeln aus `WAS-FLOWTOWN-KANN.md
 - *Die App läuft im Browser. Zum Installieren: Browser-Menü, „Zum Startbildschirm hinzufügen“.*
 - Link: „Anleitung“ → `/app/#installieren` (Abschnitt auf der App-Seite oder in der FAQ)
 
+**i) Beispielkarte „Derselbe Ort, verschiedene Bedürfnisse“**
+- Eine Karte aus dem Steckbrief Prießallee (Probe): derselbe Bahnsteig, zwei Profile nebeneinander (zum Beispiel Rollstuhl und Sehen). Jede Zeile zeigt Angabe, Quelle und Stand.
+- Unter der Karte: *Du bekommst nicht alles angezeigt, was über einen Ort bekannt ist. Sondern das, was für dich wichtig ist.*
+- Hinweis: Die Karte ist ein Beispiel mit echten Daten der Probe. Sie zeigt keinen Live-Zustand, bis die Probe öffentlich freigegeben ist.
+
+**j) Entwicklungsstand (Statuskasten)**
+- Vier Stufen mit Datum, ehrlich und aktuell zu halten:
+  1. Konzept: steht.
+  2. Bedarf untersucht: Befragung und Testfahrten, Stand eintragen.
+  3. Technik geprüft: Server, Datenquellen, Assistenz laufen als Prototyp.
+  4. Pilot Bielefeld: Erprobung mit der Redaktion, Stand eintragen.
+- Überschrift: *Wo wir stehen.* Darunter: *Flowtown ist ein Prototyp. Angaben beschreiben den Stand heute, nicht einen flächendeckenden Dienst.*
+
+**k) Datenschutz in einem Satz**
+- *Diese Seite setzt keine Cookies und keine Tracker.* Verweis auf `/datenschutz/`.
+
 **i) Abschluss**
 - Wiederholung „App öffnen“, Hinweis „Barrierefrei heißt für uns: Jede Angabe hat einen Stand und eine Quelle.“
 
@@ -209,8 +227,33 @@ Mindestens diese Fragen, mit Antworten aus dem Repo:
 
 ### 5.8 Über uns `/ueber-uns/`
 - barrierefrAI, Dr. Markus Paulußen, Bielefeld. Kurze Beschreibung, warum das Projekt entstanden ist.
-- Partner und Förderer: nur nennen, was schriftlich zugesagt ist. Sonst Platzhalter: *Partner werden hier genannt, sobald sie zugestimmt haben.*
+- **Team:** Namen, Rolle und ein Satz zum Hintergrund je Person. Nur mit schriftlicher Zustimmung der Person. Bis dahin nur die Rolle und der Name des Projektverantwortlichen.
+- **Unterstützer und Förderer:** Logos und Ausschnitt „Gefördert durch“ nur mit schriftlicher Zusage. Sonst Platzhalter: *Partner werden hier genannt, sobald sie zugestimmt haben.*
+- **Botschafterinnen und Botschafter:** Eine Person mit Namen und Zitat nur mit Zusage, die Zusage muss auf der Seite nachvollziehbar sein (Datum, Zitat freigegeben).
 - Hintergrund für Förderer (aus `WAS-FLOWTOWN-KANN.md`): „Barriere-Atlas von unten“ als Idee, nicht als Zusage.
+
+### 5.8a Aktuelles `/aktuelles/` (NEU)
+- Überschrift: *Aktuelles: Stand, Pilot und Gedanken zu Barrierefreiheit.*
+- Drei Arten von Beiträgen:
+  1. **Meilensteine:** Pilotstart, neue Pilotorte, neue Funktionen. Jeder Beitrag mit Datum und dem Hinweis, ob es heute schon gilt oder nur geplant ist.
+  2. **Hintergrund:** Warum Barrieren im Alltag wichtig sind. Beispiele aus Bielefeld, bei denen Flowtown Fakten belegt. Beispiel-Themen: Evakuierung mit Behinderung, Aufzüge und Ausfälle, Stufen am Eingang.
+  3. **Fachliches:** Wie Flowtown prüft (Vertrauensstufen, Frischeklassen), was Datenquellen liefern und was fehlt.
+- Regeln für jeden Beitrag: keine Zahlen ohne Quelle, keine Zusagen („sicher“, „frei“), Zitate nur mit Freigabe.
+- Die Liste zeigt die neuesten Beiträge zuerst. Ein Beitrag hat Titel, Datum, Kurztext und eine Seite.
+- Technik: einfache Liste aus einer JSON-Datei oder einem Ordner mit HTML-Seiten. Kein CMS im ersten Schritt.
+- Startbestand: mindestens zwei Beiträge zum Launch, sonst ist die Seite leer und wird nicht verlinkt.
+
+### 5.8b Für Kommunen und Betreiber `/fuer-kommunen/` (NEU)
+- Überschrift: *Wo Informationen zur Barrierefreiheit fehlen, sehen Sie es zuerst.*
+- Zielgruppe: Stadt Bielefeld, Verkehrsbetriebe, Einrichtungen mit Publikumsverkehr, Hochschulen.
+- Was Flowtown anbieten kann (nur, was heute belegt ist):
+  - **Lückenbericht:** Aus den Fragen der Nutzenden, die Flowtown nicht beantworten konnte, entsteht eine Liste, wo Angaben fehlen. Keine Personendaten, nur Monat, Thema, Ort und Profilart. Grundlage ist der Lückenzähler im Server.
+  - **Rückmeldungen:** Hinweise „Stimmt nicht“ und „Veraltet“ mit Angabe, zu welchem Objekt sie gehören.
+  - **Redaktion vor Ort:** Prüfung von Eingängen, Aufzügen und Haltestellen durch Mitwirkende, mit Herkunft und Stand.
+- Was Flowtown **nicht** anbietet: keine Zertifizierung, kein Gütesiegel, keine Garantie, keine Datenweitergabe an Dritte.
+- Kontakt für Gespräche: Verweis auf `/kontakt/` mit Betreff „Kommune“ oder „Betreiber“.
+- Hinweis zur Datenlage: Der Bericht ist eine Arbeitsgrundlage. Die Entscheidung über Änderungen bleibt beim Betreiber.
+- Offen: Ob Flowtown einen Bericht für Partner regelmäßig liefert (siehe Entscheidung 9).
 
 ### 5.9 Kontakt `/kontakt/`
 - E-Mail: info@barrierefrai.com (steht schon in `nutzung.html`).
@@ -268,7 +311,8 @@ Mindestens diese Fragen, mit Antworten aus dem Repo:
 - Schriften: Atkinson Hyperlegible (gut lesbar bei Sehbehinderung) und Bricolage Grotesque (Überschriften). Beide liegen schon lokal in `vendor/fonts/`, also **kein Google-Font-Aufruf** (Datenschutz).
 - Farben: Die Token `--accent`, `--amber-tint`, `--muted` und `--line` aus `style.css` übernehmen. Hell und dunkel per `prefers-color-scheme`.
 - Kein Framework, kein Build. Menü und Stand-Datum in `site.js`.
-- Keine Tracker, keine externen Skripte. Falls Zählung gewünscht: nur ohne Cookies, in der Datenschutzerklärung erwähnt.
+- Keine Tracker, keine externen Skripte. Falls Zählung gewünscht: nur ohne Cookies, in der Datenschutzerklärung erwähnt. Die Startseite sagt „keine Cookies“ (Abschnitt 5.1 k).
+- Bildsprache: keine KI-generierten Bilder und keine Stockfotos. Echte Fotos nur mit Zustimmung, keine Personen ohne Zustimmung. Wo ein Bild nicht belegt ist, ersetzt eine klare Grafik das Foto. Ein Maskottchen ist nicht vorgesehen.
 - Eine **Fassung in einfacher Sprache** der Startseite (Phase 2): Die Zielgruppe „Lernen und einfache Sprache“ ist im Profil vorgesehen.
 
 ### Barrierefreiheit der Seiten (Prüfkriterien)
@@ -330,6 +374,14 @@ Mindestens diese Fragen, mit Antworten aus dem Repo:
    Vorschlag: zunächst Pages, eigene Domain später. Die Redirect-Regel funktioniert in beiden Fällen.
 7. **Kontaktweg:** nur E-Mail, kein Formular.
    Vorschlag: ja.
+8. **Seite „Aktuelles“:** Start mit mindestens zwei Beiträgen, danach regelmäßig?
+   Vorschlag: ja, zum Launch zwei Beiträge (Pilotstart und Erklärung „Belegt statt geraten“), dann etwa alle zwei bis vier Wochen. Die Taktung bestimmt die Redaktion.
+9. **Angebot für Kommunen und Betreiber:** Lückenbericht als regelmäßige Lieferung oder nur auf Anfrage?
+   Vorschlag: zunächst auf Anfrage, weil der Bericht erst mit einem Pilotpartner geprüft werden sollte. Vorher klären, welche Daten davon wirklich ohne Personenbezug stammen.
+10. **Team und Unterstützer auf der Startseite:** Zustimmung einholen, bevor Namen erscheinen.
+    Vorschlag: Namen und Logos erst nach schriftlicher Zusage. Bis dahin Platzhalter, siehe Abschnitt 5.8.
+11. **Statuskasten:** Welche Daten stehen drin (Konzept, Befragung, Technik, Pilot)?
+    Vorschlag: nur Daten, die belegt sind, mit Datum. Keine Platzhalter mit geplanten Terminen.
 
 ---
 
