@@ -3375,7 +3375,7 @@
   let faqAt = 0;
   async function loadFaq() {
     if (faq && Date.now() - faqAt < 30 * 60000) return faq;
-    const bundled = fetch('data/altstadt-faq.json').then((r) => r.ok ? r.json() : null).catch(() => null);
+    const bundled = fetch('../data/altstadt-faq.json').then((r) => r.ok ? r.json() : null).catch(() => null);
     const remote = apiBase() ? api('/api/faq', { cache: 'no-cache' }).catch(() => null) : null;
     const [local, live] = await Promise.all([bundled, remote]);
     if (live?.eintraege?.length || local?.eintraege?.length) {
@@ -6657,7 +6657,7 @@
   let sbDaten = null, sbLadeZ = null, sbStop = null, sbProfil = null, sbModus = 'alles', sbSeit = '';
   function sbLaden() {
     if (sbDaten) return Promise.resolve(sbDaten);
-    if (!sbLadeZ) sbLadeZ = fetch('data/steckbrief.json').then((r) => r.json()).then((d) => (sbDaten = Array.isArray(d) ? d : [])).catch(() => (sbDaten = []));
+    if (!sbLadeZ) sbLadeZ = fetch('../data/steckbrief.json').then((r) => r.json()).then((d) => (sbDaten = Array.isArray(d) ? d : [])).catch(() => (sbDaten = []));
     return sbLadeZ;
   }
   // zuletzt gesehener Stand je Haltestelle, nur auf diesem Handy

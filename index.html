@@ -3,666 +3,232 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<title>Flowtown</title>
-<meta name="description" content="Flowtown – Die grüne Welle beginnt bei dir. Weniger Stopps, weniger Sprit, in der Stadt und auf der Autobahn. Prototyp: zeichnet Halte an Ampeln auf und zeigt, wo du wartest.">
+<title>Flowtown · Dein Weg, mit Auto, Öffis, Fahrrad und barrierefrei</title>
+<meta name="description" content="Flowtown zeigt dir deinen Weg mit Auto, Bus und Bahn, Fahrrad oder zu Fuß, mit barrierefreien Angaben, Quelle und Stand. Prototyp für Bielefeld.">
 <meta name="theme-color" content="#f7f7f5">
 <meta name="color-scheme" content="light">
-<link rel="manifest" href="manifest.webmanifest">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
-<link rel="apple-touch-icon" href="icon-192.png">
-<meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="Flowtown">
-<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
-<link rel="stylesheet" href="style.css">
+<link rel="icon" href="app/icon.svg" type="image/svg+xml">
+<script>
+/* Installierte Handy-Apps und alte Einladungslinks starten bisher im Root. Die App liegt jetzt unter app/. */
+(function () {
+  try {
+    var standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || window.navigator.standalone === true;
+    var q = location.search || '';
+    if (standalone || /[?&](code|sprechen)=/.test(q)) location.replace('app/' + q + location.hash);
+  } catch (e) { /* ohne Weiterleitung bleibt die Startseite */ }
+  /* Der frühere Dienst-Worker im Root würde die Startseite mit der alten App überdecken. */
+  try {
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then(function (regs) {
+      regs.forEach(function (r) { if (!/\/app\//.test(r.scope)) r.unregister(); });
+    });
+  } catch (e) { /* ohne Dienst-Worker ist nichts zu tun */ }
+})();
+</script>
+<style>
+@font-face{font-family:"Atkinson Hyperlegible";font-style:normal;font-weight:400;font-display:swap;src:url(vendor/fonts/atkinson-hyperlegible-latin-400-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Atkinson Hyperlegible";font-style:normal;font-weight:700;font-display:swap;src:url(vendor/fonts/atkinson-hyperlegible-latin-700-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+@font-face{font-family:"Bricolage Grotesque";font-style:normal;font-display:swap;font-weight:200 800;src:url(vendor/fonts/bricolage-grotesque-latin-wght-normal.woff2) format("woff2");unicode-range:U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD}
+:root{--bg:#f7f7f5;--surface:#ffffff;--fg:#15191e;--muted:#5b636b;--body:#3d444c;--line:#dadfd8;--accent:#17784f;--accent-ink:#0f5c3c;--tint:#e3f2ea;--shadow:0 1px 2px rgba(21,25,30,.05),0 8px 24px rgba(21,25,30,.07);--shadow-lift:0 2px 4px rgba(21,25,30,.06),0 14px 34px rgba(21,25,30,.10)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#15191e;--surface:#1d232a;--fg:#f2f4f1;--muted:#a9b1b8;--body:#cfd6dc;--line:#333d46;--accent:#3fbf84;--accent-ink:#8fe0b8;--tint:#1f3a2e;--shadow:none;--shadow-lift:none}}
+:root[data-theme="dark"]{--bg:#15191e;--surface:#1d232a;--fg:#f2f4f1;--muted:#a9b1b8;--body:#cfd6dc;--line:#333d46;--accent:#3fbf84;--accent-ink:#8fe0b8;--tint:#1f3a2e;--shadow:none;--shadow-lift:none}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font-family:"Atkinson Hyperlegible",system-ui,sans-serif;font-size:18px;line-height:1.5;-webkit-text-size-adjust:100%}
+a{color:var(--fg)}
+a:hover{color:var(--accent-ink)}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px}
+img{max-width:100%;display:block}
+.display{font-family:"Bricolage Grotesque","Atkinson Hyperlegible",system-ui,sans-serif;font-weight:800;letter-spacing:-.03em;line-height:.98;margin:0}
+.wrap{max-width:1120px;margin:0 auto;padding:0 40px}
+.skip{position:absolute;left:-9999px;top:8px;background:var(--surface);padding:10px 14px;border-radius:10px;z-index:10}
+.skip:focus{left:12px}
+.k{font-size:13px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.btn{display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:0 26px;border-radius:999px;border:2px solid var(--accent);background:var(--accent);color:#fff;font:inherit;font-size:19px;font-weight:700;text-decoration:none}
+.btn:hover{color:#fff;filter:brightness(1.06)}
+.btn-line{display:inline-flex;align-items:center;justify-content:center;min-height:56px;padding:0 26px;border-radius:999px;border:2px solid var(--fg);background:transparent;color:var(--fg);font:inherit;font-size:19px;font-weight:700;text-decoration:none}
+.topnav{display:flex;gap:24px;font-size:17px;font-weight:700;flex-wrap:wrap}
+.phone{border:9px solid #15191e;border-radius:46px;background:#15191e;box-shadow:var(--shadow-lift);overflow:hidden}
+.phone img{width:100%;height:auto;border-radius:36px}
+.frame{margin:0;justify-self:center;width:340px;max-width:100%}
+.cap{font-size:15px;color:var(--muted);margin-top:14px;text-align:center}
+.sec{padding-top:88px}
+.sec h2{font-size:clamp(34px,4.2vw,52px);margin:14px 0 0;max-width:820px}
+.grid4{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:20px;margin-top:40px}
+.grid3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:22px;margin-top:40px}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:20px;padding:26px;box-shadow:var(--shadow)}
+.card h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:26px;letter-spacing:-.02em;margin:0 0 10px;line-height:1.1}
+.card p{margin:0;color:var(--body)}
+.num{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:50%;background:var(--accent);color:#fff;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:19px}
+.chip{display:inline-block;font-size:17px;padding:10px 16px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--fg)}
+.row{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:72px;align-items:center}
+.row.flip > :first-child{order:2}
+.row p.lead{font-size:20px;line-height:1.55;color:var(--body);margin:0 0 16px}
+.big{font-size:clamp(30px,3.6vw,40px);margin:14px 0 18px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:28px;padding:48px;box-shadow:var(--shadow)}
+.profiles{display:flex;flex-wrap:wrap;gap:10px;margin-top:22px}
+.foot{background:#15191e;color:#f2f4f1;padding:40px 0}
+.foot a{color:#f2f4f1}
+@media (max-width: 960px){.grid4{grid-template-columns:repeat(2,minmax(0,1fr))}.grid3{grid-template-columns:1fr}.row{grid-template-columns:1fr;gap:36px}.row.flip > :first-child{order:0}.panel{padding:28px}.hero{flex-direction:column!important;align-items:stretch!important}.frame{width:300px}}
+@media (max-width: 560px){.wrap{padding:0 16px}.grid4{grid-template-columns:1fr}.sec{padding-top:64px}.topnav{display:none}.hero h1{font-size:44px!important}.hero p.lead{font-size:19px}}
+@media (prefers-reduced-motion: reduce){*{scroll-behavior:auto!important}}
+</style>
 </head>
 <body>
-<svg class="sprite" aria-hidden="true" focusable="false">
-  <symbol id="i-handset" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2z"/></symbol>
-  <symbol id="i-car" viewBox="0 0 24 24"><path d="M4 16V12.2l2-5.3A2 2 0 0 1 7.9 5.6h8.2a2 2 0 0 1 1.9 1.3l2 5.3V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1z"/><path d="M4 12.2h16M6.5 17v2M17.5 17v2"/><circle cx="8" cy="14.5" r=".9" fill="currentColor"/><circle cx="16" cy="14.5" r=".9" fill="currentColor"/></symbol>
-  <symbol id="i-bike" viewBox="0 0 24 24"><circle cx="5.5" cy="16.5" r="3.5"/><circle cx="18.5" cy="16.5" r="3.5"/><path d="M5.5 16.5 9 9h6l3.5 7.5M9 9l3 7.5H5.5M15 9l-1.2-3.2H11.5"/></symbol>
-  <symbol id="i-bus" viewBox="0 0 24 24"><rect x="4" y="3" width="16" height="15" rx="3"/><path d="M4 11h16M8 18v3M16 18v3"/><circle cx="8" cy="14.5" r=".9" fill="currentColor"/><circle cx="16" cy="14.5" r=".9" fill="currentColor"/></symbol>
-  <symbol id="i-tram" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="13" rx="3"/><path d="M5 11h14M9 2h6M12 2v3M8.5 21l1.5-3M15.5 21 14 18"/><circle cx="9" cy="14.5" r=".9" fill="currentColor"/><circle cx="15" cy="14.5" r=".9" fill="currentColor"/></symbol>
-  <symbol id="i-train" viewBox="0 0 24 24"><path d="M7 3h10a3 3 0 0 1 3 3v9a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3V6a3 3 0 0 1 3-3z"/><path d="M4 10h16M12 3v7M8 21l2-3M16 21l-2-3"/><circle cx="8.5" cy="14" r=".9" fill="currentColor"/><circle cx="15.5" cy="14" r=".9" fill="currentColor"/></symbol>
-  <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></symbol>
-  <symbol id="i-walk" viewBox="0 0 24 24"><circle cx="13" cy="4" r="2"/><path d="m9 21 2.5-6.5M11.5 14.5 14 17v4M12.5 8.5l-1 6M12.5 8.5 9 10.5l-1.5 3M12.5 8.5 15 11.5h3"/></symbol>
-  <symbol id="i-access" viewBox="0 0 24 24"><circle cx="11" cy="4" r="2"/><path d="M11 7.5V13h5l2.5 5.5"/><path d="M8 10.5a5.5 5.5 0 1 0 7.5 7"/></symbol>
-  <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="2.2"/><circle cx="18" cy="5" r="2.2"/><path d="M8.2 19H15a3.5 3.5 0 0 0 0-7H9a3.5 3.5 0 0 1 0-7h6.8"/></symbol>
-  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
-  <symbol id="i-bulb" viewBox="0 0 24 24"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.8 10.6c.6.5.8 1.2.8 1.9V16h6v-.5c0-.7.2-1.4.8-1.9A6 6 0 0 0 12 3z"/></symbol>
-  <symbol id="i-light" viewBox="0 0 24 24"><rect x="8" y="2" width="8" height="20" rx="3"/><circle cx="12" cy="7" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="17" r="1.6"/></symbol>
-  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16M7 17v-5M12 17V6M17 17v-8"/></symbol>
-  <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2zM9 4v14M15 6v14"/></symbol>
-  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 6h9M17 6h3M4 12h3M11 12h9M4 18h11M19 18h1"/><circle cx="15" cy="6" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="18" r="2"/></symbol>
-  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12-7.5z" fill="currentColor"/></symbol>
-  <symbol id="i-stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/></symbol>
-  <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13" r="8"/><path d="M12 9v4l2.5 2M9.5 2h5"/></symbol>
-  <symbol id="i-hourglass" viewBox="0 0 24 24"><path d="M6 3h12M6 21h12M7 3c0 4.5 10 5.5 10 9s-10 4.5-10 9M17 3c0 4.5-10 5.5-10 9s10 4.5 10 9"/></symbol>
-  <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m8 12.5 2.8 2.8L16 9.5"/></symbol>
-  <symbol id="i-euro" viewBox="0 0 24 24"><path d="M17.5 6.5a7 7 0 1 0 0 11M4 10h9M4 14h9"/></symbol>
-  <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 3l8 3v6c0 4.7-3.4 8-8 9-4.6-1-8-4.3-8-9V6z"/><path d="m9 12 2 2 4-4"/></symbol>
-  <symbol id="i-sos" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5"/><path d="M12 7.5v9M7.5 12h9" stroke-width="2.6"/></symbol>
-  <symbol id="i-phone" viewBox="0 0 24 24"><rect x="7" y="2" width="10" height="20" rx="2.5"/><path d="M11 18h2"/></symbol>
-  <symbol id="i-hand" viewBox="0 0 24 24"><path d="M8 13V5.5a1.5 1.5 0 0 1 3 0V11M11 10.5V4a1.5 1.5 0 0 1 3 0v6.5M14 10.5V5.5a1.5 1.5 0 0 1 3 0V14a7 7 0 0 1-7 7h-.5a6 6 0 0 1-5.2-3L3 15.2a1.5 1.5 0 0 1 2.6-1.5L8 16"/></symbol>
-  <symbol id="i-thumb" viewBox="0 0 24 24"><path d="M7 10v11M3 10h4v11H3zM7 10l4-7a2 2 0 0 1 3.1 2.1L13 9h5.3a2 2 0 0 1 2 2.4l-1.5 7.5a2.5 2.5 0 0 1-2.4 2.1H7"/></symbol>
-  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></symbol>
-  <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 16V4M7 9l5-5 5 5M5 21h14"/></symbol>
-  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></symbol>
-  <symbol id="i-flask" viewBox="0 0 24 24"><path d="M9 3h6M10 3v6l-5.5 9.5A1.7 1.7 0 0 0 6 21h12a1.7 1.7 0 0 0 1.5-2.5L14 9V3M7.5 15h9"/></symbol>
-  <symbol id="i-db" viewBox="0 0 24 24"><ellipse cx="12" cy="5.5" rx="8" ry="2.8"/><path d="M4 5.5v13c0 1.5 3.6 2.8 8 2.8s8-1.3 8-2.8v-13M4 12c0 1.5 3.6 2.8 8 2.8s8-1.3 8-2.8"/></symbol>
-  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M3.5 18a9 9 0 1 1 17 0"/><path d="m12 14 4-5"/></symbol>
-  <symbol id="i-pin" viewBox="0 0 24 24"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></symbol>
-  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12c2.5-5 5-5 7.5 0s5 5 7.5 0 3.5-3 5-3"/></symbol>
-  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20z"/><path d="M12 10v4.5M12 17.5v.01"/></symbol>
-  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01"/></symbol>
-  <symbol id="i-gps" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
-  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M8.5 21h7"/></symbol>
-  <symbol id="i-sound" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 6v12l-4.5-3.5H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
-  <symbol id="i-grid" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 12h16M12 4v16"/></symbol>
-  <symbol id="i-list" viewBox="0 0 24 24"><path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/></symbol>
-  <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/></symbol>
-  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5h10.5a4 4 0 0 0 .4-8 6 6 0 0 0-11.6 1.6A3.5 3.5 0 0 0 7 18.5z"/></symbol>
-  <symbol id="i-spark" viewBox="0 0 24 24"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/></symbol>
-  <symbol id="i-chevron" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></symbol>
-  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></symbol>
-  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16v-5a6 6 0 0 1 12 0v5l1.5 2h-15zM10 21h4"/></symbol>
-</svg>
-<header class="top">
-  <svg class="logo" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#D64933"/><circle cx="20" cy="7" r="5" fill="#F2B33D"/><circle cx="33" cy="7" r="5" fill="#2FA36B"/></svg>
-  <h1>Flowtown</h1>
-  <span class="proto">Prototyp</span>
-  <button type="button" class="refresh sos" id="btn-sos" aria-label="Notfall und Hilfe: Notrufnummern" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-sos"/></svg></button>
-  <button type="button" class="refresh mic" id="btn-mic" aria-label="Sprechen: Befehl sagen" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button>
-  <button type="button" class="refresh" id="btn-refresh" aria-label="Aktualisieren"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
+<a class="skip" href="#inhalt">Zum Inhalt springen</a>
+
+<header class="wrap" style="display:flex;justify-content:space-between;align-items:center;gap:16px;padding-top:24px;padding-bottom:24px;flex-wrap:wrap">
+  <a href="./" style="display:flex;align-items:center;gap:12px;text-decoration:none">
+    <svg width="40" height="14" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#D64933"/><circle cx="20" cy="7" r="5" fill="#F2B33D"/><circle cx="33" cy="7" r="5" fill="#2FA36B"/></svg>
+    <span class="display" style="font-size:24px">Flowtown</span>
+  </a>
+  <nav class="topnav" aria-label="Hauptnavigation">
+    <a href="#unterwegs">Unterwegs</a><a href="#so">So geht’s</a><a href="#karte">Karte</a><a href="#quellen">Quellen</a><a href="#bielefeld">Bielefeld</a>
+  </nav>
+  <a class="btn" href="app/" style="min-height:44px;padding:0 18px;font-size:16px">App öffnen</a>
 </header>
 
-<main id="main">
-  <p id="app-error" class="msg warn app-error" role="alert" hidden></p>
-  <!-- Einstieg beim ersten Start -->
-  <section id="view-welcome" class="view welcome" hidden aria-labelledby="h-welcome">
-    <div id="w-step1" class="w-step">
-    <header class="claim">
-      <p class="eyebrow">Willkommen bei Flowtown</p>
-      <h2 id="h-welcome" class="display">Die <em>grüne Welle</em><br>beginnt bei dir.</h2>
-      <p class="claim-sub">Besser ankommen in Bielefeld. Für alle, mit und ohne Behinderung.</p>
-    </header>
-    <div class="w-first">
-      <button id="w-voice" class="btn big w-voice" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Vorlesen und Ansagen einschalten</span></button>
-      <label class="check"><input type="checkbox" id="w-big"><span>Große Schrift</span></label>
+<main id="inhalt">
+
+<section class="wrap hero" style="display:flex;gap:64px;align-items:center;padding-top:44px;padding-bottom:80px">
+  <div style="flex:1 1 0;min-width:0">
+    <div class="k">Prototyp · Pilot Bielefeld</div>
+    <h1 class="display" style="font-size:76px;margin:18px 0 24px">Dein Weg, mit Auto, Öffis, Fahrrad und barrierefrei.</h1>
+    <p class="lead" style="font-size:22px;line-height:1.5;margin:0 0 34px;max-width:560px;color:var(--body)">Flowtown ist für alle, die unterwegs sind. Sag oder tippe, wohin du willst. Flowtown zeigt, womit du am besten ankommst und was auf dem Weg gilt, mit Quelle und Stand.</p>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">
+      <a class="btn" href="app/">App öffnen</a>
+      <a class="btn-line" href="#so">So geht’s</a>
     </div>
-    <ul class="tip-list intro-list" id="w-intro" aria-label="Das bekommst du">
-      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg></span><span class="tip-main"><b>Dein Weg</b><span>Sag, wohin du willst. Flowtown zeigt, womit du am besten ankommst.</span></span></div></li>
-      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg></span><span class="tip-main"><b>Gerade jetzt</b><span>Abfahrten, Störungen, Staus, Aufzüge. Und ein anderer Weg, wenn etwas ausfällt.</span></span></div></li>
-      <li class="tipcard"><div class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-wave"/></svg></span><span class="tip-main"><b>Dein Flow</b><span>Flowtown misst, wo du an Ampeln wartest. Das bleibt auf deinem Handy.</span></span></div></li>
+    <p style="font-size:16px;margin:18px 0 0;color:var(--muted)">Kostenlos. Ohne Konto. Keine Cookies.</p>
+  </div>
+  <figure class="frame" style="flex:0 0 360px;margin:0">
+    <div class="phone"><img src="assets/screens/start.png" width="780" height="1688" alt="Startbildschirm der App mit dem Knopf „Sprich mit Flowtown“, dem Suchfeld „Wohin möchtest du?“ und dem Knopf „Ohne Ziel aufzeichnen“"></div>
+    <figcaption class="cap">Der Startbildschirm der App.</figcaption>
+  </figure>
+</section>
+
+<section aria-label="Beispielfragen" style="background:var(--surface);border-top:1px solid var(--line);border-bottom:1px solid var(--line)">
+  <div class="wrap" style="padding-top:26px;padding-bottom:26px;display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+    <span class="k" style="margin-right:6px">Fragen zum Beispiel</span>
+    <span class="chip">„Womit komme ich heute am besten zur Uni?“</span>
+    <span class="chip">„Wann fährt die nächste Bahn ab Jahnplatz?“</span>
+    <span class="chip">„Wo finde ich einen Parkplatz für Menschen mit Behinderung?“</span>
+    <span class="chip">„Wo warte ich lange?“</span>
+  </div>
+</section>
+
+<section class="wrap sec" id="unterwegs" aria-labelledby="h-unterwegs">
+  <div class="k">Für alle, die unterwegs sind</div>
+  <h2 class="display" id="h-unterwegs">Jeder Weg hat seine Art, unterwegs zu sein.</h2>
+  <p class="lead" style="font-size:20px;line-height:1.55;color:var(--body);margin:18px 0 0;max-width:720px">Mit dem Auto, mit Bus und Bahn, mit dem Fahrrad oder zu Fuß, mit Kinderwagen, Rollator oder Rollstuhl. Flowtown vergleicht die Wege und zeigt, was für dich wichtig ist.</p>
+  <div class="grid4">
+    <article class="card"><h3>Mit dem Auto</h3><p>Parkplätze, Behindertenparkplätze, Baustellen und Sperrungen auf der Strecke.</p></article>
+    <article class="card"><h3>Mit Bus und Bahn</h3><p>Abfahrten, Störungen, Aufzüge und ein anderer Weg, wenn etwas ausfällt.</p></article>
+    <article class="card"><h3>Mit dem Fahrrad</h3><p>Radwege und Strecken. Angaben zu Ampeln und Querungen, mit Quelle und Stand.</p></article>
+    <article class="card"><h3>Zu Fuß</h3><p>Stufenlose Wege, Treppen vorher angesagt, Eingänge und Ruhezonen unterwegs.</p></article>
+  </div>
+</section>
+
+<section class="wrap sec" aria-labelledby="h-profil">
+  <div class="panel">
+    <div class="k">Barrierefrei heißt für jeden etwas anderes</div>
+    <h2 class="display big" id="h-profil">Was dich stört, ist für andere vielleicht kein Problem.</h2>
+    <p class="lead" style="font-size:20px;line-height:1.55;color:var(--body);margin:0;max-width:760px">Deshalb zeigt Flowtown nicht alles, was über einen Ort bekannt ist. Sondern das, was für dein Profil wichtig ist. Wer kein Profil braucht, lässt es aus.</p>
+    <div class="profiles" role="list" aria-label="Profile">
+      <span class="chip" role="listitem">Rollstuhl</span>
+      <span class="chip" role="listitem">Rollator oder Gehhilfe</span>
+      <span class="chip" role="listitem">Kinderwagen</span>
+      <span class="chip" role="listitem">Sehen</span>
+      <span class="chip" role="listitem">Hören</span>
+      <span class="chip" role="listitem">Einfache Sprache</span>
+      <span class="chip" role="listitem">Ruhe</span>
+      <span class="chip" role="listitem">Langsamer unterwegs</span>
+    </div>
+  </div>
+</section>
+
+<section class="wrap sec" id="so" aria-labelledby="h-so">
+  <div class="k">So geht’s</div>
+  <h2 class="display" id="h-so">Drei Schritte von der Frage zum Weg.</h2>
+  <div class="grid3">
+    <article class="card"><span class="num" aria-hidden="true">1</span><h3 style="margin-top:18px">Ziel sagen oder tippen</h3><p>„Ich möchte zur Uni.“ Du kannst fragen oder das Ziel ins Suchfeld tippen.</p></article>
+    <article class="card"><span class="num" aria-hidden="true">2</span><h3 style="margin-top:18px">Wege vergleichen</h3><p>Auto, Bus und Bahn, Rad und zu Fuß, jeweils mit den Angaben und dem Stand.</p></article>
+    <article class="card"><span class="num" aria-hidden="true">3</span><h3 style="margin-top:18px">Unterwegs bleiben</h3><p>Gerade jetzt: Störungen, Baustellen und Aufzüge. Mit einem Ersatzweg, wenn etwas ausfällt.</p></article>
+  </div>
+</section>
+
+<section class="wrap sec" aria-labelledby="h-weg">
+  <div class="row flip">
+    <div>
+      <div class="k">Dein Weg</div>
+      <h2 class="display big" id="h-weg">Lege deinen Weg einmal an.</h2>
+      <p class="lead">Zum Beispiel zur Arbeit. Flowtown vergleicht Auto, Bus und Bahn, Rad und zu Fuß, jeweils mit Quelle und Stand.</p>
+      <p class="lead" style="font-size:17px;color:var(--muted)">Ein Beispiel aus der App.</p>
+    </div>
+    <figure class="frame">
+      <div class="phone"><img src="assets/screens/dein-weg.png" width="780" height="1688" loading="lazy" alt="Bildschirm „Dein Weg jetzt“ mit dem Hinweis, einen Weg anzulegen, und dem Knopf „Weg anlegen“"></div>
+    </figure>
+  </div>
+</section>
+
+<section class="wrap sec" id="karte" aria-labelledby="h-karte">
+  <div class="row">
+    <div>
+      <div class="k">Die Karte</div>
+      <h2 class="display big" id="h-karte">Barrieren auf einen Blick.</h2>
+      <p class="lead">Filter für Barrierefrei, Behindertenparkplätze, Radwege und mehr. Ein Tipp auf einen Punkt zeigt die Angabe mit Quelle, zum Beispiel: „Rollstuhlgerechte Toilette, Stadt Bielefeld (Open Data)“.</p>
+      <p class="lead" style="font-size:17px;color:var(--muted)">Kartendaten: © OpenStreetMap-Mitwirkende</p>
+    </div>
+    <figure class="frame">
+      <div class="phone"><img src="assets/screens/karte.webp" width="920" height="2000" loading="lazy" alt="Karte mit Filter Barrierefrei und einem geöffneten Punkt: Rollstuhlgerechte Toilette am Jahnplatz, Quelle Stadt Bielefeld"></div>
+    </figure>
+  </div>
+</section>
+
+<section class="wrap sec" aria-labelledby="h-tipps">
+  <div class="row flip">
+    <div>
+      <div class="k">Tipps für dich</div>
+      <h2 class="display big" id="h-tipps">Tipps, die zu deinem Weg passen.</h2>
+      <p class="lead">Ist ein Profil eingestellt, zeigt Flowtown zuerst passende Tipps. Zum Beispiel: Speichere ein Ziel, dann siehst du, welche Haltestellen mit oder ohne Stufen erreichbar sind.</p>
+    </div>
+    <figure class="frame">
+      <div class="phone"><img src="assets/screens/tipps.png" width="780" height="1688" loading="lazy" alt="Bildschirm Tipps mit dem Hinweis „Für dich: Rollator oder Gehhilfe“ und der Karte „Speichere ein Ziel“"></div>
+    </figure>
+  </div>
+</section>
+
+<section class="wrap sec" id="quellen" aria-labelledby="h-quellen">
+  <div class="panel" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:48px;align-items:center">
+    <div>
+      <div class="k">Belegt statt geraten</div>
+      <h2 class="display big" id="h-quellen">Flowtown sagt, woher es das weiß.</h2>
+      <p class="lead">Jede Angabe trägt ihre Quelle und ihr Alter. Fehlt sie, steht dort „keine Angabe“. Unbekannt ist nie „passt“.</p>
+      <p style="margin:18px 0 0"><a href="#" style="font-weight:700;color:var(--accent-ink)">Wie Flowtown prüft →</a></p>
+    </div>
+    <ul style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:12px">
+      <li style="border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--bg)"><b>Rollstuhlgerechte Toilette, Jahnplatz</b><br><span style="color:var(--muted)">Quelle: Stadt Bielefeld (Open Data)</span></li>
+      <li style="border:1px solid var(--line);border-radius:16px;padding:18px;background:var(--bg)"><b>Eingang Seitenstraße: stufenlos</b><br><span style="color:var(--muted)">Quelle: Redaktion vor Ort, geprüft im Oktober</span></li>
+      <li style="border:1px dashed var(--muted);border-radius:16px;padding:18px"><b>Türbreite: keine Angabe</b><br><span style="color:var(--muted)">Vor Ort prüfen</span></li>
     </ul>
-    <section class="w-goals" aria-labelledby="w-mode-h">
-      <h3 id="w-mode-h">Womit bist du oft unterwegs?</h3>
-      <p class="small muted">Mehrere möglich. Flowtown vergleicht deine Wege danach.</p>
-      <div class="goal-chips" id="w-modes" role="group" aria-labelledby="w-mode-h"></div>
-    </section>
-    <section class="w-goals" aria-labelledby="w-goal-h">
-      <h3 id="w-goal-h">Was ist dir wichtig?</h3>
-      <p class="small muted">Mehrere möglich. Flowtown zeigt dir das zuerst.</p>
-      <div class="goal-chips" id="w-goals" role="group" aria-labelledby="w-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
-    </section>
-    <section class="w-access" aria-labelledby="w-acc-h">
-      <button type="button" class="acc-q acc-toggle" id="w-acc-h" aria-expanded="false" aria-controls="w-acc-body"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg><span>Barrierefrei unterwegs? Profil wählen</span><svg class="ic acc-chev" aria-hidden="true"><use href="#i-chevron"/></svg></button>
-      <div id="w-acc-body" hidden>
-      <div class="acc-chips" id="w-acc" role="group" aria-labelledby="w-acc-h"><button type="button" class="acc-chip" data-wacc="rollstuhl" aria-pressed="false">Rollstuhl</button><button type="button" class="acc-chip" data-wacc="rollator" aria-pressed="false">Rollator oder Gehhilfe</button><button type="button" class="acc-chip" data-wacc="sehen" aria-pressed="false">Ich sehe schlecht oder nichts</button><button type="button" class="acc-chip" data-wacc="hoeren" aria-pressed="false">Ich höre schlecht oder nichts</button><button type="button" class="acc-chip" data-wacc="lernen" aria-pressed="false">Einfache Sprache</button><button type="button" class="acc-chip" data-wacc="ruhe" aria-pressed="false">Ruhe und Pausen</button></div>
-      <p class="small muted">Ändern kannst du das jederzeit unter Mehr → Barrierefrei unterwegs.</p>
-      </div>
-    </section>
-    <p class="intro-note" id="w-intro-note"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Deine Fahrten bleiben auf deinem Handy. Keine Anmeldung, keine Werbung. Und ehrlich: Zu jeder Antwort sagt Flowtown, woher sie kommt.</span></p>
-    <button id="btn-intro-next" class="btn primary big go" type="button">Weiter</button>
-    <p class="small muted w-steps" id="w-steps1">Schritt 1 von 3</p>
-    </div>
-    <div id="w-step2" class="w-step" hidden>
-    <header class="page-head">
-      <p class="eyebrow">Schritt 2 von 3</p>
-      <h2 id="h-welcome2" class="display">Was darf Flowtown?</h2>
-      <p class="page-sub">Alles lässt sich später in den Einstellungen ändern.</p>
-    </header>
-    <fieldset class="card consent">
-      <legend class="sr-only">Was Flowtown darf</legend>
-      <label class="check"><input type="checkbox" id="w-lage" checked><span>Verkehrslage vor der Fahrt laden</span></label>
-      <p class="small muted">Lädt Stau und Baustellen für ganz Bielefeld. Über dich wird nichts gesendet.</p>
-      <label class="check"><input type="checkbox" id="w-wir"><span>Fahrten anonym beitragen</span></label>
-      <p class="small muted">Je Ampel nur Richtung, Zeitfenster und Wartezeit, damit alle sehen, wo es hakt.</p>
-      <label class="check"><input type="checkbox" id="w-ki"><span>KI-Einschätzung erlauben</span></label>
-      <p class="small muted">Nur auf Knopfdruck, zusammengefasste Werte an Mistral in der EU.</p>
-    </fieldset>
-    <div class="card pilot-box">
-      <h3>Machst du beim Pilot mit?</h3>
-      <label class="field" for="w-code">Pilot-Code (freiwillig)
-        <input id="w-code" type="text" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="FT-XXXX-XXXX">
-      </label>
-      <label class="check"><input type="checkbox" id="w-pilot"><span>Meine Fahrten für den Pilot übertragen</span></label>
-      <p class="small muted">Mit Code gehen deine Fahrten pseudonym an den Flowtown-Server: Halte an Ampeln, Zeiten, Strecke im 150-m-Raster, Bewertungen. Kein Name, keine Start- und Zielorte. Du kannst sie jederzeit löschen.</p>
-    </div>
-    <p class="small"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung lesen</a> · <a href="nutzung.html" target="_blank" rel="noopener">Nutzungsbedingungen</a></p>
-    <p id="welcome-msg" class="msg" role="status" aria-live="polite"></p>
-    <button id="btn-welcome" class="btn primary big go" type="button">Los geht’s</button>
-    <button id="btn-intro-back" class="btn quiet" type="button">Zurück</button>
-    </div>
-    <div id="w-step3" class="w-step" hidden>
-    <header class="page-head">
-      <p class="eyebrow">Schritt 3 von 3</p>
-      <h2 id="h-welcome3" class="display">Dein erster Weg</h2>
-      <p class="page-sub">Welchen Weg fährst du oft, zum Beispiel zur Arbeit? Flowtown prüft ihn gleich einmal und vergleicht Auto, Bus und Bahn, Rad und zu Fuß, mit Quelle und Stand.</p>
-    </header>
-    <div id="w-wege-form"></div>
-    <p class="small muted">Wenn du den Weg speicherst, geht Start und Ziel (auf etwa 100 m genau) und, falls gewählt, dein Profil einmal an den Flowtown-Server und HERE. Der Weg selbst bleibt auf deinem Handy.</p>
-    <button id="btn-w3-skip" class="btn quiet" type="button">Später, ich lege den Weg selbst an</button>
-    </div>
-  </section>
+  </div>
+</section>
 
-  <!-- Fahren -->
-  <section id="view-start" class="view" aria-labelledby="h-start">
-    <div class="ask-slot" id="ask-slot-start">
-      <!-- Frag Flowtown: eine Karte mit Feld und Beispielfragen, wandert auf Heute, Tipps und Verlauf; auf Wohin? nur das Feld -->
-    <section class="ask-hero" id="ask-hero" aria-labelledby="ask-hero-h" hidden>
-      <h3 class="ask-hero-kick" id="ask-hero-h"><span class="ask-hero-ic" aria-hidden="true"><svg class="ic"><use href="#i-spark"/></svg></span><span id="ask-hero-title">KI, die mit dir spricht</span></h3>
-      <p class="ask-hero-prof" id="ask-hero-prof" hidden><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg><span></span></p>
-      <p class="ask-hero-sub" id="ask-hero-sub"></p>
-      <div id="ask-hero-field">
-      <div class="ask-wrap" id="ask-wrap" hidden><form class="ask-bar" id="ask-bar" role="search"><button type="button" class="ask-mic" id="ask-mic" aria-label="Sprechen statt tippen" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button><label class="sr-only" for="ask-inp">Frag Flowtown: Frage eintippen</label><input id="ask-inp" type="text" placeholder="Frag Flowtown …" autocomplete="off" enterkeyhint="send"><button class="btn" type="submit">Fragen</button></form></div>
-      </div>
-      <div class="ask-ex" id="ask-ex" role="group" aria-label="Beispielfragen"></div>
-      <button type="button" class="ask-allow" id="ask-allow" hidden><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Für Antworten zu deinen Fahrten: Auswertung erlauben</span></button>
-    </section>
-    </div>
-    <div class="hero-wohin">
-      <button type="button" class="prof-btn" id="prof-btn" aria-label="Barrierefrei? Profil wählen"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg></button>
-    <header class="claim">
-      <svg class="claim-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg>
-      <p class="eyebrow" id="today-date"></p>
-      <h2 id="h-start" class="display">Besser ankommen mit Flowtown.</h2>
-      <p class="claim-sub">Navigation mit Sprache, einfach, direkt, barrierefrei.</p>
-    </header>
-    <div class="talk-hero" id="talk-hero" hidden>
-      <button type="button" class="talk-btn" id="talk-btn"><span class="tb-ic" aria-hidden="true"><svg class="ic"><use href="#i-mic"/></svg></span><span class="tb-tx"><b>Sprich mit Flowtown</b><small>Frag oder sag, wohin du willst.</small></span></button>
-    </div>
-    <section class="entry plan-card" id="plan-card" aria-labelledby="h-plan">
-      <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-route"/></svg></span><div><h3 id="h-plan" class="go-h">Wohin?</h3><p class="go-sub">Plane deinen Weg.</p></div></div>
-      <form id="plan-form" class="vf-form plan-form" role="search"><label class="sr-only" for="plan-q">Wohin? Ort, Adresse oder Einrichtung</label><input id="plan-q" type="search" placeholder="Wohin möchtest du?" autocomplete="off" enterkeyhint="search"><button class="btn plan-search" type="submit">Suchen</button><button type="button" class="plan-mic" id="plan-mic" aria-label="Ziel sprechen" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button></form>
-      <p class="small plan-note">Ziel und ungefährer Standort gehen an den Flowtown-Server und an HERE. Gespeichert wird nichts.</p>
-      <div id="plan-teaser"></div>
-      <button id="btn-plan" class="btn big plan-go quiet-go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Weg planen</span></button>
-    </section>
-    </div>
-    <section class="entry go-card" aria-labelledby="h-go">
-      <div class="go-head"><span class="go-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span><div><h3 id="h-go" class="go-h">Womit?</h3><p class="go-sub">Jetzt geht’s los.</p></div></div>
-    <div id="mode-box" class="mode-box">
-    <fieldset class="switch">
-      <legend>Womit?</legend>
-      <div class="switch-row">
-        <label><input type="radio" name="mgroup" value="auto" checked><span><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg>Auto</span></label>
-        <label><input type="radio" name="mgroup" value="rad"><span><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Rad</span></label>
-        <label><input type="radio" name="mgroup" value="oepnv"><span><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Bus &amp; Bahn</span></label>
-        <label><input type="radio" name="mgroup" value="fuss"><span><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg>Zu Fuß</span></label>
-      </div>
-      <div class="switch-row sub" id="pt-row" hidden>
-        <label><input type="radio" name="pt" value="bahn" checked><span><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</span></label>
-        <label><input type="radio" name="pt" value="bus"><span><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg>Bus</span></label>
-        <label><input type="radio" name="pt" value="zug"><span><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Zug</span></label>
-      </div>
-    </fieldset>
-    <button type="button" class="prof-line" id="prof-line"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg><span id="prof-line-text">Barrierefrei? Profil wählen</span><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg></button>
-    </div>
-    <div id="mode-slot-start"></div>
-    <div class="rec-row">
-      <button id="btn-start" class="btn big go" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-start-label">Ohne Ziel aufzeichnen</span></button>
-      <button id="btn-mode" class="mode-chip" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="mode-pop"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg><span class="sr-only" id="btn-mode-t">Verkehrsmittel: Auto. Ändern</span></button>
-    </div>
-    <div id="mode-pop" class="mode-pop" role="group" aria-label="Womit bist du unterwegs?" hidden>
-      <button type="button" data-setmode="auto"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg>Auto</button>
-      <button type="button" data-setmode="rad"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Rad</button>
-      <button type="button" data-setmode="fuss"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg>Zu Fuß</button>
-      <button type="button" data-setmode="bahn"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</button>
-      <button type="button" data-setmode="bus"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg>Bus</button>
-      <button type="button" data-setmode="zug"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg>Zug</button>
-    </div>
-    <p class="small go-note" id="go-note">Du fährst wie sonst. Flowtown misst Halte und Wartezeiten, ein Ziel brauchst du dafür nicht.</p>
-    </section>
-    <div id="acc-tips" class="acc-tips" hidden></div>
-    <p id="start-msg" class="msg" role="status" aria-live="polite"></p>
-    <div id="a2hs" class="a2hs" hidden></div>
-    <section class="lw nowcard" id="nowcard" aria-labelledby="h-now" hidden></section>
-    <button type="button" class="tag-link" id="tag-link" aria-label="Dein Weg heute öffnen">
-      <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-calendar"/></svg></span>
-      <span class="tag-tx"><b>Dein Weg heute</b><span id="tag-sub" class="small">Fahrten, Meldungen, Tipps</span></span>
-      <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
-    </button>
-  </section>
+<section class="wrap sec" id="bielefeld" aria-labelledby="h-bielefeld">
+  <div class="k">Bielefeld · Pilot</div>
+  <h2 class="display" id="h-bielefeld">Wir testen in Bielefeld.</h2>
+  <p class="lead" style="font-size:20px;line-height:1.55;color:var(--body);margin:18px 0 0;max-width:760px">Im Pilot sind die Altstadt, der Hauptbahnhof, Bethel und die Universität. Mehr Orte und Städte sind geplant, nicht zugesagt.</p>
+  <p style="margin:24px 0 0;display:flex;gap:14px;flex-wrap:wrap"><a class="btn" href="app/">App öffnen</a><a class="btn-line" href="mailto:info@barrierefrai.com?subject=Flowtown%20mitmachen">Mitmachen</a></p>
+</section>
 
-  <!-- Dein Weg heute: alles, was nicht zum Losgehen gehört -->
-  <section id="view-tag" class="view" hidden aria-labelledby="h-tag">
-    <button type="button" class="tag-back" id="tag-back"><svg class="ic" aria-hidden="true" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg>Heute</button>
-    <div class="hero-wohin hero-page hero-compact"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg><header class="page-head"><h2 id="h-tag" class="display">Dein Weg heute</h2></header></div>
-    <p id="tag-empty" class="small muted" hidden>Noch nichts zu zeigen. Sobald du fährst, siehst du hier deine Fahrten, Meldungen auf deinen Wegen und Tipps.</p>
-    <section class="today-list" aria-label="Fahrten und Meldungen"><div id="weg"></div><div id="st-detail"></div></section>
-    <div id="vorfahrt" class="vorfahrt" hidden></div>
-    <div id="tip-strip"></div>
-    <div class="fuer-dich" id="fuer-dich" hidden></div>
-    <details class="card hints" id="hints">
-      <summary class="card-head"><span class="chip"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg></span><h3>So klappt die Aufzeichnung</h3></summary>
-      <ul class="ilist">
-        <li><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg><span id="hint-hold">Handy in die Halterung, App geöffnet lassen. Der Bildschirm bleibt an.</span></li>
-        <li><svg class="ic" aria-hidden="true"><use href="#i-hand"/></svg><span id="hint-during">Während der Fahrt nichts antippen. Bewertet wird erst danach.</span></li>
-        <li><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg><span>Gespeichert werden nur Halte an Ampeln und Ampeln ohne Halt, keine Start- und Zielorte. Fährst du mit Ziel los, nur dessen Name.</span></li>
-      </ul>
-    </details>
-  </section>
-
-  <!-- Weg zum Ziel: Vergleich der Verkehrsmittel -->
-  <section id="view-best" class="view" hidden aria-labelledby="h-best">
-    <button id="btn-best-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>Heute</button>
-    <div class="hero-wohin hero-page hero-compact"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg><header class="page-head"><p class="eyebrow">Weg zu</p><h2 id="h-best" class="display">Ziel</h2></header></div>
-    <div id="best-wrap" aria-live="polite"></div>
-  </section>
-
-  <!-- Planen -->
-  <section id="view-plan" class="view" hidden aria-labelledby="h-plan-page">
-    <button id="btn-plan-back" class="back-link plan-back" type="button"><svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg><span id="plan-back-t">Heute</span></button>
-    <div class="hero-wohin hero-page"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg>
-    <header class="page-head"><h2 id="h-plan-page" class="display">Wohin?</h2><p class="page-sub" id="plan-sub"><b>Plane deinen Weg.</b> Ziel wählen, Flowtown zeigt die beste Strecke und die beste Abfahrt. Mit Profil auch barrierefreie Wege.</p></header>
-    </div>
-    <div class="ask-slot" id="ask-slot-plan"></div>
-    <div class="entry plan-mode"><div id="mode-slot-plan"></div></div>
-    <p id="plan-off" class="msg" hidden>Zum Planen braucht Flowtown den Server. Trag ihn unter Mehr → Server und Dienste ein.</p>
-    <div id="wohin" class="wohin"></div>
-  </section>
-
-  <!-- Aufzeichnung -->
-  <section id="view-drive" class="view" hidden aria-labelledby="h-drive">
-    <h2 id="h-drive" class="sr-only">Aufzeichnung läuft</h2>
-    <div class="leg-banner" id="leg-banner" role="status" aria-live="assertive" hidden></div>
-    <div class="nav-box" id="nav-box" hidden>
-      <div class="nav-next" role="status" aria-live="polite"><span class="nav-arrow" id="nav-arrow" aria-hidden="true"></span><span class="nav-what"><b id="nav-dist"></b><span id="nav-text"></span></span></div>
-      <p class="nav-rest" id="nav-rest"></p>
-      <button type="button" class="btn nav-rep" id="btn-nav-rep" aria-label="Letzte Ansage wiederholen"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg>Wiederholen</button>
-      <button type="button" class="btn nav-re" id="btn-nav-re" hidden><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg>Strecke neu berechnen</button>
-    </div>
-    <div class="drive-map" id="drive-map" aria-hidden="true" inert hidden></div>
-    <div class="drive-state" id="drive-state" role="status" aria-live="polite">Warte auf GPS …</div>
-    <div class="speed"><span id="drive-speed">–</span><small>km/h</small></div>
-    <p class="dir" id="drive-dir" aria-live="off"></p>
-    <p class="leg" id="drive-leg" hidden></p>
-    <p class="stop-line" id="drive-stop" role="status" aria-live="polite" hidden></p>
-    <dl class="counters">
-      <div><dt><svg class="ic" aria-hidden="true"><use href="#i-timer"/></svg><span id="lbl-drive-time">Fahrzeit</span></dt><dd id="drive-time">0:00</dd></div>
-      <div><dt><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg><span>Ampeln ohne Halt</span></dt><dd id="drive-pass">0</dd></div>
-      <div><dt><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg><span>Halte an Ampeln</span></dt><dd id="drive-halts">0</dd></div>
-      <div><dt><svg class="ic" aria-hidden="true"><use href="#i-hourglass"/></svg><span>Wartezeit</span></dt><dd id="drive-wait">0:00</dd></div>
-    </dl>
-    <p class="gps"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg><span id="drive-gps">GPS: –</span></p>
-    <p class="msg warn" id="drive-warn" hidden></p>
-    <div class="leg-suggest" id="leg-suggest" role="alert" hidden>
-      <p id="leg-suggest-text"></p>
-      <div class="leg-suggest-btns"><button id="btn-leg-yes" class="btn primary big" type="button"></button><button id="btn-leg-no" class="btn big" type="button">Nein</button></div>
-    </div>
-    <div class="mode-row" id="mode-row">
-      <p class="mode-q" id="mode-q">Unterwegs mit</p>
-      <div class="leg-chips" role="group" aria-label="Verkehrsmittel wechseln"><button type="button" class="leg-chip" data-leg="fuss" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-walk"/></svg><span>Zu Fuß</span></button><button type="button" class="leg-chip" data-leg="bahn" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg><span>Stadtbahn</span></button><button type="button" class="leg-chip" data-leg="bus" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bus"/></svg><span>Bus</span></button><button type="button" class="leg-chip" data-leg="zug" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg><span>Zug</span></button><button type="button" class="leg-chip" data-leg="auto" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg><span>Auto</span></button><button type="button" class="leg-chip" data-leg="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg><span>Rad</span></button></div>
-    </div>
-    <div class="voice-row">
-    <button id="btn-mic-drive" class="voice-toggle mic-drive" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg><span>Sprechen</span></button>
-    <button id="btn-voice" class="voice-toggle" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg><span>Ansagen aus</span></button>
-    <button id="btn-drive-map" class="voice-toggle" type="button" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg><span>Karte</span></button>
-    </div>
-    <div class="end-row">
-      <button id="btn-end" class="btn danger big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-stop"/></svg><span id="btn-end-label">Fahrt beenden</span></button>
-      <button id="btn-end-confirm" class="btn danger big" type="button" hidden>Ja, beenden</button>
-      <button id="btn-end-cancel" class="btn big" type="button" hidden><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg><span id="btn-cont-label">Weiterfahren</span></button>
-    </div>
-  </section>
-
-  <!-- Bewertung -->
-  <section id="view-review" class="view" hidden aria-labelledby="h-review">
-    <span class="st-label hist" id="review-label">Fahrt beendet</span>
-    <h2 id="h-review" class="st-title">Wie war deine Fahrt?</h2>
-    <div id="review-head" class="review-head"></div>
-    <h3 class="ask-title" id="review-ask">Wie war es an den Ampeln?</h3>
-    <div id="review-list" class="list"></div>
-    <details class="more-box" id="review-more"><summary><svg class="ic" aria-hidden="true"><use href="#i-list"/></svg>Alle Details</summary>
-      <div id="review-summary" class="pills"></div>
-      <div id="review-bilanz"></div>
-    </details>
-    <button id="btn-review-done" class="btn primary big" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Fertig</button>
-    <button id="btn-review-delete" class="btn quiet" type="button"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg><span>Diese Aufzeichnung löschen</span></button>
-  </section>
-
-  <!-- Tipps -->
-  <section id="view-tips" class="view" hidden aria-labelledby="h-tips">
-    <div class="hero-wohin hero-page"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg>
-    <header class="page-head"><h2 id="h-tips" class="display">Tipps für deinen Weg.</h2><p class="page-sub" id="tips-small"></p></header>
-    <div class="ask-slot" id="ask-slot-tips"></div>
-    </div>
-    <div id="tips-body" class="tip-list"></div>
-    <p class="note"><svg class="ic" aria-hidden="true"><use href="#i-info"/></svg><span>Aus deinen Fahrten, auf deinem Gerät ausgewertet.</span></p>
-  </section>
-
-  <!-- Statistik -->
-  <section id="view-stats" class="view" hidden aria-labelledby="h-stats">
-    <div class="hero-wohin hero-page"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg>
-    <header class="page-head row"><h2 id="h-stats" class="display">Dein Verlauf mit Flowtown.</h2>
-    <div class="seg pill" id="stats-range" role="group" aria-label="Zeitraum">
-      <button type="button" data-range="week" aria-pressed="true">Woche</button><button type="button" data-range="month" aria-pressed="false">Monat</button><button type="button" data-range="all" aria-pressed="false">Alles</button>
-    </div></header>
-    <p class="page-sub" id="stats-small"></p>
-    <div class="ask-slot" id="ask-slot-stats"></div>
-    </div>
-    <p id="stats-demo" class="msg warn" hidden>Enthält Demo-Daten aus der Testfahrt.</p>
-    <div id="stats-body"></div>
-  </section>
-
-  <!-- Karte -->
-  <section id="view-map" class="view view-map" hidden aria-labelledby="h-map">
-    <div class="hero-wohin hero-page hero-compact"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg><header class="page-head"><h2 id="h-map" class="display">Karte</h2></header></div>
-    <div class="map-layers" id="map-layers" role="group" aria-label="Ebenen der Karte">
-      <button type="button" class="layer-chip" data-layer="signals" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg>Meine Ampeln</button><button type="button" class="layer-chip" data-layer="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Radwege</button><button type="button" class="layer-chip" data-layer="tram" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-tram"/></svg>Stadtbahn</button><button type="button" class="layer-chip" data-layer="lage" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Baustellen</button><button type="button" class="layer-chip" data-layer="stau" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Stau jetzt</button><button type="button" class="layer-chip" data-layer="acc" aria-pressed="true"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Barrierefrei</button><button type="button" class="layer-chip" data-layer="parking" aria-pressed="false">Behindertenparkplätze</button><button type="button" class="layer-chip" data-layer="grid" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-grid"/></svg>Flow-Raster</button>
-    </div>
-    <div class="map-wrap">
-      <div id="map" role="region" aria-label="Karte von Bielefeld mit den eingeschalteten Ebenen"></div>
-      <p id="map-status" class="map-status" role="status" aria-live="polite" hidden></p>
-      <button id="btn-locate" class="map-locate" type="button" aria-label="Zu meinem Standort"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg></button>
-    </div>
-    <details id="map-coverage-list" class="card map-list" hidden></details>
-    <details id="map-list" class="card map-list" hidden></details>
-    <button id="btn-melden" class="btn" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Hindernis melden</button>
-    <p><a href="redaktion/#/aufnahme">Hinweis aufnehmen (Redaktion)</a></p>
-    <p id="map-loc-msg" class="msg" role="status" aria-live="polite"></p>
-    <div id="map-legend" class="map-legend small"></div>
-    <select id="map-window" aria-label="Zeitfenster des Flow-Rasters" hidden></select>
-    <p id="map-empty" class="msg" hidden></p>
-    <div id="map-insights" class="card insights" hidden></div>
-  </section>
-
-  <dialog id="melden-dlg" class="melden-dlg" aria-labelledby="melden-h">
-    <h3 id="melden-h">Was ist an dieser Stelle?</h3>
-    <fieldset class="hart-list"><legend class="sr-only">Art des Hinweises</legend><label class="hart"><input type="radio" name="hart" value="stufe"><span>Stufe oder Treppe</span></label><label class="hart"><input type="radio" name="hart" value="bordstein"><span>Hoher Bordstein</span></label><label class="hart"><input type="radio" name="hart" value="pflaster"><span>Schlechter Belag</span></label><label class="hart"><input type="radio" name="hart" value="aufzug"><span>Aufzug defekt</span></label><label class="hart"><input type="radio" name="hart" value="blockiert"><span>Gehweg blockiert</span></label><label class="hart"><input type="radio" name="hart" value="toilette"><span>Toilette nicht nutzbar</span></label><label class="hart"><input type="radio" name="hart" value="ampel"><span>Ampel zu kurz grün oder ohne Ton</span></label><label class="hart"><input type="radio" name="hart" value="gut"><span>Gut zugänglich</span></label></fieldset>
-    <p class="small muted">Dein Hinweis erscheint für alle auf der Karte, ohne Namen. Gesendet wird nur die Stelle und die Art. Aufzüge und blockierte Wege verschwinden nach 1 bis 2 Wochen von selbst.</p>
-    <p id="melden-msg" class="msg" role="status" aria-live="polite"></p>
-    <div class="btn-col"><button type="button" class="btn primary" id="btn-melden-ok">Melden</button><button type="button" class="btn quiet" id="btn-melden-no">Abbrechen</button></div>
-  </dialog>
-
-  <!-- Mehr -->
-  <!-- Was kann Flowtown? -->
-  <section id="view-kann" class="view" hidden aria-labelledby="h-kann">
-    <button type="button" class="tag-back" id="kann-back"><svg class="ic" aria-hidden="true" style="transform:rotate(180deg)"><use href="#i-chevron"/></svg>Einstellungen</button>
-    <div class="hero-wohin hero-page hero-compact"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg><header class="page-head"><h2 id="h-kann" class="display">Besser ankommen</h2></header></div>
-    <p class="kann-lead">Für alle in Bielefeld, mit und ohne Behinderung. Und ehrlich: Zu jeder Antwort sagt Flowtown, woher sie kommt.</p>
-    <section class="kcard" aria-labelledby="k1"><span class="knum" aria-hidden="true">1</span><h3 id="k1">Dein Weg</h3><p>Sag, wohin du willst. Flowtown zeigt, womit du am besten ankommst: zu Fuß, mit Rad, Auto, Bus oder Bahn.</p><div class="kex" data-kex><button type="button" class="ask-ex-chip" data-kask="Womit komme ich heute am besten zur Uni?">Womit komme ich heute am besten zur Uni?</button><button type="button" class="ask-ex-chip" data-kask="Was lohnt sich mit Rollstuhl?">Was lohnt sich mit Rollstuhl?</button></div></section>
-    <section class="kcard" aria-labelledby="k2"><span class="knum" aria-hidden="true">2</span><h3 id="k2">Gerade jetzt</h3><p>Was auf deinem Weg los ist: Abfahrten, Störungen, Staus, Baustellen, Aufzüge. Und ein anderer Weg, wenn etwas ausfällt.</p><div class="kex" data-kex><button type="button" class="ask-ex-chip" data-kask="Wann fährt die nächste Bahn ab Jahnplatz?">Wann fährt die nächste Bahn ab Jahnplatz?</button><button type="button" class="ask-ex-chip" data-kask="Geht der Aufzug am Jahnplatz?">Geht der Aufzug am Jahnplatz?</button></div></section>
-    <section class="kcard" aria-labelledby="k3"><span class="knum" aria-hidden="true">3</span><h3 id="k3">Dein Flow</h3><p>Flowtown misst, wo du an Ampeln wartest und wie dein Weg läuft. Das bleibt auf deinem Handy.</p><div class="kex" data-kex><button type="button" class="ask-ex-chip" data-kask="Wie war meine letzte Fahrt?">Wie war meine letzte Fahrt?</button><button type="button" class="ask-ex-chip" data-kask="Wo warte ich lange?">Wo warte ich lange?</button></div></section>
-    <p class="small muted">Dein Profil (zum Beispiel Rollstuhl, Rollator, schlecht sehen oder hören, einfache Sprache) stellt Wege, Ansagen und Antworten genau auf dich ein. Du findest es unter Einstellungen, „Profil“.</p>
-    <p class="small muted" id="kann-note" hidden>Zum Fragen braucht Flowtown die Verbindung zum Server. Die Beispiele sind darum gerade ausgeblendet.</p>
-  </section>
-
-  <section id="view-more" class="view" hidden aria-labelledby="h-more">
-    <div class="hero-wohin hero-page"><svg class="claim-mark page-mark" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5.6" fill="#D64933"/><circle cx="20" cy="7" r="5.6" fill="#F2B33D"/><circle cx="33" cy="7" r="5.6" fill="#2FA36B"/></svg>
-    <header class="page-head"><h2 id="h-more" class="display">Einstellungen</h2>
-    <p class="page-sub">Alles bleibt auf diesem Handy, bis du es teilst. Tippe auf einen Bereich zum Ändern.</p></header>
-    </div>
-    <a class="tag-link" href="redaktion/#/aufnahme">
-      <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-access"/></svg></span>
-      <span class="tag-tx"><b>Hinweis aufnehmen</b><span class="small">Standort und Diktat · Redaktion</span></span>
-      <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
-    </a>
-    <button type="button" class="tag-link" id="kann-link" aria-label="Was kann Flowtown? Überblick öffnen">
-      <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-info"/></svg></span>
-      <span class="tag-tx"><b>Was kann Flowtown?</b><span class="small">Drei Dinge, mit Beispielen zum Ausprobieren</span></span>
-      <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
-    </button>
-    <button type="button" class="tag-link" id="intro-link" aria-label="Einführung noch einmal ansehen">
-      <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-play"/></svg></span>
-      <span class="tag-tx"><b>Einführung noch einmal ansehen</b><span class="small">Der erste Start mit Verkehrsmitteln, Profil und Erlaubnissen</span></span>
-      <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
-    </button>
-    <p id="more-msg" class="msg" role="status" aria-live="polite"></p>
-    <section class="tip-list" aria-labelledby="h-more-dich"><h3 class="eyebrow" id="h-more-dich">Für dich</h3>
-    <details class="tipcard setbox" id="box-access" data-world="acc">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg></span><span class="tip-main"><b>Profil</b><span id="access-sub">Kein Profil</span></span></summary>
-      <div class="tip-detail">
-        <label class="field" for="set-access">Ich bin unterwegs mit …
-          <select id="set-access">
-            <option value="aus">kein Profil</option>
-            <option value="rollstuhl">Rollstuhl</option>
-            <option value="rollator">Rollator oder Gehhilfe</option>
-            <option value="sehen">Ich sehe schlecht oder nichts</option>
-            <option value="hoeren">Ich höre schlecht oder nichts</option>
-            <option value="lernen">Einfache Sprache</option>
-            <option value="ruhe">Ruhe und Pausen</option>
-            <option value="andere">Andere Einschränkung</option>
-          </select>
-        </label>
-        <p class="small muted">Ruhe und Pausen passt zum Beispiel bei chronischer Krankheit, Autismus oder Angst. Rollator oder Gehhilfe auch, wenn du langsamer zu Fuß bist.</p>
-        <p class="small muted">Mit Profil zeigt Flowtown auf der Karte und bei deinen Zielen, was für dich wichtig ist, und wertet deine Wartezeiten an Ampeln gesondert aus.</p>
-        <label class="check"><input type="checkbox" id="set-big"><span>Große Schrift</span></label>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-modes">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-car"/></svg></span><span class="tip-main"><b>Unterwegs mit</b><span id="modes-sub">Noch nichts gewählt</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted" id="set-modes-h">Womit du oft unterwegs bist. Mehrere möglich. Das bleibt auf diesem Handy. In „Dein Weg jetzt“ empfiehlt Flowtown dann das schnellste davon.</p>
-        <div class="goal-chips" id="set-modes" role="group" aria-labelledby="set-modes-h"></div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-wege">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg></span><span class="tip-main"><b>Meine Wege</b><span id="wege-sub">Noch keiner</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted">Wege, die du oft fährst, zum Beispiel zur Arbeit. Sie bleiben auf diesem Handy und sind in der Sicherung („Daten exportieren“) enthalten. Eine Anzeige dazu auf „Heute“ gibt es noch nicht.</p>
-        <div id="wege-list"></div>
-        <div id="wege-form"></div>
-        <button type="button" class="btn quiet" id="wege-add">+ Weg hinzufügen</button>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-steckbrief">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg></span><span class="tip-main"><b>Bahnsteige (Probe)</b><span id="steckbrief-sub">Prießallee</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted">Probe: Angaben aus Begehung und Fotos vom 22.11.2026. „Unbekannt“ heißt keine Angabe, nicht „passt“.</p>
-        <div id="steckbrief-host"></div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-ansagen" data-world="acc">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg></span><span class="tip-main"><b>Ansagen und Sprache</b><span id="ansagen-sub">Ansagen aus</span></span></summary>
-      <div class="tip-detail">
-        <label class="check"><input type="checkbox" id="set-begleit"><span>Begleitmodus zu Fuß: Ampeln an der Strecke mit Ausstattung, Richtungen als Uhrzeit, Schritte, Warnung bei falscher Richtung</span></label>
-        <label class="check"><input type="checkbox" id="set-compass"><span>Kompass für „Wo bin ich?“: Angaben wie rechts, links und auf 3 Uhr</span></label>
-        <label class="field" for="set-sprechicon">Symbol für „Sprechen“ (Knopf unten rechts)
-          <select id="set-sprechicon"><option value="mic">Mikrofon</option><option value="phone">Telefonhörer</option></select>
-        </label>
-        <label class="check"><input type="checkbox" id="set-sprechgross"><span>Großer Sprachmodus: ein großer Knopf, große Schrift, Antworten laut vorgelesen</span></label>
-        <div class="sprech-link" id="sprech-link">
-          <b>Schnell sprechen vom Startbildschirm</b>
-          <p class="small muted">Ein Tipp auf dieses Symbol öffnet Flowtown gleich im Sprachmodus. Zum Sprechen tippst du dann einmal auf den großen Knopf.</p>
-          <ol class="small sprech-steps"><li><b>iPhone:</b> Link in Safari öffnen, auf Teilen tippen, „Zum Home-Bildschirm“ wählen.</li><li><b>Android:</b> Flowtown-Symbol gedrückt halten und „Mit Flowtown sprechen“ auf den Startbildschirm ziehen.</li></ol>
-          <label class="sr-only" for="sprech-url">Link zum Sprachmodus</label>
-          <input id="sprech-url" type="text" readonly>
-          <button id="btn-sprech-copy" class="btn quiet" type="button">Link kopieren</button>
-        </div>
-        <div class="voice-set" id="box-voice">
-          <label class="check"><input type="checkbox" id="set-voice"><span>Ansagen vorlesen: Wechsel, Baustellen und Hindernisse voraus, Bilanz am Ende</span></label>
-          <label class="check"><input type="checkbox" id="set-navtone"><span>Hinweiston vor Navigationsansagen (zwei Töne, am Ziel drei aufsteigende)</span></label>
-          <label class="field" for="set-geradeaus">„Weiter geradeaus“ zu Fuß
-            <select id="set-geradeaus"><option value="">automatisch: im Begleitmodus alle 25 m</option><option value="0">aus</option><option value="10">alle 10 m (wie in der Norm ITU-T F.921)</option><option value="25">alle 25 m</option><option value="50">alle 50 m</option></select>
-          </label>
-          <label class="field" for="set-voice-rate">Sprechtempo
-            <select id="set-voice-rate"><option value="0.85">langsam</option><option value="1">normal</option><option value="1.2">schnell</option></select>
-          </label>
-          <label class="field" for="set-voice-name"><span id="set-voice-label">Stimme</span>
-            <select id="set-voice-name"><option value="">Automatisch: die beste Stimme</option></select>
-          </label>
-          <button id="btn-voice-test" class="btn quiet" type="button"><svg class="ic" aria-hidden="true"><use href="#i-sound"/></svg>Probe hören</button>
-          <div class="voice-hint" id="voice-hint" hidden></div>
-          <p class="small muted">Die Ansagen kommen aus der Sprachausgabe deines Handys. Flowtown schickt dafür nichts an seinen Server. Mit VoiceOver oder TalkBack kannst du sie auch ausgeschaltet lassen.</p>
-        </div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-goals">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg></span><span class="tip-main"><b>Was dir wichtig ist</b><span id="goals-sub">Noch nichts gewählt</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted" id="set-goal-h">Flowtown zeigt dir das auf „Heute“ zuerst. Mehrere möglich.</p>
-        <div class="goal-chips" id="set-goals" role="group" aria-labelledby="set-goal-h"><button type="button" class="goal-chip" data-goal="schnell" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Schneller ankommen</button><button type="button" class="goal-chip acc" data-goal="stufenlos" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-access"/></svg>Ohne Stufen</button><button type="button" class="goal-chip blue" data-goal="blick" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg>Ohne Blick aufs Display</button><button type="button" class="goal-chip" data-goal="rad" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-bike"/></svg>Sicher mit dem Rad</button><button type="button" class="goal-chip" data-goal="stadt" aria-pressed="false"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg>Die Stadt verbessern</button></div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-price">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-euro"/></svg></span><span class="tip-main"><b>Preise</b><span id="price-sub">Für die Kostenschätzung</span></span></summary>
-      <div class="tip-detail">
-        <label class="row" for="inp-fuel">Sprit, Euro je Liter
-          <input id="inp-fuel" class="price" type="text" inputmode="decimal" autocomplete="off">
-        </label>
-        <label class="row" for="inp-power">Strom, Euro je kWh
-          <input id="inp-power" class="price" type="text" inputmode="decimal" autocomplete="off">
-        </label>
-      </div>
-    </details>
-    </section>
-    <section class="tip-list" aria-labelledby="h-more-daten"><h3 class="eyebrow" id="h-more-daten">Daten und Datenschutz</h3>
-    <details class="tipcard setbox" id="box-cut">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg></span><span class="tip-main"><b>Datenschutz</b><span id="cut-sub">Start und Ziel</span></span></summary>
-      <div class="tip-detail">
-        <label class="row" for="inp-cut">Ereignisse in der Nähe von Start und Ziel verwerfen
-          <select id="inp-cut">
-            <option value="0">aus</option>
-            <option value="200">200 m</option>
-            <option value="400">400 m</option>
-          </select>
-        </label>
-        <p class="small"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung lesen</a></p>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-signals">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-light"/></svg></span><span class="tip-main"><b>Ampeldaten</b><span id="signals-sub">Noch keine Ampeln geladen</span></span></summary>
-      <div class="tip-detail">
-        <p class="small" id="signals-info">–</p>
-        <button id="btn-reload-signals" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-gps"/></svg>Ampeln in der Umgebung neu laden</button>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-data">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-db"/></svg></span><span class="tip-main"><b>Sichern und übertragen</b><span id="data-sub">Exportieren und importieren</span></span></summary>
-      <div class="tip-detail">
-        <p class="small muted">Alles bleibt auf diesem Gerät, bis du es exportierst.</p>
-        <div class="btn-col">
-          <button id="btn-export" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Daten exportieren (JSON)</button>
-          <button id="btn-export-csv" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-download"/></svg>Halte exportieren (CSV)</button>
-          <label class="btn file-btn"><svg class="ic" aria-hidden="true"><use href="#i-upload"/></svg>Daten importieren<input id="inp-import" type="file" accept="application/json,.json"></label>
-        </div>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-wipe">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg></span><span class="tip-main"><b>Alles löschen</b><span>Alle Fahrten von diesem Handy entfernen</span></span></summary>
-      <div class="tip-detail">
-        <button id="btn-wipe" class="btn danger" type="button"><svg class="ic" aria-hidden="true"><use href="#i-trash"/></svg>Alle Fahrten löschen</button>
-        <div id="wipe-confirm" class="btn-col" hidden>
-          <p class="small">Wirklich alle Fahrten löschen? Das lässt sich nicht rückgängig machen.</p>
-          <button id="btn-wipe-yes" class="btn danger" type="button">Ja, alles löschen</button>
-          <button id="btn-wipe-no" class="btn" type="button">Abbrechen</button>
-        </div>
-      </div>
-    </details>
-    </section>
-    <section class="tip-list" aria-labelledby="h-more-mit"><h3 class="eyebrow" id="h-more-mit">Mitmachen und Testen</h3>
-    <details class="tipcard setbox" id="box-pilot">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-flask"/></svg></span><span class="tip-main"><b>Pilot</b><span id="pilot-sub">Mit Code dabei sein</span></span></summary>
-      <div class="tip-detail" id="pilot-card"></div>
-    </details>
-    <details class="tipcard setbox" id="box-server">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-cloud"/></svg></span><span class="tip-main"><b>Server und Dienste</b><span id="server-sub">Kein Server eingetragen</span></span></summary>
-      <div class="tip-detail">
-        <label class="field" for="inp-server">Adresse des Servers
-          <input id="inp-server" type="url" inputmode="url" autocomplete="off" spellcheck="false" placeholder="https://…/flowtown-api">
-        </label>
-        <label class="check"><input type="checkbox" id="inp-wir"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg> Fahrten anonym beitragen</label>
-        <label class="check"><input type="checkbox" id="inp-lage"><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg> Verkehrslage vor der Fahrt</label>
-        <label class="check"><input type="checkbox" id="inp-ki"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> KI-Einschätzung erlauben</label>
-        <label class="check"><input type="checkbox" id="inp-ask-stats"><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg> Frag Flowtown darf meine Auswertung nutzen</label>
-        <button id="btn-server-test" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-check"/></svg>Verbindung prüfen</button>
-        <p class="small muted" id="server-status" role="status" aria-live="polite"></p>
-        <details class="more-info"><summary><svg class="ic" aria-hidden="true"><use href="#i-shield"/></svg>Was wird gesendet?</summary>
-          <ul class="ilist small">
-            <li><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span><b>Beitragen:</b> je Ampel nur Richtung, Zeitfenster und Wartezeit. Keine Uhrzeiten, kein Start, kein Ziel. Werte anderer erscheinen ab fünf Personen.</span></li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg><span><b>Verkehrslage:</b> Die App lädt die Lage für ganz Bielefeld und prüft auf dem Handy, was deine Wege betrifft. Über dich wird dabei nichts gesendet.</span></li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span><b>Auswertung für Fragen:</b> nur wenn eingeschaltet. Mit jeder Frage an „Frag Flowtown“ geht dann eine kurze Zusammenfassung mit: Zahl der Fahrten, Wartezeiten, die drei größten Zeitfresser mit Ampelnamen und deine Tipps. Keine einzelnen Fahrten, keine Koordinaten, keine Uhrzeiten; nichts wird gespeichert.</span></li>
-            <li><svg class="ic" aria-hidden="true"><use href="#i-spark"/></svg><span><b>KI:</b> auf Knopfdruck zusammengefasste Werte an Mistral (EU), etwa Wartezeiten und Ampelnamen. Keine Koordinaten, nichts wird gespeichert.</span></li>
-          </ul></details>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-demo">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg></span><span class="tip-main"><b>Testen ohne Fahrt</b><span>Eine Testfahrt abspielen</span></span></summary>
-      <div class="tip-detail">
-        <div class="btn-col">
-          <button id="btn-demo" class="btn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-play"/></svg>Testfahrt simulieren</button>
-          <button id="btn-demo-clear" class="btn" type="button">Demo-Daten löschen</button>
-        </div>
-      </div>
-    </details>
-    </section>
-    <section class="tip-list" aria-labelledby="h-more-hilfe"><h3 class="eyebrow" id="h-more-hilfe">Hilfe</h3>
-    <details class="tipcard setbox" id="box-krise" data-world="red">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg></span><span class="tip-main"><b>Hilfe in der Krise</b><span>Notruf, Telefonseelsorge, Krisendienst Bielefeld</span></span></summary>
-      <div class="tip-detail">
-        <ul class="hilfe-list">
-          <li><a class="tel" href="tel:112">112</a><span>Notruf: Feuerwehr und Rettungsdienst</span></li>
-          <li><a class="tel" href="tel:110">110</a><span>Polizei</span></li>
-          <li><a class="tel" href="tel:116117">116 117</a><span>Ärztlicher Bereitschaftsdienst</span></li>
-          <li><a class="tel" href="tel:08001110111">0800 111 0 111</a><span>Telefonseelsorge, rund um die Uhr, kostenlos. Auch 0800 111 0 222</span></li>
-          <li><a class="tel" href="tel:05213299285">0521 3 29 92 85</a><span>Krisendienst Bielefeld, täglich 18 bis 7:30 Uhr, am Wochenende und an Feiertagen rund um die Uhr</span></li>
-          <li><a class="tel" href="tel:0521512581">0521 51 25 81</a><span>Sozialpsychiatrischer Dienst der Stadt, Nikolaus-Dürkopp-Str. 5–9, Montag bis Freitag vormittags bis 15 Uhr</span></li>
-          <li><a class="tel" href="tel:052177278526">0521 772 785 26</a><span>Psychiatrische Institutsambulanz Bethel, Gadderbaumer Str. 33, offene Sprechzeit Montag bis Freitag 9 bis 11 Uhr</span></li>
-          <li><a class="tel" href="tel:052177277115">0521 772 771 15</a><span>Ev. Klinikum Bethel, Klinik für Psychiatrie und Psychotherapie, Remterweg 69–71</span></li>
-          <li><a class="tel" href="tel:0521124248">0521 12 42 48</a><span>Frauennotruf Bielefeld, Jöllenbecker Str. 57, Montag 16 bis 22, Dienstag 10 bis 12, Donnerstag 14 bis 18 Uhr</span></li>
-        </ul>
-        <p><b>Notruf ohne Sprechen:</b> Die offizielle Notruf-App <a href="https://www.nora-notruf.de" target="_blank" rel="noopener">nora</a> übermittelt deinen Standort. Vorher herunterladen und registrieren. Über <a href="https://www.tess-relay-dienste.de" target="_blank" rel="noopener">Tess</a> geht der Notruf auch per Gebärdensprache oder Text.</p>
-        <p class="small muted">Stand November 2026. Quellen: Stadt Bielefeld, Universität Bielefeld, barrierefrAI.</p>
-      </div>
-    </details>
-    <details class="tipcard setbox" id="box-bahn-hilfe">
-      <summary class="tip-row"><span class="tip-ic"><svg class="ic" aria-hidden="true"><use href="#i-train"/></svg></span><span class="tip-main"><b>Bahnreisen mit Behinderung</b><span>Hilfe beim Umsteigen, Rechte mit Ausweis</span></span></summary>
-      <div class="tip-detail">
-        <p><b>Hilfe beim Ein-, Um- und Aussteigen</b> meldet die Mobilitätsservice-Zentrale der Bahn für dich an: <a class="tel" href="tel:03065212888">030 65 21 28 88</a> (Montag bis Freitag 6 bis 22 Uhr, am Wochenende und an Feiertagen 8 bis 20 Uhr), per E-Mail an msz@deutschebahn.com oder online auf <a href="https://msz-bahn.de" target="_blank" rel="noopener">msz-bahn.de</a>.</p>
-        <p><b>Mit Schwerbehinderten-Ausweis:</b></p>
-        <ul class="hilfe-rechte">
-          <li>Mit Wertmarke fährst du im Nahverkehr kostenlos, also in RE, RB und S-Bahn. Für IC und ICE brauchst du eine Fahrkarte.</li>
-          <li>Merkzeichen B: Deine Begleitperson fährt kostenlos mit. Du kannst bis zu zwei Sitzplätze kostenlos reservieren.</li>
-          <li>Merkzeichen G oder aG: Die Bahn reserviert dir einen Rollstuhl-Platz im Fernverkehr.</li>
-          <li>Merkzeichen 1. Klasse: Mit einer Fahrkarte für die 2. Klasse darfst du in die 1. Klasse.</li>
-        </ul>
-        <p class="small muted">Ob die Aufzüge an einem Bahnhof gehen, zeigt die App „DB Bahnhof live“. Mehr in Leichter Sprache: <a href="https://www.bahn.de/leichte-sprache" target="_blank" rel="noopener">bahn.de/leichte-sprache</a>. Hörbehinderte Fahrgäste: <a href="https://www.bahn.de/hoerbehindert" target="_blank" rel="noopener">bahn.de/hoerbehindert</a>.</p>
-      </div>
-    </details>
-    </section>
-    <p class="small muted more-foot"><a href="datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> · <a href="nutzung.html" target="_blank" rel="noopener">Nutzungsbedingungen</a> · Ampelstandorte: © OpenStreetMap-Mitwirkende · Prototyp, Version <span id="app-version"></span></p>
-  </section>
 </main>
 
-<dialog id="map-peek" class="peek" aria-labelledby="peek-title">
-  <div class="peek-head"><h3 id="peek-title"></h3><form method="dialog"><button class="btn peek-close" aria-label="Karte schließen"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button></form></div>
-  <div id="peek-map" role="region" aria-label="Karte des Orts"></div>
-  <p id="peek-meta" class="small muted"></p>
-</dialog>
+<footer class="foot">
+  <div class="wrap" style="display:flex;justify-content:space-between;gap:24px;flex-wrap:wrap;font-size:16px">
+    <div>Flowtown · Prototyp von barrierefrAI, Bielefeld · Keine Cookies</div>
+    <nav aria-label="Rechtliches" style="display:flex;gap:20px;flex-wrap:wrap">
+      <a href="nutzung.html">Nutzungsbedingungen</a><a href="datenschutz.html">Datenschutz</a><a href="mailto:info@barrierefrai.com">Kontakt</a><span>Impressum folgt vor der Veröffentlichung</span>
+    </nav>
+  </div>
+</footer>
 
-<div id="mic-status" class="mic-status" role="status" aria-live="polite" hidden></div>
-<section id="assist" class="assist" aria-label="Frag Flowtown" hidden></section>
-<section id="sos" class="assist sos-sheet" role="dialog" aria-modal="true" aria-labelledby="sos-h" hidden></section>
-<button type="button" class="fab-mic" id="fab-mic" aria-label="Flowtown fragen" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button>
-<nav class="tabs" aria-label="Hauptnavigation">
-  <button type="button" data-view="start" data-world="go" aria-current="page"><svg class="ic" aria-hidden="true"><use href="#i-route"/></svg><span>Heute</span></button>
-  <button type="button" data-view="tips" data-world="tip"><svg class="ic" aria-hidden="true"><use href="#i-bulb"/></svg><span>Tipps</span></button>
-  <button type="button" data-view="stats" data-world="hist"><svg class="ic" aria-hidden="true"><use href="#i-chart"/></svg><span>Verlauf</span></button>
-  <button type="button" data-view="map" data-world="map"><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg><span>Karte</span></button>
-  <button type="button" data-view="more" data-world="more"><svg class="ic" aria-hidden="true"><use href="#i-sliders"/></svg><span>Mehr</span></button>
-</nav>
-
-<script>
-  // Zeigt Programmfehler sichtbar an, damit man sie melden kann
-  window.addEventListener('error', function (e) {
-    var b = document.getElementById('app-error');
-    if (!b) return;
-    b.hidden = false;
-    b.textContent = 'Fehler in der App: ' + (e.message || 'unbekannt') + (e.lineno ? ' (Zeile ' + e.lineno + ')' : '') + '. Bitte einen Screenshot davon schicken.';
-  });
-</script>
-<script src="vendor/leaflet/leaflet.js"></script>
-<script src="app.js"></script>
 </body>
 </html>

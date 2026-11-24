@@ -1,6 +1,6 @@
 # Flowtown – Plan für eine Startseite
 
-Stand: 24.11.2026. Status: **Plan, noch nicht umgesetzt.** Grundlage: Repo-Stand dieses Branches, besonders `EINFUEHRUNG.md`, `WAS-FLOWTOWN-KANN.md`, `FAKTEN.md`, `TODO.md`, `nutzung.html` und `datenschutz.html`.
+Stand: 24.11.2026. Status: **Startseite als `index.html` umgesetzt, App liegt unter `app/`.** Offen sind Impressum, Unterseiten und Rechtsprüfung. Grundlage: Repo-Stand dieses Branches, besonders `EINFUEHRUNG.md`, `WAS-FLOWTOWN-KANN.md`, `FAKTEN.md`, `TODO.md`, `nutzung.html` und `datenschutz.html`.
 
 ---
 
