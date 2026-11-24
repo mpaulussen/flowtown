@@ -173,3 +173,9 @@ details[open] summary{margin-bottom:10px}
   .flow .step{margin-right:0;box-shadow:4px 4px 0 var(--navy)}
 }
 @media (prefers-reduced-motion: reduce){html{scroll-behavior:auto}*{transition:none!important;animation:none!important}}
+
+/* Screens auf Unterseiten */
+.shots{display:flex;gap:28px;flex-wrap:wrap;justify-content:center;margin-top:36px}
+.shots figure{margin:0;width:260px;max-width:100%}
+.shots .phone{border-width:8px;border-radius:40px}
+.shots .phone img{border-radius:32px}
