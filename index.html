@@ -9,69 +9,6 @@
 <meta name="color-scheme" content="light">
 <link rel="icon" href="app/icon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="site.css">
-<style>
-/* Startseite: eigene Farben, Unterseiten bleiben wie sie sind */
-body.home{
-  --bg:#fbf7f0; --surface:#ffffff; --fg:#0e2a4d; --body:#1f3a5c; --muted:#4b5f78; --line:#d9d2c4;
-  --accent:#1d4f91; --accent-ink:#1d4f91; --accent-soft:#e3ecf8; --on-accent:#ffffff;
-  --orange:#ff7a1a; --orange-soft:#ffe6d1; --navy:#0e2a4d;
-  background:var(--bg);color:var(--fg);font-size:19px;
-}
-body.home .hero-band{background:var(--accent);color:#ffffff;position:relative;overflow:hidden}
-body.home .hero-band .k,body.home .hero-band .lead,body.home .hero-band h1,body.home .hero-band .fine{color:#ffffff}
-body.home .hero-band .lead{opacity:.95}
-body.home .hero-band::after{content:"";position:absolute;right:-180px;top:-180px;width:560px;height:560px;border-radius:50%;background:var(--orange);opacity:.22;pointer-events:none}
-body.home .k{color:var(--orange-soft)}
-body.home .hero-band .k{color:#ffd9b5}
-body.home .btn{background:var(--orange);border-color:var(--orange);color:var(--navy)}
-body.home .btn:hover{color:var(--navy);filter:brightness(1.05)}
-body.home .btn-line{color:#ffffff;border-color:#ffffff}
-body.home .btn-line:hover{background:#ffffff;color:var(--accent)}
-body.home .topnav a{color:var(--navy)}
-body.home .topnav a:hover{background:var(--orange-soft);color:var(--navy)}
-body.home .brand .display{color:var(--navy)}
-body.home .chip{background:#ffffff;border-color:var(--line);color:var(--navy)}
-body.home .card{border-color:var(--line);box-shadow:0 8px 24px rgba(14,42,77,.08)}
-body.home .card h3,body.home .display{color:var(--navy)}
-body.home .lead,body.home .card p{color:var(--body)}
-body.home .feature{background:var(--navy);border-color:var(--navy)}
-body.home .feature h3,body.home .feature p,body.home .feature .k{color:#ffffff}
-body.home .feature .k{color:#ffd9b5}
-body.home .phone{border-color:var(--navy)}
-
-/* Ablauf: vier Schritte, verbunden durch Pfeile */
-.flow{list-style:none;margin:48px 0 0;padding:0;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:0;position:relative}
-.flow li{position:relative;padding-right:36px}
-.flow li:not(:last-child)::after{content:"";position:absolute;top:34px;right:-2px;width:0;height:0;border-left:22px solid var(--orange);border-top:16px solid transparent;border-bottom:16px solid transparent;z-index:1}
-.flow .step{background:#ffffff;border:2px solid var(--navy);border-radius:24px;padding:26px;height:100%;display:flex;flex-direction:column;gap:12px;margin-right:18px;box-shadow:6px 6px 0 var(--navy)}
-.flow .n{display:inline-grid;place-items:center;width:52px;height:52px;border-radius:16px;background:var(--orange);color:var(--navy);font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:24px}
-.flow li:nth-child(even) .n{background:var(--accent);color:#ffffff}
-.flow h3{font-family:"Bricolage Grotesque",system-ui,sans-serif;font-weight:800;font-size:27px;letter-spacing:-.02em;line-height:1.1;margin:6px 0 0;color:var(--navy)}
-.flow p{font-size:18px;color:var(--body)}
-.flow .ex{font-size:16px;color:var(--navy);background:var(--orange-soft);border-radius:12px;padding:10px 12px;margin-top:auto}
-
-/* Bildleiste mit Schritten */
-.steps-rail .label{display:inline-flex;align-items:center;gap:10px;font-weight:800;font-size:18px;color:var(--navy);margin-top:14px}
-.steps-rail .label span{display:inline-grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--orange);color:var(--navy);font-size:16px}
-
-/* Blau-oranges Band für Beleg und Mitmachen */
-.band-orange{background:var(--orange);color:var(--navy);border-radius:var(--r-lg);padding:52px;box-shadow:8px 8px 0 var(--navy)}
-.band-orange .k,.band-orange p,.band-orange h2{color:var(--navy)}
-.band-orange .k{color:var(--navy);opacity:.8}
-
-@media (max-width: 1000px){
-  .flow{grid-template-columns:repeat(2,minmax(0,1fr));row-gap:48px}
-  .flow li:nth-child(2)::after{display:none}
-  .flow li:nth-child(odd):not(:last-child)::after{display:none}
-}
-@media (max-width: 720px){
-  .flow{grid-template-columns:1fr;row-gap:44px}
-  .flow li{padding-right:0}
-  .flow li::after{display:none!important}
-  .flow .step{margin-right:0;box-shadow:4px 4px 0 var(--navy)}
-  .band-orange{padding:30px;box-shadow:5px 5px 0 var(--navy)}
-}
-</style>
 </head>
 <body class="home">
 <script>
@@ -137,22 +74,29 @@ body.home .phone{border-color:var(--navy)}
   </ol>
 </section>
 
-<section class="wrap sec steps-rail" aria-labelledby="h-screens">
-  <p class="k" style="color:var(--accent)">In der App</p>
+<section class="wrap sec" aria-labelledby="h-screens">
+  <p class="k">In der App</p>
   <h2 class="display" id="h-screens" style="font-size:clamp(40px,5vw,64px);margin-top:16px;max-width:18ch">Die Schritte auf dem Handy.</h2>
-  <p class="lead" style="margin-top:20px">Die Leiste lässt sich mit dem Finger wischen oder mit den Pfeiltasten bewegen, wenn sie den Fokus hat.</p>
-  <div class="rail" tabindex="0" role="region" aria-label="Bildschirme der App, horizontal scrollbar">
+  <div class="rail" tabindex="0" role="region" aria-label="Bildschirme der App in der Reihenfolge der Schritte, horizontal scrollbar">
     <figure>
-      <div class="phone"><img src="assets/screens/dein-weg.png" width="780" height="1688" alt="Bildschirm „Dein Weg jetzt“ mit dem Hinweis, einen Weg anzulegen, und dem Knopf „Weg anlegen“"></div>
-      <figcaption class="label"><span aria-hidden="true">2</span>Weg vergleichen</figcaption>
+      <div class="phone"><img src="assets/screens/start.png" width="780" height="1688" alt="Startseite der App mit dem Knopf „Sprich mit Flowtown“, dem Suchfeld „Wohin möchtest du?“ und dem Knopf „Ohne Ziel aufzeichnen“"></div>
+      <figcaption class="steps-label"><span aria-hidden="true">1</span>Startseite</figcaption>
+    </figure>
+    <figure>
+      <div class="phone"><img src="assets/screens/eingabe.png" width="700" height="830" alt="Eingabe: Die Frage „Von wo startest du?“ mit einem Feld für Ort, Haltestelle oder Adresse, darunter der Knopf „Suchen“"></div>
+      <figcaption class="steps-label"><span aria-hidden="true">2</span>Eingabe</figcaption>
     </figure>
     <figure>
       <div class="phone"><img src="assets/screens/karte.webp" width="920" height="2000" alt="Karte mit Filter Barrierefrei und einem geöffneten Punkt: Rollstuhlgerechte Toilette an der Haltestelle Jahnplatz, Quelle Stadt Bielefeld"></div>
-      <figcaption class="label"><span aria-hidden="true">3</span>Karte mit Quelle</figcaption>
+      <figcaption class="steps-label"><span aria-hidden="true">3</span>Karte</figcaption>
     </figure>
     <figure>
       <div class="phone"><img src="assets/screens/tipps.png" width="780" height="1688" alt="Bildschirm Tipps mit dem Hinweis „Für dich: Rollator oder Gehhilfe“ und der Karte „Speichere ein Ziel“"></div>
-      <figcaption class="label"><span aria-hidden="true">✓</span>Tipps für dein Profil</figcaption>
+      <figcaption class="steps-label"><span aria-hidden="true">4</span>Tipps</figcaption>
+    </figure>
+    <figure>
+      <div class="phone"><img src="assets/screens/verlauf.png" width="780" height="1688" alt="Verlauf mit Minuten an Ampeln je Tag. Der Hinweis „Enthält Demo-Daten aus der Testfahrt“ steht darüber"></div>
+      <figcaption class="steps-label"><span aria-hidden="true">5</span>Verlauf</figcaption>
     </figure>
   </div>
 </section>
