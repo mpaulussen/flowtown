@@ -3977,7 +3977,24 @@ function mitFundort(antwort, frage) {
   return a.replace(/\.?$/, '.') + ' ' + h;
 }
 // prüft die Antwort der KI; einmal korrigieren lassen, sonst die sichere Ersatzantwort
-async function absichern(antwort, messages, used, frage) {
+// Was nicht belegt ist, sagen wir nicht: ein Satz mit einer Zahl, die in keinem Werkzeugergebnis und nicht in der Frage steht, fällt ganz weg
+const ZAHL_ERLAUBT = new Set(['110', '112']);
+function zahlenFilter(text, messages, frage) {
+  const belegt = messages.filter((m) => m.role === 'tool' || m.role === 'user').map((m) => String(m.content || '')).join(' ') + ' ' + String(frage || '');
+  const norm = (s) => String(s).replace(/,/g, '.').toLowerCase();
+  const b = norm(belegt);
+  const teile = String(text || '').split(/(?<=[.!?])\s+/);
+  return teile.filter((sz) => {
+    for (const m of sz.matchAll(/\d+(?:[.,:]\d+)*/g)) {
+      const tok = norm(m[0]);
+      if (ZAHL_ERLAUBT.has(tok)) continue;
+      if (!new RegExp('(?<![\\d.:])' + tok.replace(/\./g, '\\.') + '(?![\\d])').test(b)) return false;
+    }
+    return true;
+  }).join(' ').trim();
+}
+async function absichern(antwort0, messages, used, frage) {
+  const antwort = zahlenFilter(antwort0, messages, frage) || 'Dazu habe ich gerade keine Angabe.';
   const grund = quellenPruefung(antwort, messages, used);
   if (!grund) return mitFundort(mitFahrplanHinweis(antwort, messages), frage);
   console.error(new Date().toISOString(), 'Quellenprüfung:', grund);
@@ -3986,7 +4003,7 @@ async function absichern(antwort, messages, used, frage) {
     messages.push({ role: 'assistant', content: antwort });
     messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“${/^Dauer|^Uhrzeit/.test(grund) ? ' Fahrzeit, Abfahrt und Ankunft stehen fertig im Feld satz des Ergebnisses (auch fahrzeit_min, dauer_min): nutze genau diese Angaben aus einem Eintrag, rechne nicht selbst und rechne die Wartezeit ab jetzt nicht dazu.' : ''}` });
     const m = await mistralChat(messages, true);
-    const a2 = sauber(m.content);
+    const a2 = zahlenFilter(sauber(m.content), messages, frage);
     if (a2 && !quellenPruefung(a2, messages, used)) return mitFundort(mitFahrplanHinweis(a2, messages), frage);
   } catch (e) { /* dann die Ersatzantwort */ }
   return /^Thema:/.test(grund) ? Q_ERSATZ_ALLG : Q_ERSATZ;
