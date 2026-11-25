@@ -32,7 +32,7 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
   *Fertig, wenn:* Nutzende ohne Code keinen Redaktions-Eintrag sehen.
 - [x] **U5 Rohdaten lesbar machen** (S). Stand: App und Server geben Verkehrsarten als Wort aus (`LAGE_WORT` in `server/flowtown-server.mjs`). „K1 bei Bielefeld (zaeh)“ kommt aus den Verkehrsdaten. Beim Server in Klartext übersetzen („stockender Verkehr“).
   *Fertig, wenn:* keine Kürzel und kein „ae/oe/ue“ in der Oberfläche erscheinen.
-- [ ] **U6 Begriffe vereinheitlichen** (M). Nach E3 alle Texte in `app/index.html` und `app/app.js` durchgehen.
+- [x] **U6 Begriffe vereinheitlichen** (M). Stand: Begriffe nach E3 festgelegt (Ziel, Weg, Fahrt), Glossar unter „Mehr“. Die bestehenden Texte passten bereits, es waren keine Umbenennungen nötig. Nach E3 alle Texte in `app/index.html` und `app/app.js` durchgehen.
   *Fertig, wenn:* jeder Begriff nur in einer Bedeutung vorkommt.
 - [x] **U7 Leere Zustände mit Handlung** (M). Verlauf ohne Fahrten: Knopf „Testfahrt ansehen“. Karte ohne Verbindung: Liste der Angaben in der Nähe statt nur Fehlermeldung.
   *Fertig, wenn:* jeder leere Zustand einen nächsten Schritt anbietet.
@@ -41,7 +41,7 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
 
 ## Stand Phase 1 (25.11.2026)
 
-Umgesetzt: U1 bis U5 und U7 vollständig. U6 offen, weil es E3 (Begriffe) braucht. Version 0.113.0 in `app/app.js` und `app/sw.js`. Geprüft: Syntax, Browser ohne Seitenfehler, Versionsanzeige in Mehr, keine Redaktions-Links in der Nutzer-App, Knopf „Testfahrt ansehen“ im leeren Verlauf. Die Konsolenfehler der Sandbox stammen aus dem fehlenden Server-Zugang.
+Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version 0.113.0 in `app/app.js` und `app/sw.js`. Geprüft: Syntax, Browser ohne Seitenfehler, Versionsanzeige in Mehr, keine Redaktions-Links in der Nutzer-App, Knopf „Testfahrt ansehen“ im leeren Verlauf. Die Konsolenfehler der Sandbox stammen aus dem fehlenden Server-Zugang.
 
 ## Phase 2: Nutzertest (2 Wochen, Voraussetzung für Phase 3)
 
