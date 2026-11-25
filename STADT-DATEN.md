@@ -77,6 +77,29 @@ Die App kennzeichnet jede Angabe mit der Stufe und der Quelle.
 
 ---
 
+## Teil 4: Regeln für den Ausbau in neue Städte
+
+Jede Stadt bekommt einen Status. Der Status legt fest, welche Module die App dort aktiviert.
+
+### Status
+- **Start:** Kernmodule laufen mit Stufe 1 bis 2. Alle Angaben sind belegt.
+- **Start mit Einschränkungen** (Kurzform in der App: „Teilstart“): Einzelne Module laufen nur mit Stufe 3 oder 4. Die App sagt das in jeder Antwort, wo es gilt.
+- **Warten:** Ein Pflichtdatum fehlt. Ein Start wäre unehrlich.
+- **Nicht möglich:** Lizenz oder Ansprechperson fehlen dauerhaft.
+
+### Regeln
+1. **Fahrplan ist Pflicht.** Ohne Fahrplan Stufe 1 gibt es keinen Start.
+2. **Barrierefreiheit der Haltestellen** wird aktiviert, wenn Stufe 1 bis 3 vorliegt und mindestens **50 Prozent** der Haltestellen der Stadt Angaben haben. Darunter gilt für das ganze Modul Stufe 4.
+3. **Baustellen** werden aktiviert, wenn ein Datensatz die Stadtstraßen umfasst. Sonst gilt Stufe 4.
+4. **Echtzeit** wird aktiviert, wenn ein Zugang besteht. Sonst bleibt es beim Fahrplan, mit Hinweis.
+5. **Lizenz:** nur Datenlizenz Deutschland, CC BY oder ODbL mit Namensnennung. Alles andere ist ein Ausschluss.
+6. **Ansprechperson:** ohne benannte Stelle keine Datenpflege. Dann höchstens Stufe 1 mit Stand-Warnung.
+7. **Aktualität:** Daten älter als zwölf Monate fallen eine Stufe.
+8. **Prüfkatalog:** Eine Stadt geht erst live, wenn ihr Prüfkatalog keine falschen Antworten zeigt (Regel M2 in `UX-PLAN.md`).
+
+### Beispiel Heilbronn
+Status: **Teilstart.** Regel 1 erfüllt (Fahrplan Stufe 1). Regel 2 greift nur für den Landkreis, die Stadt steht als Stufe 4, bis die Liste der Stadt vorliegt. Baustellen im Stadtgebiet: Stufe 4. Echtzeit: Zugang fehlt.
+
 ## Offene Punkte
 
 - Die Datenstufe ist noch nicht in der App sichtbar. Das kommt als eigener Schritt.
