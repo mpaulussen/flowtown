@@ -4059,6 +4059,12 @@ function belegtSatz(text, frage, messages) {
     if (/Stadtbahn/i.test(s) && !/keine Stadtbahn|gibt es keine/i.test(s) && !/Stadtbahn/i.test(werk) && !/Stadtbahn/i.test(f)) return false;
     if (/\bAuto\b|\bAutos\b|Parkplatz|Parkplätze|parkplätzen/i.test(s) && !/auto|wagen|parken|parkplatz|kfz|pkw/i.test(f)) return false;
     if (/Fußweg|zu Fuß|laufen|Gehweg|Gehzeit/i.test(s) && !/fuß|fuss|gehweg|gehzeit|gehen|laufen|fußweg/i.test(werk)) return false;
+    // Bielefeld-Verwechslung: Die Frage nennt keine Stadt Bielefeld, also hat die Antwort auch nichts von dort zu sagen
+    if (/Bielefeld/i.test(s) && !/Bielefeld/i.test(f) && !/Bielefeld/i.test(werk)) return false;
+    // pauschal „keine Daten zu Haltestellen“: Die Haltestellen sind im Fahrplan, nur die Angaben zur Barrierefreiheit fehlen
+    if (/(keine|kein)\s+(daten|angaben|informationen)\s+zu\s+(den\s+)?haltestellen\b/i.test(s) && !/barrierefrei|stufen|zugang|ausstattung|aufzug|rampe/i.test(s)) return false;
+    // Namen, die nicht im Ergebnis stehen, werden nicht genannt (zum Beispiel ein Anbietername)
+    if (/NEW\s+mobil/i.test(s) && !/NEW\s+mobil/i.test(werk)) return false;
     return true;
   }).join(' ').trim();
 }
