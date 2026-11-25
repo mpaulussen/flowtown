@@ -3333,7 +3333,9 @@ function msgText(c) {
 function sauber(text) {
   let t = String(text || '').replace(/[*#_`]/g, '').replace(/[+:]{2,}/g, ' ').replace(/\s+/g, ' ').trim();
   // erfundene Öffnungszeiten entfernen (nur Werkzeuge dürfen Zeiten nennen)
-  t = t.replace(/[^.!?]*(?:It is open 24\/7|open 24\/7|rund um die Uhr|durchgehend geöffnet|24\/7 geöffnet)[^.!?]*[.!?]?/gi, '').replace(/\s+/g, ' ').trim();
+  t = t.replace(/[^.!?]*(?:open 24\/7|24\/7|around the clock|24 hours|rund um die Uhr|durchgehend geöffnet|24\/7 geöffnet)[^.!?]*[.!?]?/gi, '')
+  // Pauschalaussagen über alle Haltestellen oder Wege entfernen
+  t = t.replace(/[^.!?]*\b[Aa]lle (Haltestellen|Fahrzeuge|Wege|Fahrten|Bahnen|Busse|Bahnhöfe|Eingänge)\b[^.!?]*(stufenlos|Hochbahnsteig|barrierefrei|rollstuhlgerecht)[^.!?]*[.!?]?/g, '').replace(/\s+/g, ' ').trim().replace(/\s+/g, ' ').trim();
   const teile = t.split(/(?<=[.!?])\s+/);
   const out = [], seen = new Set();
   for (const sz of teile) {
