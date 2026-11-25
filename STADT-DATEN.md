@@ -116,6 +116,8 @@ Status: **Teilstart.** Regel 1 erfüllt (Fahrplan Stufe 1). Regel 2 greift nur f
 
 **Status: Teilstart** (wie Heilbronn). Das Echtzeit-Modul läuft, sobald die Lizenz CC BY-SA geklärt ist; bis dahin „Warten“ für Echtzeit.
 
+**OpenStreetMap-Abfrage (25.11.2026, Stadtgebiet):** 1.148 Haltestellen-Knoten, passend zu den 1.163 Haltepunkten, die die Stadt nennt. Merkmal `wheelchair`: `yes` 166, `limited` 34, `no` 75, leer 873. Mit Angabe 275 von 1.148, also 24 Prozent. Regel 2 (mindestens 50 Prozent) ist damit nicht erfüllt, das Modul Barrierefreiheit bleibt auf Stufe 4. Zum Vergleich Heilbronn: 27 Prozent mit Angabe, der Anteil `yes` liegt in beiden Städten bei 12 bis 14 Prozent. Die Aktualität der Angaben ist unbekannt, die Stadt nutzt laut Faktencheck eine Liste von 2014.
+
 **Nächste Schritte:** OpenStreetMap-Abfrage für Mönchengladbach auf dem Server, Anfrage an Geodatenstelle und NEW, Prüfkatalog für Mönchengladbach (M2), Rechtsprüfung zu CC BY-SA.
 
 ## Offene Punkte
