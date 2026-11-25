@@ -11,6 +11,7 @@ import { pipeline } from 'node:stream/promises';
 import readline from 'node:readline';
 import { steckbriefAus, slug } from './steckbrief-export.mjs';
 
+const LAGE_WORT = { sperrung: 'Sperrung', stau: 'Stau', unfall: 'Unfall', zaeh: 'zäher Verkehr', baustelle: 'Baustelle', warnung: 'Hinweis' };
 const PORT = Number(process.env.PORT || 8787);
 const HOST = process.env.HOST || '127.0.0.1';
 const DATA_DIR = process.env.DATA_DIR || path.join(path.dirname(new URL(import.meta.url).pathname), 'data');
@@ -760,7 +761,7 @@ async function checkZiel(from, to, mode, nav, via) {
     items.push(Object.assign({}, it, { at, text: mode === 'fuss' && it.fuss ? it.fuss : it.text }));
   }
   // Straße und Ort benennen: „A2 bei Kamen“, sortiert nach Schwere und Lage
-  const RANK = { sperrung: 0, stau: 1, unfall: 2, zaeh: 3, baustelle: 4, warnung: 5 };
+const RANK = { sperrung: 0, stau: 1, unfall: 2, zaeh: 3, baustelle: 4, warnung: 5 };
   items.sort((a, b) => RANK[a.art] - RANK[b.art] || a.at - b.at);
   await Promise.all(items.slice(0, 12).map(async (it) => {
     if (it.titel) return;
@@ -3126,15 +3127,16 @@ async function assistTool(name, a, ctx, act) {
     const v = await checkZiel(f, t, mode);
     if (mode === 'fuss' && GEH_KMH[ctx.typ]) { const dF = gehDauerS(v.dauer, v.km, ctx.typ); v.tempo = `geschätzt mit ${String(GEH_KMH[ctx.typ]).replace('.', ',')} km/h für dein Profil`; v.dauer = dF; }
     return { ziel: to.name, verkehrsmittel: mode, tempo: v.tempo, dauer_min: Math.round(v.dauer / 60), km: Math.round(v.km * 10) / 10, verzoegerung_min: Math.max(0, Math.round((v.dauer - v.basis) / 60)),
-      meldungen: (v.items || []).slice(0, 3).map((it) => ({ art: it.art, titel: it.titel || '', hinweis: it.text || '' })),
+      meldungen: (v.items || []).slice(0, 3).map((it) => ({ art: LAGE_WORT[it.art] || it.art, titel: it.titel || '', hinweis: it.text || '' })),
       beste_abfahrt: v.abfahrt && v.abfahrt.length > 1 ? v.abfahrt.reduce((b, x) => (x.dauer < b.dauer ? x : b)) : null,
       ausweichroute: v.alternative ? { ueber: v.alternative.strassen, mehr_min: v.alternative.mehr_min, km: v.alternative.km, ohne_stau: v.alternative.ohne } : undefined };
   }
+  // Verkehrsarten als Wort, damit die Assistenz keine Codes wie „zaeh“ übernimmt
   if (name === 'verkehrslage') {
     const o = await assistOrt(a.ort, ctx);
     if (!o) return { fehler: 'Ort unbekannt oder kein Standort' };
     const l = await readLage();
-    const near = l.items.filter((it) => (it.pts || []).some((q) => mAbs(o.pos, q) <= 1000)).slice(0, 5).map((it) => ({ art: it.art, titel: it.titel, abschnitt: it.richtungText || '', hinweis: it.fuss || it.text || '', bis: it.bis || '' }));
+    const near = l.items.filter((it) => (it.pts || []).some((q) => mAbs(o.pos, q) <= 1000)).slice(0, 5).map((it) => ({ art: LAGE_WORT[it.art] || it.art, titel: it.titel, abschnitt: it.richtungText || '', hinweis: it.fuss || it.text || '', bis: it.bis || '' }));
     return { bei: o.name, meldungen: near };
   }
   if (name === 'hinweise') {

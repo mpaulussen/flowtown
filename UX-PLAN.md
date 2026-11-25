@@ -30,7 +30,7 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
   *Fertig, wenn:* auf keinem Screen Text oder Zahlen unter dem Knopf liegen (Prüfung mit 320 px und 200 % Schrift).
 - [x] **U4 Redaktion aus der Nutzer-App** (S). Einträge „Hinweis aufnehmen“ in `app/index.html` (Zeile 372 und 408) nur zeigen, wenn ein Redaktionscode hinterlegt ist.
   *Fertig, wenn:* Nutzende ohne Code keinen Redaktions-Eintrag sehen.
-- [~] **U5 Rohdaten lesbar machen** (S). Stand: in der App-Zusammenfassung behoben. Offen: der Server gibt den Code `zaeh` weiter, daraus entsteht „(zaeh)“ in Antworten der Assistenz. „K1 bei Bielefeld (zaeh)“ kommt aus den Verkehrsdaten. Beim Server in Klartext übersetzen („stockender Verkehr“).
+- [x] **U5 Rohdaten lesbar machen** (S). Stand: App und Server geben Verkehrsarten als Wort aus (`LAGE_WORT` in `server/flowtown-server.mjs`). „K1 bei Bielefeld (zaeh)“ kommt aus den Verkehrsdaten. Beim Server in Klartext übersetzen („stockender Verkehr“).
   *Fertig, wenn:* keine Kürzel und kein „ae/oe/ue“ in der Oberfläche erscheinen.
 - [ ] **U6 Begriffe vereinheitlichen** (M). Nach E3 alle Texte in `app/index.html` und `app/app.js` durchgehen.
   *Fertig, wenn:* jeder Begriff nur in einer Bedeutung vorkommt.
@@ -41,7 +41,7 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
 
 ## Stand Phase 1 (25.11.2026)
 
-Umgesetzt: U1, U2, U3, U4, U7 vollständig. U5 in der App, auf dem Server offen. U6 offen, weil es E3 (Begriffe) braucht. Version 0.113.0 in `app/app.js` und `app/sw.js`. Geprüft: Syntax, Browser ohne Seitenfehler, Versionsanzeige in Mehr, keine Redaktions-Links in der Nutzer-App, Knopf „Testfahrt ansehen“ im leeren Verlauf. Die Konsolenfehler der Sandbox stammen aus dem fehlenden Server-Zugang.
+Umgesetzt: U1 bis U5 und U7 vollständig. U6 offen, weil es E3 (Begriffe) braucht. Version 0.113.0 in `app/app.js` und `app/sw.js`. Geprüft: Syntax, Browser ohne Seitenfehler, Versionsanzeige in Mehr, keine Redaktions-Links in der Nutzer-App, Knopf „Testfahrt ansehen“ im leeren Verlauf. Die Konsolenfehler der Sandbox stammen aus dem fehlenden Server-Zugang.
 
 ## Phase 2: Nutzertest (2 Wochen, Voraussetzung für Phase 3)
 
