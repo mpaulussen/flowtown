@@ -22,22 +22,26 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
 
 ## Phase 1: Schnelle Korrekturen (1 Woche, ohne Nutzertest möglich)
 
-- [ ] **U1 Manifest und Beschreibung aktualisieren** (S). `app/manifest.webmanifest` und `app/index.html` Zeile 7 sagen noch „Die grüne Welle … weniger Sprit“.
+- [x] **U1 Manifest und Beschreibung aktualisieren** (S). `app/manifest.webmanifest` und `app/index.html` Zeile 7 sagen noch „Die grüne Welle … weniger Sprit“.
   *Fertig, wenn:* beim Installieren der App die aktuelle Beschreibung erscheint.
-- [ ] **U2 Versions-Etikett aus dem Kopf entfernen** (S). `<span class="proto">Prototyp</span>` (Zeile 72) und die Versionsnummer gehören unter „Mehr“.
+- [x] **U2 Versions-Etikett aus dem Kopf entfernen** (S). `<span class="proto">Prototyp</span>` (Zeile 72) und die Versionsnummer gehören unter „Mehr“.
   *Fertig, wenn:* der Kopf nur Logo und höchstens zwei Knöpfe zeigt.
-- [ ] **U3 Schwebender Knopf verdeckt keinen Inhalt** (S). `#fab-mic` liegt über Fahrzeiten und Texten. Unteren Abstand jeder Ansicht um die Höhe des Knopfes vergrößern.
+- [x] **U3 Schwebender Knopf verdeckt keinen Inhalt** (S). `#fab-mic` liegt über Fahrzeiten und Texten. Unteren Abstand jeder Ansicht um die Höhe des Knopfes vergrößern.
   *Fertig, wenn:* auf keinem Screen Text oder Zahlen unter dem Knopf liegen (Prüfung mit 320 px und 200 % Schrift).
-- [ ] **U4 Redaktion aus der Nutzer-App** (S). Einträge „Hinweis aufnehmen“ in `app/index.html` (Zeile 372 und 408) nur zeigen, wenn ein Redaktionscode hinterlegt ist.
+- [x] **U4 Redaktion aus der Nutzer-App** (S). Einträge „Hinweis aufnehmen“ in `app/index.html` (Zeile 372 und 408) nur zeigen, wenn ein Redaktionscode hinterlegt ist.
   *Fertig, wenn:* Nutzende ohne Code keinen Redaktions-Eintrag sehen.
-- [ ] **U5 Rohdaten lesbar machen** (S). „K1 bei Bielefeld (zaeh)“ kommt aus den Verkehrsdaten. Beim Server in Klartext übersetzen („stockender Verkehr“).
+- [~] **U5 Rohdaten lesbar machen** (S). Stand: in der App-Zusammenfassung behoben. Offen: der Server gibt den Code `zaeh` weiter, daraus entsteht „(zaeh)“ in Antworten der Assistenz. „K1 bei Bielefeld (zaeh)“ kommt aus den Verkehrsdaten. Beim Server in Klartext übersetzen („stockender Verkehr“).
   *Fertig, wenn:* keine Kürzel und kein „ae/oe/ue“ in der Oberfläche erscheinen.
 - [ ] **U6 Begriffe vereinheitlichen** (M). Nach E3 alle Texte in `app/index.html` und `app/app.js` durchgehen.
   *Fertig, wenn:* jeder Begriff nur in einer Bedeutung vorkommt.
-- [ ] **U7 Leere Zustände mit Handlung** (M). Verlauf ohne Fahrten: Knopf „Testfahrt ansehen“. Karte ohne Verbindung: Liste der Angaben in der Nähe statt nur Fehlermeldung.
+- [x] **U7 Leere Zustände mit Handlung** (M). Verlauf ohne Fahrten: Knopf „Testfahrt ansehen“. Karte ohne Verbindung: Liste der Angaben in der Nähe statt nur Fehlermeldung.
   *Fertig, wenn:* jeder leere Zustand einen nächsten Schritt anbietet.
 
 ---
+
+## Stand Phase 1 (25.11.2026)
+
+Umgesetzt: U1, U2, U3, U4, U7 vollständig. U5 in der App, auf dem Server offen. U6 offen, weil es E3 (Begriffe) braucht. Version 0.113.0 in `app/app.js` und `app/sw.js`. Geprüft: Syntax, Browser ohne Seitenfehler, Versionsanzeige in Mehr, keine Redaktions-Links in der Nutzer-App, Knopf „Testfahrt ansehen“ im leeren Verlauf. Die Konsolenfehler der Sandbox stammen aus dem fehlenden Server-Zugang.
 
 ## Phase 2: Nutzertest (2 Wochen, Voraussetzung für Phase 3)
 

@@ -2,7 +2,7 @@
 (function () {
   'use strict';
 
-  const VERSION = '0.112.10';
+  const VERSION = '0.113.0';
   const $ = (s) => document.querySelector(s);
   const $$ = (s) => Array.from(document.querySelectorAll(s));
 
@@ -3099,7 +3099,10 @@
     const body = $('#stats-body');
     if (!list.length) {
       $('#stats-small').textContent = '';
-      body.innerHTML = `<p class="msg">${statsRange === 'week' ? 'Diese Woche noch keine Fahrten.' : statsRange === 'month' ? 'In den letzten 30 Tagen keine Fahrten.' : 'Noch keine Fahrten.'} Starte unter „Heute“ deine erste Aufzeichnung oder spiele unter „Mehr“ eine Testfahrt ab.</p>`;
+      body.innerHTML = `<p class="msg">${statsRange === 'week' ? 'Diese Woche noch keine Fahrten.' : statsRange === 'month' ? 'In den letzten 30 Tagen keine Fahrten.' : 'Noch keine Fahrten.'} Starte unter „Heute“ deine erste Aufzeichnung oder spiele unter „Mehr“ eine Testfahrt ab.</p>`
+      + '<p><button type="button" class="btn small" id="btn-empty-demo">Testfahrt ansehen</button></p>';
+      const eb = body.querySelector('#btn-empty-demo');
+      if (eb) eb.addEventListener('click', () => { document.querySelector('button[data-view="more"]').click(); setTimeout(() => { const d = document.getElementById('btn-demo'); if (d) d.closest('details').open = true; d && d.scrollIntoView({ block: 'center' }); }, 0); });
       return;
     }
     const ag = aggregate(list);
@@ -4887,7 +4890,7 @@
         + (nums.length ? `<div class="lw-nums">${nums.map(([v, l]) => `<span><b>${v}</b><span>${l}</span></span>`).join('')}</div>` : '')
         + (!items.length && lageOn() && lageCache && nLines ? `<p class="lw-ok small">Keine Störungen, kein Stau, keine Baustellen auf deinen Wegen in Bielefeld.</p>` : '')
         + more + '</div>';
-      say.push(`${title}: ${badge === 'frei' ? 'frei' : badge}. ${nums.map(([v, l]) => `${v} ${l}`).join(', ')}${nums.length ? '.' : ''} ${items.map((x) => `${x.art ? x.art + ': ' : ''}${x.name}${x.right ? ', ' + x.right : ''}.`).join(' ')}`);
+      say.push(`${title}: ${badge === 'frei' ? 'frei' : badge}. ${nums.map(([v, l]) => `${v} ${l}`).join(', ')}${nums.length ? '.' : ''} ${items.map((x) => `${x.art && LAGE_LABEL[x.art] ? LAGE_LABEL[x.art] + ': ' : ''}${x.name}${x.right ? ', ' + x.right : ''}.`).join(' ')}`);
     }
     if (!real.length) say.push('Noch keine Fahrt.');
     wegSay = say.join(' ').replace(/\s+/g, ' ').trim();
@@ -7496,7 +7499,7 @@
   $('#inp-fuel').value = fmtNum(settings.fuelPrice, 2);
   $('#inp-power').value = fmtNum(settings.powerPrice, 2);
   $('#app-version').textContent = VERSION;
-  $('.proto').textContent = 'Prototyp ' + VERSION;   // zeigt zugleich: das Programm läuft
+  { const vfEl = $('#ver-foot'); if (vfEl) vfEl.textContent = 'Prototyp ' + VERSION; }   // zeigt zugleich: das Programm läuft
   setTimeout(loadServerTools, 1500);
   clusters = buildClusters(signalNodes());
   // Ampelanlagen der Stadt einmal pro Woche holen; nicht während einer Aufzeichnung neu einteilen

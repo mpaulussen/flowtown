@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Flowtown</title>
-<meta name="description" content="Flowtown – Die grüne Welle beginnt bei dir. Weniger Stopps, weniger Sprit, in der Stadt und auf der Autobahn. Prototyp: zeichnet Halte an Ampeln auf und zeigt, wo du wartest.">
+<meta name="description" content="Flowtown: barrierefreie Wege mit Auto, Bus und Bahn, Fahrrad und zu Fuß, mit Quelle und Stand. Prototyp für Bielefeld.">
 <meta name="theme-color" content="#f7f7f5">
 <meta name="color-scheme" content="light">
 <link rel="manifest" href="manifest.webmanifest">
@@ -69,7 +69,6 @@
 <header class="top">
   <svg class="logo" viewBox="0 0 40 14" aria-hidden="true"><circle cx="7" cy="7" r="5" fill="#D64933"/><circle cx="20" cy="7" r="5" fill="#F2B33D"/><circle cx="33" cy="7" r="5" fill="#2FA36B"/></svg>
   <h1>Flowtown</h1>
-  <span class="proto">Prototyp</span>
   <button type="button" class="refresh sos" id="btn-sos" aria-label="Notfall und Hilfe: Notrufnummern" aria-haspopup="dialog"><svg class="ic" aria-hidden="true"><use href="#i-sos"/></svg></button>
   <button type="button" class="refresh mic" id="btn-mic" aria-label="Sprechen: Befehl sagen" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-mic"/></svg></button>
   <button type="button" class="refresh" id="btn-refresh" aria-label="Aktualisieren"><svg class="ic" aria-hidden="true"><use href="#i-refresh"/></svg></button>
@@ -369,7 +368,6 @@
     <details id="map-coverage-list" class="card map-list" hidden></details>
     <details id="map-list" class="card map-list" hidden></details>
     <button id="btn-melden" class="btn" type="button" aria-pressed="false" hidden><svg class="ic" aria-hidden="true"><use href="#i-alert"/></svg>Hindernis melden</button>
-    <p><a href="../redaktion/#/aufnahme">Hinweis aufnehmen (Redaktion)</a></p>
     <p id="map-loc-msg" class="msg" role="status" aria-live="polite"></p>
     <div id="map-legend" class="map-legend small"></div>
     <select id="map-window" aria-label="Zeitfenster des Flow-Rasters" hidden></select>
@@ -403,11 +401,6 @@
     <header class="page-head"><h2 id="h-more" class="display">Einstellungen</h2>
     <p class="page-sub">Alles bleibt auf diesem Handy, bis du es teilst. Tippe auf einen Bereich zum Ändern.</p></header>
     </div>
-    <a class="tag-link" href="../redaktion/#/aufnahme">
-      <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-access"/></svg></span>
-      <span class="tag-tx"><b>Hinweis aufnehmen</b><span class="small">Standort und Diktat · Redaktion</span></span>
-      <svg class="ic" aria-hidden="true"><use href="#i-chevron"/></svg>
-    </a>
     <button type="button" class="tag-link" id="kann-link" aria-label="Was kann Flowtown? Überblick öffnen">
       <span class="tag-ic" aria-hidden="true"><svg class="ic"><use href="#i-info"/></svg></span>
       <span class="tag-tx"><b>Was kann Flowtown?</b><span class="small">Drei Dinge, mit Beispielen zum Ausprobieren</span></span>
@@ -631,7 +624,7 @@
       </div>
     </details>
     </section>
-    <p class="small muted more-foot"><a href="../datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> · <a href="../nutzung.html" target="_blank" rel="noopener">Nutzungsbedingungen</a> · Ampelstandorte: © OpenStreetMap-Mitwirkende · Prototyp, Version <span id="app-version"></span></p>
+    <p class="small muted more-foot"><span id="ver-foot"></span><br><a href="../datenschutz.html" target="_blank" rel="noopener">Datenschutzerklärung</a> · <a href="../nutzung.html" target="_blank" rel="noopener">Nutzungsbedingungen</a> · Ampelstandorte: © OpenStreetMap-Mitwirkende · Prototyp, Version <span id="app-version"></span></p>
   </section>
 </main>
 

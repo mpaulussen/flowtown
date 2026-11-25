@@ -1762,3 +1762,6 @@ body.talk-in-view .fab-mic{display:none}
 
 .sb-frage { font-weight: 700; margin: 0 0 8px; }
 .sb-modus { color: var(--muted); font-size: 13px; margin: 0 0 6px; }
+
+/* Phase 1 (U3): Inhalte liegen nie unter dem Mikrofon-Knopf */
+.view:not(#view-start){padding-bottom:calc(130px + env(safe-area-inset-bottom,0px))}
