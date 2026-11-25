@@ -4000,6 +4000,12 @@ function zahlenFilter(text, messages, frage) {
     }
     // ein gespeichertes Zuhause gibt es nur, wenn ein Werkzeug es nennt (die Frage „nach Hause“ belegt es nicht)
     if (/zu\s?hause/i.test(sz) && !/zuhause|zu hause|wohnung|adresse/i.test(werkzeuge)) return false;
+    // „Bus“ nur, wenn ein Werkzeug Busse nennt (Regionalbahnen wie R11 sind keine Busse)
+    if (/\bbus(se)?\b/i.test(sz) && !/\bbus(se)?\b/i.test(werkzeuge)) return false;
+    // Gesamturteile über einen Weg nur, wenn ein Werkzeug sie auch nennt
+    for (const m of sz.matchAll(/gut machbar|problemlos|ohne probleme|ohne hindernisse|gut zug[äa]nglich|gut befahrbar/gi)) {
+      if (!new RegExp(m[0].replace(/ä/g, '[äa]'), 'i').test(werkzeuge)) return false;
+    }
     return true;
   }).join(' ').trim();
 }
