@@ -3987,7 +3987,7 @@ function zahlenFilter(text, messages, frage) {
   const teile = String(text || '').split(/(?<=[.!?])\s+/);
   // Ausstattung und Zustand: nur sagen, was ein Werkzeug belegt (Wortstamm, Umlaute gleichgesetzt)
   const nb = b.replace(/ß/g, 'ss').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/[^a-z0-9.]/g, '');
-  const AUSSTATTUNG = /\b(hochbahnsteig|aufz[uü]g|fahrstuhl|rampe|stufenlos|hochflur|niederflur|rollstuhlgerecht|barrierefrei|toilette|behindertenparkplatz)/i;
+  const AUSSTATTUNG = /\b(hochbahnsteig|aufz[uü]g|fahrstuhl|rampe|stufenlos|hochflur|niederflur|rollstuhlgerecht|barrierefrei|toilette|behindertenparkplatz|treppe|bordstein)/i;
   return teile.filter((sz) => {
     for (const m of sz.matchAll(/\d+(?:[.,:]\d+)*/g)) {
       const tok = norm(m[0]);
