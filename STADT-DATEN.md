@@ -114,7 +114,9 @@ Status: **Teilstart.** Regel 1 erfüllt (Fahrplan Stufe 1). Regel 2 greift nur f
 | Ansprechperson | Geodatenstelle der Stadt und NEW | benannt |
 | Inklusionsbeirat | nicht geprüft | offen |
 
-**Status: Teilstart** (wie Heilbronn). Das Echtzeit-Modul läuft, sobald die Lizenz CC BY-SA geklärt ist; bis dahin „Warten“ für Echtzeit.
+**Status: Nicht gestartet, Testbetrieb** (Entscheidung 25.11.2026). Der Prüfkatalog für Mönchengladbach zeigte in mehreren Läufen wechselnde falsche Aussagen, zuletzt eine Gehzeit zum Rathaus, die nicht aus dem Ergebnis stammt. Solange keine Regel für Zeiten und Ziele greift, die nicht im Ergebnis stehen, geht die Stadt nicht live. Die Fahrplan-Daten bleiben auf dem Server geladen.
+
+**Bedingung für den Start:** null falsche Antworten in einem vollständigen Lauf des Prüfkatalogs (Regel M2) sowie geklärte Lizenz für die Echtzeit (CC BY-SA).
 
 **OpenStreetMap-Abfrage (25.11.2026, Stadtgebiet):** 1.148 Haltestellen-Knoten, passend zu den 1.163 Haltepunkten, die die Stadt nennt. Merkmal `wheelchair`: `yes` 166, `limited` 34, `no` 75, leer 873. Mit Angabe 275 von 1.148, also 24 Prozent. Regel 2 (mindestens 50 Prozent) ist damit nicht erfüllt, das Modul Barrierefreiheit bleibt auf Stufe 4. Zum Vergleich Heilbronn: 27 Prozent mit Angabe, der Anteil `yes` liegt in beiden Städten bei 12 bis 14 Prozent. Die Aktualität der Angaben ist unbekannt, die Stadt nutzt laut Faktencheck eine Liste von 2014.
 
