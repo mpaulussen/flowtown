@@ -82,6 +82,9 @@ def main():
     pattern = re.compile('.' if alle else pat, re.I)
     CITY = box(sys.argv[4] if len(sys.argv) > 4 else '', CITY)
     REGION = box(sys.argv[5] if len(sys.argv) > 5 else '', REGION)
+    # Quelle und Lizenz: Standard DELFI (CC BY 4.0); für andere Datensätze als Parameter 6 und 7
+    QUELLE = sys.argv[6] if len(sys.argv) > 6 and sys.argv[6] else 'DELFI'
+    LIZENZ = sys.argv[7] if len(sys.argv) > 7 and sys.argv[7] else 'CC BY 4.0'
     t0 = time.time()
     z = zipfile.ZipFile(src)
     rows = lambda name: csv.DictReader(io.TextIOWrapper(z.open(name), encoding='utf-8-sig', newline=''))
@@ -214,7 +217,7 @@ def main():
     out_trips = [t for t, _ in out_trips]
     used_services = {t[3] for t in out_trips}
     out = {
-        'quelle': 'DELFI', 'lizenz': 'CC BY 4.0', 'stand': feed.get('feed_version', ''),
+        'quelle': QUELLE, 'lizenz': LIZENZ, 'stand': feed.get('feed_version', ''),
         'gilt': [feed.get('feed_start_date', ''), feed.get('feed_end_date', '')],
         'stops': stops, 'routes': [routes[i] for i in used_routes], 'heads': heads, 'patterns': patterns,
         'services': {k: sorted(v) for k, v in days.items() if v and k in used_services}, 'trips': out_trips

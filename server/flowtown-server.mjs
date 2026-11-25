@@ -405,10 +405,13 @@ const FAHRPLAN_FILE = path.join(DATA_DIR, 'fahrplan.json');
 const STADT_FP = {
   moenchengladbach: { name: 'Mönchengladbach', muster: '*', stadt: '51.10,51.26,6.30,6.58', region: '50.95,51.45,6.00,6.95' },
   paderborn: { name: 'Paderborn', muster: '*', stadt: '51.68,51.80,8.66,8.86', region: '51.45,52.10,8.10,9.30' },
-  detmold: { name: 'Detmold', muster: '*', stadt: '51.86,52.00,8.74,9.02', region: '51.65,52.25,8.35,9.40' }
+  detmold: { name: 'Detmold', muster: '*', stadt: '51.86,52.00,8.74,9.02', region: '51.65,52.25,8.35,9.40' },
+  // Heilbronn: eigene Datei des Verkehrsverbunds HNV (NVBW, Datenlizenz Deutschland), nicht DELFI. Nur mit HNV_GTFS_URL in /etc/flowtown.env.
+  heilbronn: { name: 'Heilbronn', muster: 'Stadtwerke Heilbronn', stadt: '49.10,49.18,9.15,9.27', region: '49.00,49.30,9.00,9.45', zip: 'hnv', quelleName: 'NVBW (HNV)', lizenz: 'dl-de/by-2-0' }
 };
+const HNV_GTFS_URL = process.env.HNV_GTFS_URL || '';
 const FP_STAEDTE = [{ id: 'bielefeld', name: 'Bielefeld', file: FAHRPLAN_FILE, muster: FAHRPLAN_AGENCY, stadt: '', region: '', box: [51.90, 52.12, 8.38, 8.70] }]
-  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach,paderborn,detmold' : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
+  .concat((process.env.FAHRPLAN_STAEDTE == null ? 'moenchengladbach,paderborn,detmold' + (HNV_GTFS_URL ? ',heilbronn' : '') : process.env.FAHRPLAN_STAEDTE).split(',').map((x) => x.trim().toLowerCase()).filter((x) => STADT_FP[x])
     .map((id) => Object.assign({ id, file: path.join(DATA_DIR, `fahrplan-${id}.json`), box: STADT_FP[id].stadt.split(',').map(Number) }, STADT_FP[id])));
 let fahrplan = null, fahrplanRun = null, fahrplanTry = 0;   // Bielefeld: { stand, gilt, json (gzip), etag }
 const fahrplaene = {};   // je Stadt dasselbe
@@ -429,27 +432,40 @@ const fpStadtAt = (pos) => (pos ? FP_STAEDTE.find((c) => fahrplaene[c.id] && pos
 async function refreshFahrplan() {
   if (!DELFI_URL) throw new Error('DELFI_GTFS_URL fehlt in /etc/flowtown.env');
   const zip = path.join(DATA_DIR, 'delfi-gtfs.zip');
-  try {
-    const res = await fetch(DELFI_URL, { headers: { 'User-Agent': 'Flowtown-Prototyp (info@barrierefrai.com)' } });
+  const hnvZip = path.join(DATA_DIR, 'hnv-gtfs.zip');
+  const herunterladen = async (url, dst) => {
+    const res = await fetch(url, { headers: { 'User-Agent': 'Flowtown-Prototyp (info@barrierefrai.com)' } });
     if (!res.ok || !/zip|octet/.test(res.headers.get('content-type') || '')) throw new Error('Download: HTTP ' + res.status + ' ' + (res.headers.get('content-type') || ''));
-    await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(zip));
+    await pipeline(Readable.fromWeb(res.body), fs.createWriteStream(dst));
+  };
+  try {
+    await herunterladen(DELFI_URL, zip);
+    // Heilbronn (HNV) kommt aus einer eigenen Datei; schlägt der Download fehl, bleiben die anderen Städte unberührt
+    let hnvOk = false;
+    const msgsVorab = [];
+    if (FP_STAEDTE.some((c) => c.zip === 'hnv')) {
+      try { if (!HNV_GTFS_URL) throw new Error('HNV_GTFS_URL fehlt'); await herunterladen(HNV_GTFS_URL, hnvZip); hnvOk = true; }
+      catch (e) { msgsVorab.push('Heilbronn: ' + e.message); }
+    }
     const script = path.join(path.dirname(new URL(import.meta.url).pathname), 'fahrplan-bielefeld.py');
     const run = (c) => new Promise((resolve, reject) => {
-      const p = spawn('python3', [script, zip, c.file, c.muster, c.stadt, c.region]);
+      const quelle = c.zip === 'hnv' ? hnvZip : zip;
+      const p = spawn('python3', [script, quelle, c.file, c.muster, c.stadt, c.region, c.quelleName || '', c.lizenz || '']);
       let log = '';
       p.stdout.on('data', (x) => { log += x; }); p.stderr.on('data', (x) => { log += x; });
       p.on('error', (e) => reject(new Error('python3 nicht gefunden: ' + e.message)));
       p.on('close', (code) => (code === 0 ? resolve(log.trim()) : reject(new Error('Auszug: ' + log.trim().slice(-300)))));
     });
     // nacheinander, damit der Speicher reicht; eine Stadt, die nicht klappt, hält die anderen nicht auf
-    const msgs = [];
+    const msgs = [...msgsVorab];
     for (const c of FP_STAEDTE) {
+      if (c.zip === 'hnv' && !hnvOk) continue;
       try { msgs.push(`${c.name}: ${await run(c)}`); } catch (e) { if (c.id === 'bielefeld') throw e; msgs.push(`${c.name}: ${e.message}`); }
     }
     loadFahrplan();
     hstTick();
     return msgs.join(' | ');
-  } finally { fs.rmSync(zip, { force: true }); }
+  } finally { fs.rmSync(zip, { force: true }); fs.rmSync(hnvZip, { force: true }); }
 }
 // stündlich prüfen: fehlt der Fahrplan oder ist er älter als 7 Tage, nachts zwischen 3 und 5 Uhr neu holen
 function fahrplanTick() {
@@ -2320,7 +2336,7 @@ Regeln:
 - Telefonnummern nennst du nie, nur 112 und 110. Verweise auf mobiel.de, bahn.de oder die Stadt.
 - Öffnungszeiten, Preise und Ausstattung nennst du nur, wenn sie in den Werkzeugergebnissen stehen. Sonst sagst du: keine Angabe. Nie „rund um die Uhr“ oder „durchgehend geöffnet“ erfinden.
 - Sag nie, dass alle Haltestellen, Fahrzeuge oder Wege stufenlos oder barrierefrei sind. Nenne nur die Orte, die ein Werkzeug nennt.
-- Fahrzeiten, Linien und Verbindungen nennst du nur für Orte in Bielefeld, Paderborn, Mönchengladbach und Detmold. Für andere Orte, zum Beispiel Berlin, Amsterdam, Halle oder Heilbronn, sagst du, dass du dort keine Fahrplandaten hast, und verweist auf bahn.de oder den Verkehrsbetrieb. Keine Routen über Autobahnen erfinden, die nicht im Ergebnis stehen.
+- Fahrzeiten, Linien und Verbindungen nennst du nur für Orte in Bielefeld, Paderborn, Mönchengladbach, Detmold und Heilbronn. Für andere Orte, zum Beispiel Berlin, Amsterdam oder Halle, sagst du, dass du dort keine Fahrplandaten hast, und verweist auf bahn.de oder den Verkehrsbetrieb. Keine Routen über Autobahnen erfinden, die nicht im Ergebnis stehen.
 - Entfernungen und Zeiten übernimmst du genau aus den Werkzeugergebnissen. Widersprich dir nie selbst. Bei Unsicherheit sag „etwa“ oder nenne keine Zahl.
 - Die App hat nur diese Stellen: die Reiter Heute, Tipps, Verlauf, Karte und Mehr, das Suchfeld „Wohin?“ auf Heute, das rote Plus oben für den Notruf, auf der Karte den Knopf „Hindernis melden“, unter Mehr die Einstellungen (Profil, Ansagen und Sprache, Server und Dienste). Nenne nie andere Menüpunkte, Knöpfe oder Funktionen.
 - Notruf 112 nur bei Verletzung, Gefahr oder Bedrohung, die die Person schildert. Bei Wünschen wie Abholen, Taxi oder Fahrdienst sag, dass du nichts bestellen kannst. Wird jemand verfolgt oder bedroht: belebten Ort aufsuchen und 110. Bei Profil Hören rätst du nie zum Anrufen, sondern zur App nora (Notruf ohne Sprechen).
