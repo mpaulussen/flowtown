@@ -4065,7 +4065,8 @@ function belegtSatz(text, frage, messages) {
     // pauschal „keine Daten zu Haltestellen“: Die Haltestellen sind im Fahrplan, nur die Angaben zur Barrierefreiheit fehlen
     if (/(keine|kein)\s+(daten|angaben|informationen)\s+zu\s+(den\s+)?haltestellen\b/i.test(s) && !/barrierefrei|stufen|zugang|ausstattung|aufzug|rampe/i.test(s)) return false;
     // „Für <Stadt> habe ich keine Fahrplandaten“: Die Städte mit Fahrplan-Auszug sind geladen, nur einzelne Strecken fehlen
-    if (/(für|in)\s+(mönchengladbach|bielefeld|paderborn|detmold|heilbronn)\s+habe\s+ich\s+keine\s+fahrplandaten/i.test(s) || /keine\s+fahrplandaten\s+für\s+(mönchengladbach|bielefeld|paderborn|detmold|heilbronn)/i.test(s)) return false;
+    const stadt = '(mönchengladbach|bielefeld|paderborn|detmold|heilbronn)';
+    if (new RegExp(stadt + '.{0,40}keine\\s+fahrplandaten', 'i').test(s) || new RegExp('keine\\s+fahrplandaten.{0,40}' + stadt, 'i').test(s)) return false;
     // Namen, die nicht im Ergebnis stehen, werden nicht genannt (zum Beispiel ein Anbietername)
     if (/NEW\s+mobil/i.test(s) && !/NEW\s+mobil/i.test(werk)) return false;
     return true;
