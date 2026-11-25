@@ -92,13 +92,31 @@ Jede Stadt bekommt einen Status. Der Status legt fest, welche Module die App dor
 2. **Barrierefreiheit der Haltestellen** wird aktiviert, wenn Stufe 1 bis 3 vorliegt und mindestens **50 Prozent** der Haltestellen der Stadt Angaben haben. Darunter gilt für das ganze Modul Stufe 4.
 3. **Baustellen** werden aktiviert, wenn ein Datensatz die Stadtstraßen umfasst. Sonst gilt Stufe 4.
 4. **Echtzeit** wird aktiviert, wenn ein Zugang besteht. Sonst bleibt es beim Fahrplan, mit Hinweis.
-5. **Lizenz:** nur Datenlizenz Deutschland, CC BY oder ODbL mit Namensnennung. Alles andere ist ein Ausschluss.
+5. **Lizenz:** erlaubt sind Datenlizenz Deutschland (dl-de/by-2-0), CC BY 4.0 und ODbL, jeweils mit Namensnennung. CC BY-SA 4.0 (DELFI-Echtzeit) ist erlaubt, wenn die Namensnennung und die Weitergabe unter gleichen Bedingungen eingehalten werden; die Rechtsprüfung dazu steht noch aus. Alles andere ist ein Ausschluss.
 6. **Ansprechperson:** ohne benannte Stelle keine Datenpflege. Dann höchstens Stufe 1 mit Stand-Warnung.
 7. **Aktualität:** Daten älter als zwölf Monate fallen eine Stufe.
 8. **Prüfkatalog:** Eine Stadt geht erst live, wenn ihr Prüfkatalog keine falschen Antworten zeigt (Regel M2 in `UX-PLAN.md`).
 
 ### Beispiel Heilbronn
 Status: **Teilstart.** Regel 1 erfüllt (Fahrplan Stufe 1). Regel 2 greift nur für den Landkreis, die Stadt steht als Stufe 4, bis die Liste der Stadt vorliegt. Baustellen im Stadtgebiet: Stufe 4. Echtzeit: Zugang fehlt.
+
+## Teil 5: Prüfung Mönchengladbach (Stand 25.11.2026)
+
+| Bereich | Befund | Stufe |
+|---|---|---|
+| Fahrplan | DELFI-Auszug Stadt und Region, 15.075 Fahrten, 3.251 Haltestellen, gültig bis 12.12.2026, CC BY 4.0 | 1 |
+| Echtzeit | DELFI-Trip-Updates über Mobilithek, im Server für alle Fahrplan-Städte | 1, Lizenz CC BY-SA 4.0 nach Regel 5 zu prüfen |
+| Haltestellen-Barrierefreiheit | Kein offener Datensatz. Die Stadt nutzt laut bsk-mg.de eine Excel-Liste mit Stand 2014. Faktencheck Linie 016: 12 von 36 Bussteigen erfüllen die Anforderungen | 4 |
+| Umbau-Liste Haltestellen | Die Stadt spricht von 1.163 Haltepunkten und einem schrittweisen Umbau, eine Liste mit Stand habe ich nicht gefunden | 4 |
+| Baustellen | Informationsdienst der Stadt von 2021, Übersicht der NEW kein Open-Data-Datensatz | 4 |
+| Verkehrsmeldungen | Straßen.NRW noch nicht freigegeben | Warten |
+| Parkplätze | Parkplatz-Portal der Stadt, rund 80 barrierefreie Stellplätze mit Foto und Route, Stand Dezember 2025 (nur Stellplätze) | 3 |
+| Ansprechperson | Geodatenstelle der Stadt und NEW | benannt |
+| Inklusionsbeirat | nicht geprüft | offen |
+
+**Status: Teilstart** (wie Heilbronn). Das Echtzeit-Modul läuft, sobald die Lizenz CC BY-SA geklärt ist; bis dahin „Warten“ für Echtzeit.
+
+**Nächste Schritte:** OpenStreetMap-Abfrage für Mönchengladbach auf dem Server, Anfrage an Geodatenstelle und NEW, Prüfkatalog für Mönchengladbach (M2), Rechtsprüfung zu CC BY-SA.
 
 ## Offene Punkte
 
