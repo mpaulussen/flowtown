@@ -2,7 +2,7 @@
 
 Stand: 24.11.2026. Grundlage: `UX-NOTIZEN.md` und `JURY-ANALYSE.md`. Ziel: eine App, die eine Kernzielgruppe in einem klaren Ablauf führt.
 
-**Kernzielgruppe (Vorschlag, zu bestätigen):** Menschen mit Mobilitäts- oder Sehbehinderung, die in Bielefeld mit Bus und Bahn unterwegs sind.
+**Kernzielgruppe (entschieden 25.11.2026, E1):** Menschen mit Behinderung, ältere Menschen und Menschen, die Assistenz brauchen, in Stadt, Öffentlichem Nahverkehr und beim Auto (Behindertenparkplätze), mit Orten, die Barrierefreiheitshinweise haben.
 **Kernablauf:** Ziel sagen → Weg wählen → unterwegs begleitet werden → Angabe bestätigen oder melden.
 
 Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
@@ -11,7 +11,7 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
 
 ## Phase 0: Entscheidungen (vor allem anderen)
 
-- [ ] **E1 Kernzielgruppe festlegen.** Wer ist zuerst gemeint? Alles andere richtet sich danach.
+- [x] **E1 Kernzielgruppe festlegen.** Entschieden am 25.11.2026: Mobilität für Menschen mit Behinderung, ältere Menschen und Menschen, die Assistenz brauchen. Unterwegs in der Stadt, im Öffentlichen Nahverkehr und beim Auto (Behindertenparkplätze), mit Orten, die Barrierefreiheitshinweise haben. Alles andere richtet sich danach.
 - [ ] **E2 Rolle des Ampel-Loggers klären.** Eigener Modus „Auto“, Zusatzfunktion unter „Mehr“ oder eigenes Produkt.
 - [ ] **E3 Begriffe festlegen.** Vorschlag: **Ziel** = wohin, **Weg** = geplante Strecke, **Fahrt** = Aufzeichnung unterwegs. Liste in `UX-NOTIZEN.md` ergänzen.
 - [ ] **E4 Eine Marke.** Farben und Formen der Website (Blau, Orange, Navy) in die App übernehmen oder umgekehrt.
