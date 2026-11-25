@@ -4048,13 +4048,27 @@ function zielHinweis(text, frage) {
   if (t.toLowerCase().includes(ziel.slice(0, 6))) return t;
   return t + ' Den Weg vom Halt bis zum gefragten Ort habe ich nicht geprüft.';
 }
+// Sätze, die über das Ergebnis hinausgehen: falsche Verkehrsart (RB als S-Bahn, Stadtbahn ohne Beleg), ungefragte Auto-Empfehlung, Fußwegzeit ohne Beleg
+function belegtSatz(text, frage, messages) {
+  const werk = (messages || []).filter((m) => m.role === 'tool').map((m) => String(m.content || '')).join(' ');
+  const f = String(frage || '');
+  const teile = String(text || '').split(/(?<=[.!?])\s+/);
+  return teile.filter((s) => {
+    if (/S-Bahn/i.test(s) && /\b(RB|RE|IRE|ICE|IC)\s?\d/i.test(s)) return false;
+    if (/S-Bahn/i.test(s) && !/S\s?\d|S-Bahn/i.test(werk) && !/S-Bahn/i.test(f)) return false;
+    if (/Stadtbahn/i.test(s) && !/keine Stadtbahn|gibt es keine/i.test(s) && !/Stadtbahn/i.test(werk) && !/Stadtbahn/i.test(f)) return false;
+    if (/\bAuto\b|\bAutos\b|Parkplatz|Parkplätze|parkplätzen/i.test(s) && !/auto|wagen|parken|parkplatz|kfz|pkw/i.test(f)) return false;
+    if (/Fußweg|zu Fuß|laufen|Gehweg|Gehzeit/i.test(s) && !/fuß|fuss|gehweg|gehzeit|gehen|laufen|fußweg/i.test(werk)) return false;
+    return true;
+  }).join(' ').trim();
+}
 // beides zusammen für jede Antwort, die der Server an die App gibt
-function ehrlich(text, frage) {
-  const t = selbstauskunft(text);
+function ehrlich(text, frage, messages) {
+  const t = belegtSatz(selbstauskunft(text), frage, messages);
   return t ? zielHinweis(t, frage) : '';
 }
 async function absichern(antwort0, messages, used, frage) {
-  const antwort = ehrlich(zahlenFilter(antwort0, messages, frage), frage) || 'Dazu habe ich gerade keine Angabe.';
+  const antwort = ehrlich(zahlenFilter(antwort0, messages, frage), frage, messages) || 'Dazu habe ich gerade keine Angabe.';
   const grund = quellenPruefung(antwort, messages, used);
   if (!grund) return mitFundort(mitFahrplanHinweis(antwort, messages), frage);
   console.error(new Date().toISOString(), 'Quellenprüfung:', grund);
@@ -4063,7 +4077,7 @@ async function absichern(antwort0, messages, used, frage) {
     messages.push({ role: 'assistant', content: antwort });
     messages.push({ role: 'user', content: `Deine Antwort enthält Angaben, die nicht in den Ergebnissen der Werkzeuge stehen (${grund}). Antworte noch einmal in höchstens drei Sätzen und nenne nur, was in den Ergebnissen steht. Was fehlt, sag offen: „Dazu habe ich keine Angabe.“${/^Dauer|^Uhrzeit/.test(grund) ? ' Fahrzeit, Abfahrt und Ankunft stehen fertig im Feld satz des Ergebnisses (auch fahrzeit_min, dauer_min): nutze genau diese Angaben aus einem Eintrag, rechne nicht selbst und rechne die Wartezeit ab jetzt nicht dazu.' : ''}` });
     const m = await mistralChat(messages, true);
-    const a2 = ehrlich(zahlenFilter(sauber(m.content), messages, frage), frage);
+    const a2 = ehrlich(zahlenFilter(sauber(m.content), messages, frage), frage, messages);
     if (a2 && !quellenPruefung(a2, messages, used)) return mitFundort(mitFahrplanHinweis(a2, messages), frage);
   } catch (e) { /* dann die Ersatzantwort */ }
   return /^Thema:/.test(grund) ? Q_ERSATZ_ALLG : Q_ERSATZ;
