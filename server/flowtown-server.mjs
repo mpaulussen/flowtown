@@ -2992,6 +2992,10 @@ async function assistTool(name, a, ctx, act) {
     if (!to) return { fehler: 'Ziel nicht gefunden' };
     if (!from) return { fehler: 'Kein Standort; bitte einen Startort nennen' };
     const f = from.pos.map((x) => Math.round(x * 100000) / 100000), t = to.pos.map((x) => Math.round(x * 10000) / 10000);
+    if (name === 'vergleich' && !fpStadtAt(to.pos)) {
+      // Fernziel ohne Fahrplandaten: keine Zeiten, keine Linien, keine Routen erfinden
+      return { ziel: to.name, fernziel: true, hinweis: 'Für dieses Ziel habe ich keine Fahrplandaten. Nenne keine Bus-, Bahn- oder Autozeiten und keine Linien. Verweise auf bahn.de oder den Verkehrsbetrieb.' };
+    }
     if (name === 'vergleich') {
       const pOsm = osmAussen(to.pos, ctx.typ, 5000), pEg = zuerst(eingangNahe(to.pos, ctx.typ), 5000);   // gleichzeitig mit dem Vergleich, nicht danach
       const sink = {}, v = await vergleichZiel(f, t, ctx.typ, ctx.vorrang, ctx.zuFuss, sink);
@@ -3328,6 +3332,8 @@ function msgText(c) {
 // Antwort aufräumen: kein Markdown, keine wiederholten Sätze, keine Telefonnummern (außer 110 und 112), höchstens fünf Sätze
 function sauber(text) {
   let t = String(text || '').replace(/[*#_`]/g, '').replace(/[+:]{2,}/g, ' ').replace(/\s+/g, ' ').trim();
+  // erfundene Öffnungszeiten entfernen (nur Werkzeuge dürfen Zeiten nennen)
+  t = t.replace(/[^.!?]*(?:It is open 24\/7|open 24\/7|rund um die Uhr|durchgehend geöffnet|24\/7 geöffnet)[^.!?]*[.!?]?/gi, '').replace(/\s+/g, ' ').trim();
   const teile = t.split(/(?<=[.!?])\s+/);
   const out = [], seen = new Set();
   for (const sz of teile) {
