@@ -4028,8 +4028,12 @@ function zahlenFilter(text, messages, frage) {
 // Selbstauskünfte über das Wissen der App: „ich kenne keine Verbindungen“, „ich kenne die Haltestellen nicht“ sind falsch, wenn der Fahrplan geladen ist. Solche Sätze fallen weg.
 function selbstauskunft(text) {
   const teile = String(text || '').split(/(?<=[.!?])\s+/);
-  const falsch = /\bkenne\s+(ich\s+)?(die\s+|diese\s+|keine\s+|alle\s+)?(verbindungen|fahrplan\w*|haltestellen|linien|abfahrten)\b|\bkeine\s+(verbindungen|fahrplandaten|haltestellen)\s+kenne\b/i;
-  return teile.filter((s) => !falsch.test(s)).join(' ').trim();
+  const falsch = /\bkenne\s+(ich\s+)?(die\s+|diese\s+|keine\s+|alle\s+)?(verbindungen|fahrplan\w*|haltestellen|linien|abfahrten)\b|\bkeine\s+(verbindungen|fahrplandaten|haltestellen)\s+kenne\b|\bnur\s+(daten|fahrplandaten|fahrplan)\s+(für|in)\s+bielefeld\b|\bin\s+anderen\s+(städten|orten)\s+(als\s+bielefeld\s+)?kenne\s+ich\b/i;
+  const teileOhne = teile.filter((s) => !falsch.test(s));
+  const rest = teileOhne.join(' ').trim();
+  // eine Antwort, die nur „Ich prüfe das für dich“ sagt, ist keine Antwort
+  if (/^ich pr[üu]fe (das|es|dies)\b[^.!?]*[.!?]?$/i.test(rest)) return '';
+  return rest;
 }
 // Nennt die Frage ein Ziel und die Antwort eine Verbindung, aber nicht das Ziel, sagt der Server ausdrücklich, wo der Weg endet und dass der Weg zum Ziel nicht geprüft ist
 function zielHinweis(text, frage) {
