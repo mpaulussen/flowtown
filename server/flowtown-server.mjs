@@ -3980,6 +3980,7 @@ function mitFundort(antwort, frage) {
 // Was nicht belegt ist, sagen wir nicht: ein Satz mit einer Zahl, die in keinem Werkzeugergebnis und nicht in der Frage steht, fällt ganz weg
 const ZAHL_ERLAUBT = new Set(['110', '112']);
 function zahlenFilter(text, messages, frage) {
+  const werkzeuge = messages.filter((m) => m.role === 'tool').map((m) => String(m.content || '')).join(' ');
   const belegt = messages.filter((m) => m.role === 'tool' || m.role === 'user').map((m) => String(m.content || '')).join(' ') + ' ' + String(frage || '');
   const norm = (s) => String(s).replace(/,/g, '.').toLowerCase();
   const b = norm(belegt);
@@ -3997,6 +3998,8 @@ function zahlenFilter(text, messages, frage) {
       const stamm = m[1].toLowerCase().replace(/ß/g, 'ss').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').slice(0, 6);
       if (!nb.includes(stamm)) return false;
     }
+    // ein gespeichertes Zuhause gibt es nur, wenn ein Werkzeug es nennt (die Frage „nach Hause“ belegt es nicht)
+    if (/zu\s?hause/i.test(sz) && !/zuhause|zu hause|wohnung|adresse/i.test(werkzeuge)) return false;
     return true;
   }).join(' ').trim();
 }
