@@ -3298,7 +3298,7 @@ async function direktAntwort(frage, ctx) {
   let meld = null, st = null;
   try { st = await assistTool('oepnv_stoerungen', {}, ctx, {}); meld = Array.isArray(st.aufzuege_gemeldet) ? st.aufzuege_gemeldet : []; } catch (e) { /* ohne Meldungen weiter */ }
   const db = st && st.db_aufzuege_ausser_betrieb;
-  const dbSatz = ctx.aussen ? '' : Array.isArray(db) && db.length ? ` Laut DB sind außer Betrieb: ${db.slice(0, 2).join('; ')}.` : db === 'alle in Betrieb' ? ' Laut DB-Daten ist dafür keine Störung eingetragen. Das ist kein Live-Status: vor Ort prüfen oder auf bahnhof.de nachsehen.' : ' Für die Aufzüge der Bahn zeigt bahnhof.de (DB Info) den Status.';
+  const dbSatz = ctx.aussen ? '' : Array.isArray(db) && db.length ? ` Laut DB sind außer Betrieb: ${db.slice(0, 2).join('; ')}.` : db === 'alle in Betrieb' ? ' Laut DB-Daten ist dafür keine Störung eingetragen. Wenn du dich darauf nicht verlassen willst, frag den Mobilitätsservice der Bahn am Bahnhof nach einem Weg mit einem anderen Aufzug oder bahnhof.de.' : ' Für die Aufzüge der Bahn zeigt bahnhof.de (DB Info) den Status.';
   const flow = (name) => meld == null ? '' : name ? (meld.some((x) => new RegExp(name, 'i').test(x.bei)) ? ' In Flowtown ist dort ein Ausfall gemeldet.' : ' In Flowtown liegt dort keine Ausfallmeldung vor, das sagt aber nichts über den Zustand.') : meld.length ? (meld.length === 1 ? ' In Flowtown ist 1 Ausfall gemeldet.' : ` In Flowtown sind ${meld.length} Ausfälle gemeldet.`) : ' In Flowtown liegt keine Ausfallmeldung vor, das sagt aber nichts über den Zustand.';
   if (plan.typ === 'stop') {
     let lift = null;
