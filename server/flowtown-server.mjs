@@ -3984,11 +3984,18 @@ function zahlenFilter(text, messages, frage) {
   const norm = (s) => String(s).replace(/,/g, '.').toLowerCase();
   const b = norm(belegt);
   const teile = String(text || '').split(/(?<=[.!?])\s+/);
+  // Ausstattung und Zustand: nur sagen, was ein Werkzeug belegt (Wortstamm, Umlaute gleichgesetzt)
+  const nb = b.replace(/ß/g, 'ss').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').replace(/[^a-z0-9.]/g, '');
+  const AUSSTATTUNG = /\b(hochbahnsteig|aufz[uü]g|fahrstuhl|rampe|stufenlos|hochflur|niederflur|rollstuhlgerecht|barrierefrei|toilette|behindertenparkplatz)/i;
   return teile.filter((sz) => {
     for (const m of sz.matchAll(/\d+(?:[.,:]\d+)*/g)) {
       const tok = norm(m[0]);
       if (ZAHL_ERLAUBT.has(tok)) continue;
       if (!new RegExp('(?<![\\d.:])' + tok.replace(/\./g, '\\.') + '(?![\\d])').test(b)) return false;
+    }
+    for (const m of sz.matchAll(new RegExp(AUSSTATTUNG.source, 'gi'))) {
+      const stamm = m[1].toLowerCase().replace(/ß/g, 'ss').replace(/ä/g, 'a').replace(/ö/g, 'o').replace(/ü/g, 'u').slice(0, 6);
+      if (!nb.includes(stamm)) return false;
     }
     return true;
   }).join(' ').trim();
