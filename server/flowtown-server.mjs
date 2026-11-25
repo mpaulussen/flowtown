@@ -4058,7 +4058,8 @@ function belegtSatz(text, frage, messages) {
     if (/S-Bahn/i.test(s) && !/S\s?\d|S-Bahn/i.test(werk) && !/S-Bahn/i.test(f)) return false;
     if (/Stadtbahn/i.test(s) && !/keine Stadtbahn|gibt es keine/i.test(s) && !/Stadtbahn/i.test(werk) && !/Stadtbahn/i.test(f)) return false;
     if (/\bAuto\b|\bAutos\b|Parkplatz|Parkplätze|parkplätzen/i.test(s) && !/auto|wagen|parken|parkplatz|kfz|pkw/i.test(f)) return false;
-    if (/Fußweg|zu Fuß|laufen|Gehweg|Gehzeit/i.test(s) && !/fuß|fuss|gehweg|gehzeit|gehen|laufen|fußweg/i.test(werk)) return false;
+    // Fußwege nur, wenn das Ergebnis eine Fuß-Verbindung enthält (verkehrsmittel „fuss“ aus dem Vergleich); die Fahrplan-Verbindung hat keinen Fußweg
+    if (/Fußweg|zu Fuß|laufen|Gehweg|Gehzeit/i.test(s) && !/fuss|fuß/i.test(werk)) return false;
     // Bielefeld-Verwechslung: Die Frage nennt keine Stadt Bielefeld, also hat die Antwort auch nichts von dort zu sagen
     if (/Bielefeld/i.test(s) && !/Bielefeld/i.test(f) && !/Bielefeld/i.test(werk)) return false;
     // pauschal „keine Daten zu Haltestellen“: Die Haltestellen sind im Fahrplan, nur die Angaben zur Barrierefreiheit fehlen
