@@ -107,3 +107,11 @@ Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version
 | 4 bis 7 | Phase 3 Kernablauf |
 | 8 bis 9 | Phase 4 Vertrauen |
 | 10 | Phase 5 zweiter Test |
+
+## Entscheidungen zum Testlauf (25.11.2026)
+
+- **Umfang:** vollständiger Lauf, alle 287 Fragen.
+- **Bewertung:** jede Erwartung wird mit Ja oder Nein beantwortet.
+- **Ziel:** null falsche Antworten (gezählt werden nur die falschen).
+- **Prüfung:** zunächst nur durch den Projektverantwortlichen. Eine unabhängige zweite Prüfung kommt später.
+- **Wiederholung:** vor jeder Veröffentlichung, wie in M2 festgelegt.
