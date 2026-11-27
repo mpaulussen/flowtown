@@ -7186,7 +7186,7 @@
     }
     // Einschränkung (K4): mit einer Angabe startet der Modus Einfach, „Keine davon“ lässt den Modus Standard
     const einschr = [...document.querySelectorAll('input[name="einschr"]:checked')].map((i) => i.value);
-    if (einschr.length) { settings.einschraenkung = einschr.filter((v) => v !== 'keine'); settings.modus = settings.einschraenkung.length ? 'einfach' : 'standard'; }
+    if (einschr.length) { settings.einschraenkung = einschr.filter((v) => v !== 'keine'); settings.modus = settings.einschraenkung.length ? 'einfach' : 'standard'; syncAccess(settings.einschraenkung); }
     if (einschr.length) applyModus();
     settings.onboarded = VERSION;
     store.set('settings', settings);
@@ -7493,15 +7493,26 @@
   };
   document.querySelectorAll('input[name="modus"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { settings.modus = r.value; store.set('settings', settings); applyModus(); } }));
   applyModus();
+  // Einschränkung und Profil gehören zusammen: die Tipps folgen der gewählten Einschränkung, nicht einem alten Profil
+  function syncAccess(liste) {
+    const PROFIL = { rollstuhl: 'rollstuhl', rollator: 'rollator', sehen: 'sehen', hoeren: 'hoeren', lernen: 'lernen', ruhe: 'ruhe', begleitung: 'andere', aeltere: 'andere', andere: 'andere' };
+    const reihe = ['rollstuhl', 'rollator', 'sehen', 'hoeren', 'lernen', 'ruhe', 'begleitung', 'aeltere', 'andere'];
+    const erste = reihe.find((k) => (liste || []).includes(k));
+    settings.access = { on: !!erste, type: erste ? PROFIL[erste] : (settings.access && settings.access.type) || 'rollator' };
+    store.set('settings', settings);
+  }
   // Einschränkung in den Einstellungen ändern: die Liste bestimmt den Modus
   const einschrSet = () => [...document.querySelectorAll('input[name="einschr-set"]')];
   const einschrSetInit = () => { const aktuell = Array.isArray(settings.einschraenkung) ? settings.einschraenkung : []; einschrSet().forEach((c) => { c.checked = aktuell.includes(c.value); }); };
   einschrSetInit();
+  // einmal beim Start: Profil an die gewählte Einschränkung angleichen (auch für Nutzende, die vorher gewählt haben)
+  if (Array.isArray(settings.einschraenkung) && settings.einschraenkung.length) syncAccess(settings.einschraenkung);
   einschrSet().forEach((c) => c.addEventListener('change', () => {
     if (c.checked) einschrSet().forEach((o) => { if (o !== c && (c.value === 'keine' || o.value === 'keine')) o.checked = false; });
     const gewaehlt = einschrSet().filter((o) => o.checked).map((o) => o.value).filter((v) => v !== 'keine');
     settings.einschraenkung = gewaehlt;
     settings.modus = gewaehlt.length ? 'einfach' : 'standard';
+    syncAccess(gewaehlt);
     store.set('settings', settings);
     applyModus();
   }));
