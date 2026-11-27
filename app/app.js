@@ -7517,20 +7517,10 @@
     const erste = reihe.find((k) => (liste || []).includes(k));
     settings.access = { on: !!erste, type: erste ? PROFIL[erste] : (settings.access && settings.access.type) || 'rollator' };
     // Sehen: Sprachausgabe von Anfang an einschalten
-    if (erste === 'sehen' && canSpeak && !settings.voice) settings.voice = { on: true, rate: 1 };
     store.set('settings', settings);
   }
-  // Sehen: beim ersten Antippen der App begrüßt Flowtown die Person mit Sprache (Browser erlauben Ton erst nach einer Berührung)
-  if (canSpeak && settings.access && settings.access.on && settings.access.type === 'sehen' && voiceOn()) {
-    const begruessen = () => {
-      document.removeEventListener('pointerdown', begruessen, true);
-      document.removeEventListener('keydown', begruessen, true);
-      unlockSpeech();
-      speak('Willkommen bei Flowtown. Sag oder tippe, wohin du willst. Mit Sprechen öffnest du die Sprachsteuerung. Hilfe unterwegs findest du auf der Startseite.', { now: true });
-    };
-    document.addEventListener('pointerdown', begruessen, true);
-    document.addEventListener('keydown', begruessen, true);
-  }
+  // Eigene Sprachausgabe und VoiceOver nicht übereinander: sobald der Fokus wechselt, bricht die App ihre Ansage ab
+  if (canSpeak) document.addEventListener('focusin', () => { try { speechSynthesis.cancel(); } catch (e) { /* ohne Sprachausgabe weiter */ } }, true);
   // Einschränkung in den Einstellungen ändern: die Liste bestimmt den Modus
   const einschrSet = () => [...document.querySelectorAll('input[name="einschr-set"]')];
   const einschrSetInit = () => { const aktuell = Array.isArray(settings.einschraenkung) ? settings.einschraenkung : []; einschrSet().forEach((c) => { c.checked = aktuell.includes(c.value); }); };
