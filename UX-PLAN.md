@@ -68,10 +68,22 @@ Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version
   *Fertig, wenn:* es pro Ansicht höchstens einen Mikrofon-Knopf gibt.
 - [ ] **K3 Tab-Leiste mit vier Punkten** (M). Heute, Karte, Tipps, Mehr. Der Verlauf erscheint als Karte in „Heute“, sobald Fahrten vorhanden sind.
 - [ ] **K4 Art der Einschränkung beim ersten Start** (M). Entschieden am 27.11.2026, ersetzt die frühere Fassung („Profil erst bei Bedarf“). Beim ersten Start fragt die App nach der Art der Einschränkung oder „Keine“. Diese Angabe steuert den Rest: Mit Einschränkung ist der Modus „Einfach“ voreingestellt, ohne Einschränkung „Standard“. Umschalten jederzeit unter „Mehr“. Die Angabe ist freiwillig und überspringbar (dann „Standard“). Anforderungen: nur die Art, nie Name oder Adresse; Speicherung nur auf dem Gerät; an den Server nur der Typ, den die Antworten brauchen.
+  *Auswahl (Mehrfachauswahl erlaubt, „Einfach“ gilt, sobald eine Option gewählt ist):*
+  1. Ich fahre mit dem Rollstuhl (Rollstuhl)
+  2. Ich gehe mit Rollator oder Gehhilfe (Rollator)
+  3. Ich sehe nicht gut oder gar nicht (Sehen)
+  4. Ich höre nicht gut oder gar nicht (Hören)
+  5. Ich brauche einfache Sprache oder mehr Zeit zum Lesen (Lernen)
+  6. Ich brauche Ruhe und wenig Reize (Ruhe)
+  7. Ich brauche Begleitung oder Hilfe beim Ein- und Aussteigen (Begleitung)
+  8. Ich bin älter und brauche etwas mehr Unterstützung (Ältere)
+  9. Keine davon (Modus „Standard“)
+  10. Etwas anderes (Freitext, wird nicht gespeichert)
 - [ ] **K5 Fahrt-Ansicht nach Verkehrsmittel** (M). Bus, Bahn, zu Fuß: nächster Halt, Hinweise, großer Knopf „Fahrt beenden“. Keine km/h-Anzeige. Auto: Ampeln und Wartezeit.
 - [ ] **K6 Einheitliche Zeichen für Angaben** (S). ✓ vorhanden, ✗ nicht vorhanden, ? keine Angabe. Immer mit Text, nie nur Farbe oder Symbol. Eine kurze Erklärung beim ersten Auftreten.
 - [ ] **K7 Kürzere Texte** (S). Erklärungen in Formularen auf eine Zeile kürzen, Details per Link.
 - [ ] **K8 Eine Marke** (L). Nach E4 die Farben und Formen in `app/style.css` angleichen.
+- [ ] **K9 Standard-Modus mit vollem Funktionsumfang** (L). Entschieden am 27.11.2026: Der Modus „Standard“ ist keine abgespeckte Barrierefreiheits-App, sondern eine vollwertige Navigation für Menschen ohne Einschränkung. Dazu gehören Karte, Routen, Abfahrten, Verlauf und Fahrzeiten für Bus, Bahn, Auto, Rad und zu Fuß, außerdem Straßen und Verkehrslage. Die Ampel-Auswertung bleibt wie in E2 versteckt. Barrierefreie Angaben gibt es dort ebenfalls, aber als Zusatz, nicht als Kern.
 
 ---
 
