@@ -2215,6 +2215,13 @@
   const TIPS_RE = /(lies|lese|sag|nenn)\b.*\btipps?\b|\btipps? vor(lesen)?\b/;
   async function runCommand(c) {
     if (!c) return false;
+    // Seitenwechsel per Sprache: „Heute“, „Tipps“ oder „Für dich“, „Karte“, „Einstellungen“ oder „Mehr“ (auch mit „gehe zu“, „öffne“, „zeig“)
+    const navMatch = c.match(/^(?:gehe zu|geh zu|öffne|oeffne|zeig|zeige|zu|zurück zu)?\s*(?:den |die |das )?(heute|startseite|tipps|für dich|fuer dich|karte|einstellungen|mehr)$/);
+    if (navMatch) {
+      const ziel = { heute: 'start', startseite: 'start', tipps: 'tips', 'für dich': 'tips', 'fuer dich': 'tips', karte: 'map', einstellungen: 'more', mehr: 'more' }[navMatch[1]];
+      const knopf = document.querySelector(`.tabs [data-view="${ziel}"]`);
+      if (knopf) { knopf.click(); speak(`${knopf.querySelector('span').textContent} geöffnet.`, { now: true }); return true; }
+    }
     if (merkVoice(c)) return true;
     if (!$('#assist').hidden && /^(danke|dankeschön|vielen dank|tschüss|tschüs|ciao|das wars?|das war es|das war s|nein danke|nichts mehr|ende|fertig|schluss)\b/.test(c)) {
       assistReset(); $('#assist').hidden = true; micStatus(''); speak('Gern.', { now: true, force: true }); return true;
@@ -7483,7 +7490,7 @@
     $('#ask-inp').value = b.dataset.askex;
     $('#ask-bar').requestSubmit();
   });
-  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else if (TIPS_RE.test(cmdNorm(i.value))) { renderTips(); readTips(); } else askAssist(i.value, false); i.value = ''; i.blur(); } });
+  $('#ask-bar').addEventListener('submit', (ev) => { ev.preventDefault(); unlockSpeech(); const i = $('#ask-inp'); if (i.value.trim() && /^(?:gehe zu|geh zu|öffne|oeffne|zeig|zeige|zu|zurück zu)?\s*(?:den |die |das )?(?:heute|startseite|tipps|für dich|fuer dich|karte|einstellungen|mehr)$/.test(cmdNorm(i.value))) { runCommand(cmdNorm(i.value)); i.value = ''; i.blur(); return; } if (i.value.trim()) { if (WO_RE.test(cmdNorm(i.value))) whereAmI(false); else if (TIPS_RE.test(cmdNorm(i.value))) { renderTips(); readTips(); } else askAssist(i.value, false); i.value = ''; i.blur(); } });
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-start, .vf-say, #w-voice, #btn-voice, #btn-voice-test')) unlockSpeech(); }, true);
   document.addEventListener('pointerdown', (ev) => { if (ev.target.closest('#btn-mic, #btn-mic-drive, #ask-mic, #fab-mic, #plan-mic, .assist-mic, #ask-bar .btn') && compassWanted()) compassStart(true); }, true);
   $('#set-compass').checked = compassWanted();
