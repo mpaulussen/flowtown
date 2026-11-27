@@ -7322,7 +7322,17 @@
     const type = settings.access.type, mine = FAQ_GROUPS[type] || [];
     const oepnv = (e) => /Nahverkehr/.test(e.kat) || e.orte.some((o) => ['Haltestelle Rathaus', 'Jahnplatz', 'Hauptbahnhof'].includes(o));
     const list = faq.eintraege.filter((e) => e.id !== 'AS-35' && e.gruppen.some((g) => mine.includes(g)) && (group === 'oepnv' ? oepnv(e) : !oepnv(e))).slice(0, 3);
-    const hint = group === 'fuss' ? 'Tippe auf „Weg planen“ und wähle ein Ziel: Flowtown prüft den Weg auf Stufen, Pflaster und Bordsteine und sucht einen besseren.' : 'Auf der Karte unter „Stadtbahn“ siehst du, welche Haltestellen stufenlos sind.';
+    // Hinweis je Einschränkung (EINFACH-SYSTEM.md): nur, was zur Gruppe passt
+    const HINWEIS = {
+      rollstuhl: { fuss: 'Tippe auf „Weg planen“ und wähle ein Ziel: Flowtown prüft den Weg auf Stufen, Pflaster und Bordsteine und sucht einen besseren.', oepnv: 'Auf der Karte unter „Stadtbahn“ siehst du, welche Haltestellen stufenlos sind.' },
+      rollator: { fuss: 'Tippe auf „Weg planen“ und wähle ein Ziel: Flowtown prüft den Weg auf Stufen, Pflaster und Bordsteine und sucht einen besseren.', oepnv: 'Auf der Karte unter „Stadtbahn“ siehst du, welche Haltestellen stufenlos sind.' },
+      sehen: { fuss: 'Sag oder tippe dein Ziel ein. Flowtown liest dir den Weg vor.', oepnv: 'Sag „Abfahrten hier“, dann liest Flowtown dir die nächsten Abfahrten vor.' },
+      hoeren: { fuss: 'Alle Angaben stehen auch als Text auf dem Bildschirm.', oepnv: 'Abfahrten und Störungen stehen als Text auf dem Bildschirm, mit Uhrzeit.' },
+      lernen: { fuss: 'Tippe dein Ziel ein. Die Antwort kommt in kurzen Sätzen.', oepnv: 'Tippe auf „Abfahrten hier“. Die nächsten Abfahrten stehen oben in kurzen Sätzen.' },
+      ruhe: { fuss: 'Tippe dein Ziel ein. Du siehst zuerst nur das Wichtigste.', oepnv: 'Tippe auf „Abfahrten hier“. Du siehst zuerst nur die nächste Abfahrt.' },
+      andere: { fuss: 'Tippe dein Ziel ein. Flowtown zeigt dir zuerst das Wichtigste.', oepnv: 'Hilfe beim Ein- und Aussteigen findest du unter „Hilfe unterwegs“.' }
+    };
+    const hint = (HINWEIS[type] || HINWEIS.andere)[group === 'fuss' ? 'fuss' : 'oepnv'];
     box.innerHTML = `<p class="acc-hint">${ic('access')}<span><b>${esc(ACCESS_LABEL[type])}:</b> ${esc(hint)}</span></p>`
       + list.map((e) => `<div class="tipcard" data-world="tip"><button type="button" class="tip-row" data-acctip="${e.id}" aria-expanded="${accTipOpen === e.id}"><span class="tip-ic">${ic('info')}</span><span class="tip-main"><b>${esc(e.frage)}</b><span>${esc(firstSentence(e.antwort))}</span></span></button>${accTipOpen === e.id ? `<div class="tip-detail">${faqHtml(e)}</div>` : ''}</div>`).join('');
     box.hidden = false;
@@ -7499,7 +7509,20 @@
     const reihe = ['rollstuhl', 'rollator', 'sehen', 'hoeren', 'lernen', 'ruhe', 'begleitung', 'aeltere', 'andere'];
     const erste = reihe.find((k) => (liste || []).includes(k));
     settings.access = { on: !!erste, type: erste ? PROFIL[erste] : (settings.access && settings.access.type) || 'rollator' };
+    // Sehen: Sprachausgabe von Anfang an einschalten
+    if (erste === 'sehen' && canSpeak && !settings.voice) settings.voice = { on: true, rate: 1 };
     store.set('settings', settings);
+  }
+  // Sehen: beim ersten Antippen der App begrüßt Flowtown die Person mit Sprache (Browser erlauben Ton erst nach einer Berührung)
+  if (canSpeak && settings.access && settings.access.on && settings.access.type === 'sehen' && voiceOn()) {
+    const begruessen = () => {
+      document.removeEventListener('pointerdown', begruessen, true);
+      document.removeEventListener('keydown', begruessen, true);
+      unlockSpeech();
+      speak('Willkommen bei Flowtown. Sag oder tippe, wohin du willst. Mit Sprechen öffnest du die Sprachsteuerung. Hilfe unterwegs findest du auf der Startseite.', { now: true });
+    };
+    document.addEventListener('pointerdown', begruessen, true);
+    document.addEventListener('keydown', begruessen, true);
   }
   // Einschränkung in den Einstellungen ändern: die Liste bestimmt den Modus
   const einschrSet = () => [...document.querySelectorAll('input[name="einschr-set"]')];
