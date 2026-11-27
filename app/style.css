@@ -1801,3 +1801,10 @@ body.modus-einfach #w-intro, body.modus-einfach section.w-goals:has(#w-goal-h){d
 body.modus-einfach label:has(#set-compass), body.modus-einfach label:has(#set-navtone), body.modus-einfach label:has(#set-geradeaus),
 body.modus-einfach label:has(#set-sprechicon), body.modus-einfach #set-sprechicon, body.modus-einfach #sprech-url, body.modus-einfach #btn-sprech-copy{display:none!important}
 body.modus-einfach #voice-hint{display:none!important}
+
+/* Einfach-System: drei Schnellzugriffe unter dem Sprachfeld, nur im Modus Einfach */
+.quick3{display:none}
+body.modus-einfach .quick3{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin:14px 0}
+.quick-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:84px;padding:10px 6px;border-radius:var(--r-md,16px);border:2px solid var(--accent,#1d4f91);background:var(--surface,#fff);color:var(--fg);font:inherit;font-size:17px;font-weight:700;cursor:pointer}
+.quick-btn .ic{width:28px;height:28px;color:var(--accent,#1d4f91)}
+.quick-btn:focus-visible{outline:3px solid var(--focus,#0e2a4d);outline-offset:2px}

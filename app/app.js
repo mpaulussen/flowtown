@@ -7437,6 +7437,10 @@
   $('#fab-mic').addEventListener('click', () => openAssistEmpty());
   // Heute: großer Sprechknopf öffnet den Sprachmodus, die Beispielfragen starten gleich eine Frage
   $('#talk-btn').addEventListener('click', () => { unlockSpeech(); openAssistEmpty({ big: true }); });
+  // Schnellzugriffe (Einfach-System, nur im Modus Einfach sichtbar)
+  $('#quick-sprechen').addEventListener('click', () => $('#talk-btn').click());
+  $('#quick-abfahrt').addEventListener('click', () => { unlockSpeech(); $('#ask-inp').value = 'Welche Abfahrten sind hier?'; $('#ask-bar').dispatchEvent(new Event('submit', { cancelable: true })); });
+  $('#quick-hilfe').addEventListener('click', () => $('#btn-sos').click());
   // Solange der große Sprechknopf im Bild ist, braucht es den schwebenden Mikrofonknopf nicht (er verdeckte auch das Mikro im Wohin-Feld)
   if ('IntersectionObserver' in window) new IntersectionObserver((es) => { document.body.classList.toggle('talk-in-view', es.some((e) => e.isIntersecting)); }, { threshold: 0.6 }).observe($('#talk-btn'));
   $('#plan-mic').addEventListener('click', () => { unlockSpeech(); startIntent('weg'); });
