@@ -86,8 +86,8 @@ Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version
 - [ ] **K9 Standard-Modus ist der heutige Funktionsumfang** (S). Entschieden am 27.11.2026: Die App hat heute schon den vollen Funktionsumfang (Karte, Routen, Abfahrten, Verlauf, Fahrzeiten für Bus, Bahn, Auto, Rad und zu Fuß, Straßen und Verkehrslage). Dieser Stand ist „Standard“. Neu zu bauen ist nur der Schalter. Der Ampel-Schalter bleibt im Modus „Standard“ erhalten (Ein/Aus unter „Mehr“), Standardwert: aus (bestätigt am 27.11.2026). Im Modus „Einfach“ gibt es keinen Ampel-Schalter.
 - [ ] **K10 Modus „Einfach“ als Reduktion** (M). Der Modus zeigt nur die Funktionen aus K5 bis K7 und dem Kernablauf: Sprache, Ziel, Weg, Abfahrten, Angabe melden, Hilfe. Alles andere ist ausgeblendet, nicht gelöscht. Die Quellen- und Stand-Angaben bleiben in beiden Modi gleich.
   *Vorschlag Liste (zu bestätigen):*
-  - **Bleibt sichtbar:** Startfrage „Wohin?“ mit Sprache, Ziel und Weg, Abfahrten in der Nähe, Begleitung unterwegs (Fahrt), Angabe melden, Hilfe und Angaben zur Quelle.
-  - **Ausgeblendet:** Karte, Verlauf, Tipps, Auswertung und Diagramme, Ampel-Schalter (es gibt ihn im Modus Einfach nicht), Profil-Details, Redaktion, Gespräch-Historie über mehrere Themen, Einstellungen außer Modus und Sprache.
+  - **Bleibt sichtbar:** Startfrage „Wohin?“ mit Sprache, Ziel und Weg, Abfahrten in der Nähe, Begleitung unterwegs (Fahrt), Angabe melden, Hilfe, Angaben zur Quelle, die Karte mit den Hinweisen zur Barrierefreiheit und die Tipps.
+  - **Ausgeblendet:** Verlauf, Auswertung und Diagramme, Ampel-Schalter (es gibt ihn im Modus Einfach nicht), Profil-Details, Redaktion, Gespräch-Historie über mehrere Themen, Einstellungen außer Modus und Sprache.
 
 ---
 
