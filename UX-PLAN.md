@@ -83,7 +83,7 @@ Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version
 - [ ] **K6 Einheitliche Zeichen für Angaben** (S). ✓ vorhanden, ✗ nicht vorhanden, ? keine Angabe. Immer mit Text, nie nur Farbe oder Symbol. Eine kurze Erklärung beim ersten Auftreten.
 - [ ] **K7 Kürzere Texte** (S). Erklärungen in Formularen auf eine Zeile kürzen, Details per Link.
 - [ ] **K8 Eine Marke** (L). Nach E4 die Farben und Formen in `app/style.css` angleichen.
-- [ ] **K9 Standard-Modus ist der heutige Funktionsumfang** (S). Entschieden am 27.11.2026: Die App hat heute schon den vollen Funktionsumfang (Karte, Routen, Abfahrten, Verlauf, Fahrzeiten für Bus, Bahn, Auto, Rad und zu Fuß, Straßen und Verkehrslage). Dieser Stand ist „Standard“. Neu zu bauen ist nur der Schalter. Der Ampel-Schalter bleibt im Modus „Standard“ erhalten (Ein/Aus unter „Mehr“). Im Modus „Einfach“ gibt es keinen Ampel-Schalter.
+- [ ] **K9 Standard-Modus ist der heutige Funktionsumfang** (S). Entschieden am 27.11.2026: Die App hat heute schon den vollen Funktionsumfang (Karte, Routen, Abfahrten, Verlauf, Fahrzeiten für Bus, Bahn, Auto, Rad und zu Fuß, Straßen und Verkehrslage). Dieser Stand ist „Standard“. Neu zu bauen ist nur der Schalter. Der Ampel-Schalter bleibt im Modus „Standard“ erhalten (Ein/Aus unter „Mehr“), Standardwert: aus (bestätigt am 27.11.2026). Im Modus „Einfach“ gibt es keinen Ampel-Schalter.
 - [ ] **K10 Modus „Einfach“ als Reduktion** (M). Der Modus zeigt nur die Funktionen aus K5 bis K7 und dem Kernablauf: Sprache, Ziel, Weg, Abfahrten, Angabe melden, Hilfe. Alles andere ist ausgeblendet, nicht gelöscht. Die Quellen- und Stand-Angaben bleiben in beiden Modi gleich.
 
 ---
