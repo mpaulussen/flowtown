@@ -1787,3 +1787,6 @@ body.modus-einfach #a2hs{display:none!important}
 body.modus-einfach [data-layer="signals"]{display:none!important}
 /* K12/K11 Modus „Einfach“: Tipps ohne Auswertungs-Hinweis und ohne langen Erklärtext */
 body.modus-einfach .ask-allow, body.modus-einfach #view-tips .lead-text{display:none!important}
+/* K11 Modus „Einfach“ auf „Mehr“: Begriffe, Überblick und leerer Abschnitt „Mitmachen und Testen“ ausblenden */
+body.modus-einfach .glossar, body.modus-einfach #kann-link, body.modus-einfach #h-more-mit{display:none!important}
+body.modus-einfach #h-more-mit + .tip-list, body.modus-einfach section.tip-list:has(#h-more-mit){display:none!important}
