@@ -64,3 +64,21 @@ Jede Karte beginnt mit dem Nutzen, nicht mit der Funktion.
 - Die Formulierungen in Abschnitt 2 und 5 brauchen eine Prüfung mit Menschen aus der Zielgruppe (Phase 2, T2).
 - Die Überschriften müssen in der App über eine Zuordnung kommen, nicht per Hand, damit sie zur Einschränkung passen.
 - Die Menü-Beschriftungen werden im Modus „Einfach“ umbenannt, im Modus „Standard“ bleiben sie gleich.
+
+## 7. Hilfe je Zielgruppe (Reihenfolge der Schnellzugriffe)
+
+Die Zielgruppe bestimmt, welche Hilfe vorne steht. Die erste gewählte Einschränkung (Reihenfolge wie in Abschnitt 2) entscheidet.
+
+| Einschränkung | Vorne | Danach |
+|---|---|---|
+| Sehen | Sprechen | Abfahrten hier, Hilfe unterwegs |
+| Hören | Abfahrten hier | Hilfe unterwegs, Sprechen |
+| Rollstuhl | Abfahrten hier | Sprechen, Hilfe unterwegs |
+| Rollator | Abfahrten hier | Sprechen, Hilfe unterwegs |
+| Lernen | Sprechen | Abfahrten hier, Hilfe unterwegs |
+| Ruhe | Abfahrten hier | Sprechen, Hilfe unterwegs |
+| Begleitung | Hilfe unterwegs | Abfahrten hier, Sprechen |
+| Ältere | Sprechen | Abfahrten hier, Hilfe unterwegs |
+| Keine / Andere | Sprechen | Abfahrten hier, Hilfe unterwegs |
+
+Begründung: Wer sieht, spricht zuerst. Wer hört, bekommt die Abfahrten auf dem Bildschirm. Wer im Rollstuhl oder mit Rollator unterwegs ist, braucht zuerst die Abfahrt, die passt. Wer Begleitung braucht, findet die Hilfe zuerst.

@@ -6620,6 +6620,15 @@
     if (sub && sub.classList.contains('claim-sub')) sub.textContent = key ? EINFACH_TITEL[key][1] : 'Navigation mit Sprache, einfach, direkt, barrierefrei.';
     // Menü im Modus Einfach: „Für dich“ und „Einstellungen“
     const tabLabel = (view, text) => { const s = document.querySelector(`.tabs [data-view="${view}"] span`); if (s) s.textContent = text; };
+    // Hilfe je Zielgruppe (EINFACH-SYSTEM.md, Abschnitt 7): Reihenfolge der Schnellzugriffe
+    const QUICK = { sprechen: 'quick-sprechen', abfahrt: 'quick-abfahrt', hilfe: 'quick-hilfe' };
+    const QUICK_ORDER = {
+      sehen: ['sprechen', 'abfahrt', 'hilfe'], hoeren: ['abfahrt', 'hilfe', 'sprechen'], rollstuhl: ['abfahrt', 'sprechen', 'hilfe'],
+      rollator: ['abfahrt', 'sprechen', 'hilfe'], lernen: ['sprechen', 'abfahrt', 'hilfe'], ruhe: ['abfahrt', 'sprechen', 'hilfe'],
+      begleitung: ['hilfe', 'abfahrt', 'sprechen'], aeltere: ['sprechen', 'abfahrt', 'hilfe']
+    };
+    const reihe = (einfach && key && QUICK_ORDER[key]) || ['sprechen', 'abfahrt', 'hilfe'];
+    reihe.forEach((name, i) => { const el = document.getElementById(QUICK[name]); if (el) el.style.order = String(i); });
     tabLabel('tips', einfach ? 'Für dich' : 'Tipps');
     tabLabel('more', einfach ? 'Einstellungen' : 'Mehr');
   }
