@@ -14,7 +14,7 @@ Aufwand: **S** bis ein Tag, **M** bis drei Tage, **L** eine Woche oder mehr.
 - [x] **E1 Kernzielgruppe festlegen.** Entschieden am 25.11.2026: Mobilität für Menschen mit Behinderung, ältere Menschen und Menschen, die Assistenz brauchen. Unterwegs in der Stadt, im Öffentlichen Nahverkehr und beim Auto (Behindertenparkplätze), mit Orten, die Barrierefreiheitshinweise haben. Alles andere richtet sich danach.
 - [x] **E2 Rolle des Ampel-Loggers klären.** Entschieden am 25.11.2026: Ampel-Logger vorerst verstecken. Die App erfasst und navigiert nur Straßen, Navigation und Öffentlichen Nahverkehr. Umsetzung in drei Schritten, noch offen: (1) Anzeige ausblenden (Karte, Fahrt, Mehr, Profil), (2) Haltestellen an Ampeln nicht mehr aufzeichnen, (3) keine Ampeldaten mehr in `/api/pilot/upload` und `/api/wir` senden. Mit einem Schalter in `app/app.js`, damit es ohne Neuentwicklung zurückgeholt werden kann.
 - [ ] **E3 Begriffe festlegen.** Vorschlag: **Ziel** = wohin, **Weg** = geplante Strecke, **Fahrt** = Aufzeichnung unterwegs. Liste in `UX-NOTIZEN.md` ergänzen.
-- [ ] **E4 Eine Marke.** Farben und Formen der Website (Blau, Orange, Navy) in die App übernehmen oder umgekehrt.
+- [x] **E4 Eine Marke.** Entschieden am 27.11.2026: Die Website übernimmt Layout und Bedienung der App. Blau und Orange bleiben als Akzente, wenige zusätzliche Farbnuancen. Umsetzung als eigener Schritt (K8).
 
 **Fertig, wenn:** die vier Entscheidungen schriftlich im Repo stehen.
 
