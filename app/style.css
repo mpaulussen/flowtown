@@ -1770,7 +1770,7 @@ body.talk-in-view .fab-mic{display:none}
 body.modus-einfach .tabs [data-view="stats"]{display:none!important}
 
 /* Modus „Einfach“ (K10): Einstellungen ausblenden, die nicht zum Kernablauf gehören. Nichts wird gelöscht. */
-body.modus-einfach #box-access, body.modus-einfach #box-modes, body.modus-einfach #box-wege, body.modus-einfach #box-steckbrief,
+body.modus-einfach #box-access, body.modus-einfach #box-modes, body.modus-einfach #box-steckbrief,
 body.modus-einfach #box-goals, body.modus-einfach #box-price, body.modus-einfach #box-cut, body.modus-einfach #box-signals,
 body.modus-einfach #box-data, body.modus-einfach #box-pilot, body.modus-einfach #box-server, body.modus-einfach #box-demo{display:none!important}
 body.modus-einfach label:has(#inp-ask-stats), body.modus-einfach label:has(#set-begleit){display:none!important}
@@ -1793,3 +1793,5 @@ body.modus-einfach #h-more-mit + .tip-list, body.modus-einfach section.tip-list:
 /* K11 Modus „Einfach“ auf „Heute“: kurze Karte „Dein Weg jetzt“, ohne Erklärtext und ohne Verlauf-Link */
 body.modus-einfach #nowcard > p.small{display:none!important}
 body.modus-einfach #tag-link{display:none!important}
+/* K11 Modus „Einfach“: Formular „Weg anlegen“ ohne Erklärtext (der Datenschutz-Hinweis bleibt) */
+body.modus-einfach .k11-erklaerung{display:none!important}
