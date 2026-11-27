@@ -67,7 +67,7 @@ Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version
 - [ ] **K2 Ein Sprach-Einstieg** (M). Ein fester Ort für Sprache. Mikrofone in Tipps und Verlauf entfernen, `#fab-mic` nur während einer Fahrt oder als einziger Einstieg.
   *Fertig, wenn:* es pro Ansicht höchstens einen Mikrofon-Knopf gibt.
 - [ ] **K3 Tab-Leiste mit vier Punkten** (M). Heute, Karte, Tipps, Mehr. Der Verlauf erscheint als Karte in „Heute“, sobald Fahrten vorhanden sind.
-- [ ] **K4 Profil erst bei Bedarf** (M). Einführung mit „Ohne Profil starten“. Das Profil wird gefragt, wenn eine Angabe davon abhängt („Soll ich Wege ohne Stufen zeigen?“).
+- [ ] **K4 Art der Einschränkung beim ersten Start** (M). Entschieden am 27.11.2026, ersetzt die frühere Fassung („Profil erst bei Bedarf“). Beim ersten Start fragt die App nach der Art der Einschränkung oder „Keine“. Diese Angabe steuert den Rest: Mit Einschränkung ist der Modus „Einfach“ voreingestellt, ohne Einschränkung „Standard“. Umschalten jederzeit unter „Mehr“. Die Angabe ist freiwillig und überspringbar (dann „Standard“). Anforderungen: nur die Art, nie Name oder Adresse; Speicherung nur auf dem Gerät; an den Server nur der Typ, den die Antworten brauchen.
 - [ ] **K5 Fahrt-Ansicht nach Verkehrsmittel** (M). Bus, Bahn, zu Fuß: nächster Halt, Hinweise, großer Knopf „Fahrt beenden“. Keine km/h-Anzeige. Auto: Ampeln und Wartezeit.
 - [ ] **K6 Einheitliche Zeichen für Angaben** (S). ✓ vorhanden, ✗ nicht vorhanden, ? keine Angabe. Immer mit Text, nie nur Farbe oder Symbol. Eine kurze Erklärung beim ersten Auftreten.
 - [ ] **K7 Kürzere Texte** (S). Erklärungen in Formularen auf eine Zeile kürzen, Details per Link.
