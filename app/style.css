@@ -1808,3 +1808,8 @@ body.modus-einfach .quick3{display:grid;grid-template-columns:repeat(3,minmax(0,
 .quick-btn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:84px;padding:10px 6px;border-radius:var(--r-md,16px);border:2px solid var(--accent,#1d4f91);background:var(--surface,#fff);color:var(--fg);font:inherit;font-size:17px;font-weight:700;cursor:pointer}
 .quick-btn .ic{width:28px;height:28px;color:var(--accent,#1d4f91)}
 .quick-btn:focus-visible{outline:3px solid var(--focus,#0e2a4d);outline-offset:2px}
+
+/* Einfach-System: Nutzenaussage auf den Karten (nur im Modus Einfach) */
+.nutzen{display:none}
+body.modus-einfach .nutzen{display:block;margin:6px 0 0;font-size:17px;line-height:1.4;color:var(--fg)}
+body.modus-einfach #nowcard .lw-head::after{content:"Du siehst, wo es Hinweise zur Barrierefreiheit gibt.";display:block;margin-top:6px;font-size:17px;line-height:1.4;color:var(--fg)}
