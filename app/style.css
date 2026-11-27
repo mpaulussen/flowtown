@@ -1777,3 +1777,11 @@ body.modus-einfach label:has(#inp-ask-stats), body.modus-einfach label:has(#set-
 
 /* K12 Modus „Einfach“: Tipps nur für die eigene Einschränkung, ohne allgemeine Auswahl und Hilfen */
 body.modus-einfach .tip-modes, body.modus-einfach .tip-acc, body.modus-einfach .tip-help, body.modus-einfach .tip-pick{display:none!important}
+
+/* K11 Modus „Einfach“: weniger Grafik und Erklärungen auf jeder Seite (nichts wird gelöscht) */
+body.modus-einfach .page-mark, body.modus-einfach .claim-mark, body.modus-einfach .note, body.modus-einfach .intro-note,
+body.modus-einfach .small.go-note, body.modus-einfach .small.plan-note, body.modus-einfach .more-foot{display:none!important}
+/* K11 Modus „Einfach“: der Hinweis zum Home-Bildschirm erscheint nicht (er bleibt in Standard) */
+body.modus-einfach #a2hs{display:none!important}
+/* K11 Modus „Einfach“: kein Ampel-Filter auf der Karte */
+body.modus-einfach [data-layer="signals"]{display:none!important}
