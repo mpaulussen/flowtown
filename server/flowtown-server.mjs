@@ -4050,7 +4050,8 @@ function zielHinweis(text, frage) {
 }
 // steht eine Haltestelle dieses Namens im geladenen Fahrplan (irgendeiner Stadt)?
 function haltestelleImFahrplan(name) {
-  const n = String(name || '').toLowerCase().replace(/ß/g, 'ss');
+  // Artikel vorne weglassen: „Im Fleischbeil Nord“ steht im Fahrplan als „Fleischbeil Nord“
+  const n = String(name || '').toLowerCase().replace(/ß/g, 'ss').replace(/^(im|in der|in|am|an der|an|der|die|das)\s+/, '');
   if (n.length < 4) return false;
   return Object.keys(fahrplaene).some((id) => {
     const d = fpData(id);
