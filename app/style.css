@@ -1785,3 +1785,5 @@ body.modus-einfach .small.go-note, body.modus-einfach .small.plan-note, body.mod
 body.modus-einfach #a2hs{display:none!important}
 /* K11 Modus „Einfach“: kein Ampel-Filter auf der Karte */
 body.modus-einfach [data-layer="signals"]{display:none!important}
+/* K12/K11 Modus „Einfach“: Tipps ohne Auswertungs-Hinweis und ohne langen Erklärtext */
+body.modus-einfach .ask-allow, body.modus-einfach #view-tips .lead-text{display:none!important}
