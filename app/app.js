@@ -7438,6 +7438,18 @@
   };
   document.querySelectorAll('input[name="modus"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { settings.modus = r.value; store.set('settings', settings); applyModus(); } }));
   applyModus();
+  // Einschränkung in den Einstellungen ändern: die Liste bestimmt den Modus
+  const einschrSet = () => [...document.querySelectorAll('input[name="einschr-set"]')];
+  const einschrSetInit = () => { const aktuell = Array.isArray(settings.einschraenkung) ? settings.einschraenkung : []; einschrSet().forEach((c) => { c.checked = aktuell.includes(c.value); }); };
+  einschrSetInit();
+  einschrSet().forEach((c) => c.addEventListener('change', () => {
+    if (c.checked) einschrSet().forEach((o) => { if (o !== c && (c.value === 'keine' || o.value === 'keine')) o.checked = false; });
+    const gewaehlt = einschrSet().filter((o) => o.checked).map((o) => o.value).filter((v) => v !== 'keine');
+    settings.einschraenkung = gewaehlt;
+    settings.modus = gewaehlt.length ? 'einfach' : 'standard';
+    store.set('settings', settings);
+    applyModus();
+  }));
   // „Keine davon“ schließt die Einschränkungen aus und umgekehrt
   document.querySelectorAll('input[name="einschr"]').forEach((c) => c.addEventListener('change', () => {
     if (!c.checked) return;
