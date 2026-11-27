@@ -1795,3 +1795,5 @@ body.modus-einfach #nowcard > p.small{display:none!important}
 body.modus-einfach #tag-link{display:none!important}
 /* K11 Modus „Einfach“: Formular „Weg anlegen“ ohne Erklärtext (der Datenschutz-Hinweis bleibt) */
 body.modus-einfach .k11-erklaerung{display:none!important}
+/* K11 Modus „Einfach“ in der Begrüßung: Erklärkarten und „Was ist dir wichtig?“ ausblenden (die Einschränkung bleibt) */
+body.modus-einfach #w-intro, body.modus-einfach section.w-goals:has(#w-goal-h){display:none!important}
