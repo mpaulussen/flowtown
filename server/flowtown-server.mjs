@@ -3971,7 +3971,7 @@ function quellenPruefung(antwort, messages, used) {
   if (fp) { let r = {}; try { r = JSON.parse(fp.content); } catch (e) { r = {}; } if (r.ergebnis !== 'Fahrten gefunden' && /\b(ja|hält|halten|fährt|fahren|gibt es)\b/i.test(antwort) && !/\b(nicht|kein|keine|keinen)\b/i.test(antwort)) return 'Bejahung ohne gefundene Fahrt'; }
   return null;
 }
-const Q_ERSATZ = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es auf bahn.de, mobiel.de oder in der Bahn-App.';
+const Q_ERSATZ = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es auf bahn.de, beim Verkehrsbetrieb oder in der Bahn-App.';
 const Q_ERSATZ_ALLG = 'Dazu habe ich keine Angabe aus einer sicheren Quelle. Bitte prüf es vor Ort oder bei der zuständigen Stelle.';
 // Zeiten aus fahrt_pruefen ohne Echtzeit stehen laut Fahrplan: Das sagt der Server selbst dazu, falls die Antwort es nicht tut
 function mitFahrplanHinweis(antwort, messages) {
@@ -3988,7 +3988,7 @@ function mitFundort(antwort, frage) {
   if (/öffnungszeit|geöffnet|\bauf\b|offen|schließt|öffnet|notdienst/.test(f)) h = 'Die Öffnungszeiten stehen auf der Website der Einrichtung oder der Stadt Bielefeld, oder frag direkt dort.';
   else if (/weg|alternative|umweg|anders|stufenlos|barrierefrei|rampe/.test(f) && !/bahnhof|bahnsteig|gleis/.test(f)) h = 'Sag mir Start und Ziel, dann prüfe ich eine Verbindung, oder frag vor Ort beim Personal.';
   else if (/aufzug|fahrstuhl|bahnhof|bahnsteig|gleis|eingang/.test(f)) h = 'Für Bahnhöfe zeigt bahnhof.de (DB Info) den Status, sonst frag vor Ort beim Personal.';
-  else if (/stadtbahn|bus|haltestelle|linie|hochbahnsteig|ticket|preis/.test(f)) h = 'Bei moBiel (mobiel.de) oder vor Ort beim Personal erfährst du es.';
+  else if (/stadtbahn|bus|haltestelle|linie|hochbahnsteig|ticket|preis/.test(f)) h = 'Beim Verkehrsbetrieb vor Ort oder auf dessen Website erfährst du es.';
   else h = 'Frag am besten vor Ort nach.';
   return a.replace(/\.?$/, '.') + ' ' + h;
 }
@@ -4048,6 +4048,15 @@ function zielHinweis(text, frage) {
   if (t.toLowerCase().includes(ziel.slice(0, 6))) return t;
   return t + ' Den Weg vom Halt bis zum gefragten Ort habe ich nicht geprüft.';
 }
+// steht eine Haltestelle dieses Namens im geladenen Fahrplan (irgendeiner Stadt)?
+function haltestelleImFahrplan(name) {
+  const n = String(name || '').toLowerCase().replace(/ß/g, 'ss');
+  if (n.length < 4) return false;
+  return Object.keys(fahrplaene).some((id) => {
+    const d = fpData(id);
+    return !!d && d.stops.some((st) => String(st[1] || '').toLowerCase().replace(/ß/g, 'ss').includes(n));
+  });
+}
 // Sätze, die über das Ergebnis hinausgehen: falsche Verkehrsart (RB als S-Bahn, Stadtbahn ohne Beleg), ungefragte Auto-Empfehlung, Fußwegzeit ohne Beleg
 function belegtSatz(text, frage, messages) {
   const werk = (messages || []).filter((m) => m.role === 'tool').map((m) => String(m.content || '')).join(' ');
@@ -4065,10 +4074,19 @@ function belegtSatz(text, frage, messages) {
     // pauschal „keine Daten zu Haltestellen“: Die Haltestellen sind im Fahrplan, nur die Angaben zur Barrierefreiheit fehlen
     if (/(keine|kein)\s+(daten|angaben|informationen)\s+zu\s+(den\s+)?haltestellen\b/i.test(s) && !/barrierefrei|stufen|zugang|ausstattung|aufzug|rampe/i.test(s)) return false;
     // „Für <Stadt> habe ich keine Fahrplandaten“: Die Städte mit Fahrplan-Auszug sind geladen, nur einzelne Strecken fehlen
-    const stadt = '(mönchengladbach|bielefeld|paderborn|detmold|heilbronn)';
+    const stadt = '(mönchengladbach|bielefeld|paderborn|detmold|heilbronn|neckarsulm)';
     if (new RegExp(stadt + '.{0,40}keine\\s+fahrplandaten', 'i').test(s) || new RegExp('keine\\s+fahrplandaten.{0,40}' + stadt, 'i').test(s)) return false;
     // Namen, die nicht im Ergebnis stehen, werden nicht genannt (zum Beispiel ein Anbietername)
     if (/NEW\s+mobil/i.test(s) && !/NEW\s+mobil/i.test(werk)) return false;
+    // „Die Haltestelle X kenne ich nicht“ ist falsch, wenn X im geladenen Fahrplan steht
+    if (/kenne ich nicht/i.test(s)) {
+      const m = /Haltestelle\s+([^.!?]+?)\s+(?:in\s+[^.!?]+?\s+)?kenne ich nicht/i.exec(s);
+      if (m && haltestelleImFahrplan(m[1].trim())) return false;
+    }
+    // „In Heilbronn kann ich keine Haltestellen prüfen“: die Haltestellen sind im Fahrplan, nur die Angaben zur Barrierefreiheit fehlen
+    if (/keine\s+haltestellen\s+prüfen/i.test(s)) return false;
+    // „N Mal“ nur, wenn ein Ergebnis dieselbe Zählung nennt
+    if (/\b\d+\s+Mal\b/i.test(s) && !/\bmal\b/i.test(werk)) return false;
     return true;
   }).join(' ').trim();
 }
