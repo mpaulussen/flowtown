@@ -4084,7 +4084,7 @@ function belegtSatz(text, frage, messages) {
       if (m && haltestelleImFahrplan(m[1].trim())) return false;
     }
     // „In Heilbronn kann ich keine Haltestellen prüfen“: die Haltestellen sind im Fahrplan, nur die Angaben zur Barrierefreiheit fehlen
-    if (/keine\s+haltestellen\s+prüfen/i.test(s)) return false;
+    if (/keine\s+haltestellen\s+prüfen|keine\s+haltestellen-?daten|keine\s+daten\s+zu\s+haltestellen\b/i.test(s) && !/barrierefrei|stufen|zugang|ausstattung|aufzug|rampe/i.test(s)) return false;
     // „N Mal“ nur, wenn ein Ergebnis dieselbe Zählung nennt
     if (/\b\d+\s+Mal\b/i.test(s) && !/\bmal\b/i.test(werk)) return false;
     return true;
