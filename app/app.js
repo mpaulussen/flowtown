@@ -7425,6 +7425,15 @@
   $('#set-geradeaus').addEventListener('change', (ev) => { settings.geradeaus = ev.target.value === '' ? null : Number(ev.target.value); store.set('settings', settings); });
   $('#set-navtone').addEventListener('change', (ev) => { settings.navTone = ev.target.checked; store.set('settings', settings); if (ev.target.checked) { audioUnlock(); chime('hinweis'); } });
   $('#set-begleit').addEventListener('change', (ev) => { settings.begleit = ev.target.checked; store.set('settings', settings); if (ev.target.checked && !compassOn) compassStart(true); });
+  // Modus „Einfach“ oder „Standard“ (K4/K10): blendet nur aus, löscht nichts
+  const applyModus = () => {
+    const einfach = settings.modus === 'einfach';
+    document.body.classList.toggle('modus-einfach', einfach);
+    $('#modus-sub').textContent = einfach ? 'Einfach' : 'Standard';
+    document.querySelectorAll('input[name="modus"]').forEach((r) => { r.checked = r.value === (einfach ? 'einfach' : 'standard'); });
+  };
+  document.querySelectorAll('input[name="modus"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { settings.modus = r.value; store.set('settings', settings); applyModus(); } }));
+  applyModus();
   $('#set-compass').addEventListener('change', (ev) => { settings.compass = ev.target.checked; store.set('settings', settings); if (ev.target.checked) compassStart(true).then((ok) => { if (!ok) { $('#set-compass').checked = false; micStatus('Der Kompass ist auf diesem Gerät nicht verfügbar oder nicht freigegeben.'); } }); });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
