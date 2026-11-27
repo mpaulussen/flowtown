@@ -6597,10 +6597,30 @@
     h.textContent = t; h.classList.toggle('long', t.length > 18); h.classList.toggle('xlong', t.length > 24);
   }
   let heuteTitel = null, tabTitel = null;
+  // Einfach-System (EINFACH-SYSTEM.md): Überschrift und Unterzeile nach der ersten Einschränkung
+  const EINFACH_ORDER = ['rollstuhl', 'rollator', 'sehen', 'hoeren', 'lernen', 'ruhe', 'begleitung', 'aeltere'];
+  const EINFACH_TITEL = {
+    rollstuhl: ['Stufenfrei unterwegs.', 'Sag, wohin du willst. Du siehst, was belegt ist.'],
+    rollator: ['Wege ohne unnötige Umwege.', 'Sag, wohin du willst. Du siehst, was belegt ist.'],
+    sehen: ['Du hörst, wohin es geht.', 'Sag, wohin du willst. Alles wird vorgelesen.'],
+    hoeren: ['Alles steht auf dem Bildschirm.', 'Sag oder tipp, wohin du willst.'],
+    lernen: ['Sag einfach, wohin du willst.', 'Kurze Sätze. Eine Sache auf einmal.'],
+    ruhe: ['Ruhig unterwegs.', 'Sag, wohin du willst. Wenige Angaben auf einmal.'],
+    begleitung: ['Hilfe am Ein- und Ausstieg.', 'Sag, wohin du willst. Hilfe findest du unter Einstellungen.'],
+    aeltere: ['Gut ankommen, ohne Stress.', 'Sag, wohin du willst.']
+  };
   function renderHeuteTitel() {
-    heuteTitel = TITEL_HEUTE;
+    const einfach = settings.modus === 'einfach';
+    const key = einfach ? EINFACH_ORDER.find((k) => (settings.einschraenkung || []).includes(k)) : null;
+    heuteTitel = key ? EINFACH_TITEL[key][0] : TITEL_HEUTE;
     if (!tabTitel) tabTitel = { tipps: pickTitel(TITEL_TIPPS, 'tippsTitelLast'), verlauf: pickTitel(TITEL_VERLAUF, 'verlaufTitelLast') };
     setTitel('#h-start', heuteTitel); setTitel('#h-tips', tabTitel.tipps); setTitel('#h-stats', tabTitel.verlauf);
+    const sub = $('#h-start') && $('#h-start').nextElementSibling;
+    if (sub && sub.classList.contains('claim-sub')) sub.textContent = key ? EINFACH_TITEL[key][1] : 'Navigation mit Sprache, einfach, direkt, barrierefrei.';
+    // Menü im Modus Einfach: „Für dich“ und „Einstellungen“
+    const tabLabel = (view, text) => { const s = document.querySelector(`.tabs [data-view="${view}"] span`); if (s) s.textContent = text; };
+    tabLabel('tips', einfach ? 'Für dich' : 'Tipps');
+    tabLabel('more', einfach ? 'Einstellungen' : 'Mehr');
   }
   function renderLastTrip() {
     renderHeuteTitel();
@@ -7450,6 +7470,7 @@
     const einfach = settings.modus === 'einfach';
     document.body.classList.toggle('modus-einfach', einfach);
     $('#modus-sub').textContent = einfach ? 'Einfach' : 'Standard';
+    if (typeof renderHeuteTitel === 'function') renderHeuteTitel();
     document.querySelectorAll('input[name="modus"]').forEach((r) => { r.checked = r.value === (einfach ? 'einfach' : 'standard'); });
   };
   document.querySelectorAll('input[name="modus"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { settings.modus = r.value; store.set('settings', settings); applyModus(); } }));
