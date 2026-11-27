@@ -6632,7 +6632,7 @@
     // Hören: der Sprech-Knopf wird zu „Schreiben“ und öffnet das Textfeld
     const schreiben = einfach && key === 'hoeren';
     const qs = document.getElementById('quick-sprechen');
-    if (qs) { qs.dataset.mode = schreiben ? 'schreiben' : 'sprechen'; qs.querySelector('span').textContent = schreiben ? 'Schreiben' : 'Sprechen'; }
+    if (qs) { qs.dataset.mode = schreiben ? 'schreiben' : 'sprechen'; qs.querySelector('span').textContent = schreiben ? 'Schreiben' : 'Sprechen'; qs.querySelector('use').setAttribute('href', schreiben ? '#i-route' : '#i-mic'); }
     tabLabel('tips', einfach ? 'Für dich' : 'Tipps');
     tabLabel('more', einfach ? 'Einstellungen' : 'Mehr');
   }
