@@ -2597,6 +2597,8 @@
       $('#start-msg').textContent = words(trip.mode).short;
       return;
     }
+    // Stadt der Fahrt (K12): nach dem ersten GPS-Punkt, damit Tipps nur die eigene Stadt zeigen
+    trip.stadt = (rec.samples.length && stadtAt(rec.samples[0].lat, rec.samples[0].lon)) || null;
     trips.push(trip);
     if (!saveTrips()) alert('Der Speicher auf dem Gerät ist voll, die Fahrt konnte nicht gespeichert werden. Lösche unter Verlauf ältere Fahrten.');
     flushWir(trip);
@@ -6127,8 +6129,22 @@
     return { prio: -1, icon: 'bell', cls: 'amber', title: 'Meldungen für deine Wege', cat: 'Meldung', num: String(ns.length), short: `${esc(ns[0].titel)}${ns.length > 1 ? ` und ${ns.length - 1} weitere Meldung${ns.length > 2 ? 'en' : ''}` : ''}.`,
       html: `<ul class="ki-list">${ns.map((n) => `<li>${ic('bell')}<span><strong>${esc(n.titel)}</strong>${n.text ? `<br>${esc(n.text)}` : ''}${n.quelle ? `<br><span class="small muted">Quelle: ${esc(n.quelle)}${n.bis ? ` · bis ${esc(n.bis)}` : ''}</span>` : ''}</span></li>`).join('')}</ul>` };
   }
+  // Stadtrahmen (wie auf dem Server): eigene Stadt für Tipps im Modus Einfach
+  const STADT_BOX = { bielefeld: [51.90, 52.12, 8.38, 8.70], heilbronn: [49.10, 49.18, 9.15, 9.27], moenchengladbach: [51.10, 51.26, 6.30, 6.58], paderborn: [51.68, 51.80, 8.66, 8.86], detmold: [51.86, 52.00, 8.74, 9.02] };
+  function stadtAt(lat, lon) {
+    if (lat == null || lon == null) return null;
+    for (const [k, b] of Object.entries(STADT_BOX)) if (lat >= b[0] && lat <= b[1] && lon >= b[2] && lon <= b[3]) return k;
+    return 'andere';
+  }
+  const tripStadt = (t) => t.stadt || (t.events || []).map((e) => stadtAt(e.lat, e.lon)).find(Boolean) || null;
+  const eigeneStadt = () => {
+    const letzte = [...trips].reverse().find((t) => !t.demo && tripStadt(t) && tripStadt(t) !== 'andere');
+    return letzte ? tripStadt(letzte) : 'bielefeld';
+  };
+  // Im Modus Einfach nur Fahrten der eigenen Stadt; Fahrten ohne bekannte Position bleiben drin
+  const tippsNurEigeneStadt = (t) => settings.modus !== 'einfach' || !tripStadt(t) || tripStadt(t) === eigeneStadt();
   function computeTips(mode) {
-    const list = trips.filter((t) => !t.demo && (!mode || mode === 'alle' || MODE_GROUP[t.mode] === mode));
+    const list = trips.filter((t) => !t.demo && tippsNurEigeneStadt(t) && (!mode || mode === 'alle' || MODE_GROUP[t.mode] === mode));
     const oe = !mode || mode === 'alle' || mode === 'oepnv', rad = !mode || mode === 'alle' || mode === 'rad';
     // zuerst, was den Weg besser macht (Meldungen, anderes Verkehrsmittel, Abfahrt, Umstieg), dann Ampeln, Fahrweise und Kosten
     const BUCKET = { Meldung: 0, Rad: 1, Weg: 1, Linie: 1, Umstieg: 1, Zeit: 2, Ampel: 3, Ampeln: 3, Fahrweise: 4, Kosten: 4 };
@@ -6362,9 +6378,9 @@
     const counts = tipModeCounts(), used = Object.keys(counts);
     if (!tipMode || (tipMode !== 'alle' && !counts[tipMode])) tipMode = used.length > 1 ? used.sort((a, b) => counts[b] - counts[a])[0] : 'alle';
     const tips = computeTips(tipMode);
-    const n = trips.filter((t) => !t.demo).length;
+    const n = trips.filter((t) => !t.demo && tippsNurEigeneStadt(t)).length;
     const real = trips.filter((t) => !t.demo);
-    const prof = profileTips(real), zt = n ? [] : zielTips();
+    const prof = profileTips(real.filter(tippsNurEigeneStadt)), zt = n ? [] : zielTips();
     const easy = settings.access.on && settings.access.type === 'lernen';
     $('#tips-small').textContent = tips.length ? `${tips.length} für dich, aus ${n} Fahrt${n === 1 ? '' : 'en'}. Tippe für Einzelheiten.` : n ? 'Mit diesem Verkehrsmittel noch zu wenig Fahrten.' : 'Noch keine Fahrten. Schon jetzt für dich:';
     const card = (x, i) => `<div class="tipcard${i === 0 ? ' tip-top' : ''}" data-world="${TIP_WORLD[x.cat] || 'tip'}"><button type="button" class="tip-row" data-tip="${i}" aria-expanded="${tipOpen === i}"><span class="tip-ic">${ic(x.icon)}</span><span class="tip-main">${i === 0 && tips.length > 1 ? '<em class="tip-kick">Wichtigster Tipp</em>' : ''}<b>${x.head || plain(x.title)}</b><span>${plain(x.short)}</span></span>${x.num ? `<span class="tip-num">${x.num}</span>` : ''}</button>${tipOpen === i ? `<div class="tip-detail">${x.html}</div>` : ''}${x.act ? `<div class="tip-act">${x.act}</div>` : ''}</div>`;
