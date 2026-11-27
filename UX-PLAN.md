@@ -88,6 +88,9 @@ Umgesetzt: U1 bis U5 und U7 vollständig. U6 erledigt mit E3 (Begriffe). Version
   *Vorschlag Liste (zu bestätigen):*
   - **Bleibt sichtbar:** Startfrage „Wohin?“ mit Sprache, Ziel und Weg, Abfahrten in der Nähe, Begleitung unterwegs (Fahrt), Angabe melden, Hilfe, Angaben zur Quelle, die Karte mit den Hinweisen zur Barrierefreiheit und die Tipps.
   - **Ausgeblendet:** Verlauf, Auswertung und Diagramme, Ampel-Schalter (es gibt ihn im Modus Einfach nicht), Profil-Details, Redaktion, Gespräch-Historie über mehrere Themen, Einstellungen außer Modus und Sprache.
+  - **Stand 27.11.2026 umgesetzt:** Modus-Schalter, Einschränkung beim ersten Start und in den Einstellungen, Ausblendung der Einstellungen und des Verlaufs.
+- [ ] **K11 Inhalte im Modus Einfach reduzieren** (M). Entschieden am 27.11.2026: Jede Seite zeigt im Modus Einfach weniger Text und weniger Grafik. Pro Bildschirm eine Aussage, eine Handlung, eine Quelle. Lange Erklärungen werden ausgeblendet und sind über „Mehr erfahren“ erreichbar.
+- [ ] **K12 Tipps nur für die eigene Situation** (M). Entschieden am 27.11.2026: Die Tipps-Seite zeigt nur Tipps für die eigene Stadt (Bielefeld oder Heilbronn, je nach Standort), die gewählte Route und die gewählte Einschränkung. Allgemeine Tipps fallen weg.
 
 ---
 
