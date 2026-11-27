@@ -1797,3 +1797,7 @@ body.modus-einfach #tag-link{display:none!important}
 body.modus-einfach .k11-erklaerung{display:none!important}
 /* K11 Modus „Einfach“ in der Begrüßung: Erklärkarten und „Was ist dir wichtig?“ ausblenden (die Einschränkung bleibt) */
 body.modus-einfach #w-intro, body.modus-einfach section.w-goals:has(#w-goal-h){display:none!important}
+/* K11 Modus „Einfach“ in „Ansagen und Sprache“: Kompass, Symbol, Hinweiston, Weiter-geradeaus und Link-Kopieren ausblenden */
+body.modus-einfach label:has(#set-compass), body.modus-einfach label:has(#set-navtone), body.modus-einfach label:has(#set-geradeaus),
+body.modus-einfach label:has(#set-sprechicon), body.modus-einfach #set-sprechicon, body.modus-einfach #sprech-url, body.modus-einfach #btn-sprech-copy{display:none!important}
+body.modus-einfach #voice-hint{display:none!important}
