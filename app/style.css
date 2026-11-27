@@ -1768,3 +1768,9 @@ body.talk-in-view .fab-mic{display:none}
 
 /* Modus „Einfach“: Verlauf-Knopf ausblenden (nichts gelöscht) */
 body.modus-einfach .tabs [data-view="stats"]{display:none!important}
+
+/* Modus „Einfach“ (K10): Einstellungen ausblenden, die nicht zum Kernablauf gehören. Nichts wird gelöscht. */
+body.modus-einfach #box-access, body.modus-einfach #box-modes, body.modus-einfach #box-wege, body.modus-einfach #box-steckbrief,
+body.modus-einfach #box-goals, body.modus-einfach #box-price, body.modus-einfach #box-cut, body.modus-einfach #box-signals,
+body.modus-einfach #box-data, body.modus-einfach #box-pilot, body.modus-einfach #box-server, body.modus-einfach #box-demo{display:none!important}
+body.modus-einfach label:has(#inp-ask-stats), body.modus-einfach label:has(#set-begleit){display:none!important}
