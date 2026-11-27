@@ -1774,3 +1774,6 @@ body.modus-einfach #box-access, body.modus-einfach #box-modes, body.modus-einfac
 body.modus-einfach #box-goals, body.modus-einfach #box-price, body.modus-einfach #box-cut, body.modus-einfach #box-signals,
 body.modus-einfach #box-data, body.modus-einfach #box-pilot, body.modus-einfach #box-server, body.modus-einfach #box-demo{display:none!important}
 body.modus-einfach label:has(#inp-ask-stats), body.modus-einfach label:has(#set-begleit){display:none!important}
+
+/* K12 Modus „Einfach“: Tipps nur für die eigene Einschränkung, ohne allgemeine Auswahl und Hilfen */
+body.modus-einfach .tip-modes, body.modus-einfach .tip-acc, body.modus-einfach .tip-help, body.modus-einfach .tip-pick{display:none!important}
