@@ -1790,3 +1790,6 @@ body.modus-einfach .ask-allow, body.modus-einfach #view-tips .lead-text{display:
 /* K11 Modus „Einfach“ auf „Mehr“: Begriffe, Überblick und leerer Abschnitt „Mitmachen und Testen“ ausblenden */
 body.modus-einfach .glossar, body.modus-einfach #kann-link, body.modus-einfach #h-more-mit{display:none!important}
 body.modus-einfach #h-more-mit + .tip-list, body.modus-einfach section.tip-list:has(#h-more-mit){display:none!important}
+/* K11 Modus „Einfach“ auf „Heute“: kurze Karte „Dein Weg jetzt“, ohne Erklärtext und ohne Verlauf-Link */
+body.modus-einfach #nowcard > p.small{display:none!important}
+body.modus-einfach #tag-link{display:none!important}
