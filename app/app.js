@@ -1600,7 +1600,10 @@
     if (!t) { speak('Es gibt noch nichts zu wiederholen.', { now: true, force: true }); return; }
     navSay(t, { force: true });
   }
+  // Blind oder Sehen (Einschränkung): VoiceOver liest den Text, die App spricht nicht doppelt dazu
+  const blindMode = () => !!(settings.access && settings.access.on && settings.access.type === 'sehen');
   function speak(text, opts) {
+    if (blindMode() && !(opts && opts.force)) return;
     opts = opts || {};
     if (!canSpeak || !text || (!opts.force && !voiceOn())) return;
     lastSpoken = text;
@@ -4492,8 +4495,11 @@
     if (assistBig) assistLoopStart(true);
     const hoeren = () => { if (assistBig && !$('#assist').hidden && !recog && !assistBusy && SR && settings.voiceIn && !(opts && opts.launch)) listen(); };
     // Der Bot spricht zuerst und redet dich direkt an; danach hört er zu (nicht, solange er selbst spricht, sonst hört er sich)
-    // Beim Öffnen weder eigene Begrüßung noch automatisches Zuhören: sonst liegt die App-Stimme über VoiceOver. Gesprochen wird auf Knopfdruck.
-    void hoeren; void CALL_HELLO;
+    // Blind: keine eigene Begrüßung und kein automatisches Zuhören (VoiceOver übernimmt). Alle anderen: wie bisher
+    if (!blindMode()) {
+      if (assistBig && canSpeak) speak(CALL_HELLO, { now: true, force: true, onend: hoeren });
+      else if (SR && settings.voiceIn && !(opts && opts.launch)) listen();
+    }
   }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
@@ -7521,6 +7527,15 @@
   }
   // Eigene Sprachausgabe und VoiceOver nicht übereinander: sobald der Fokus wechselt, bricht die App ihre Ansage ab
   if (canSpeak) document.addEventListener('focusin', () => { try { speechSynthesis.cancel(); } catch (e) { /* ohne Sprachausgabe weiter */ } }, true);
+  // Solange das Sprachfenster offen ist, liest VoiceOver nicht die Seite dahinter mit (inert auf allen anderen Bereichen)
+  const sprachfenster = $('#assist');
+  if (sprachfenster && 'MutationObserver' in window) {
+    const hintergrund = (aus) => [...document.body.children].forEach((el) => {
+      if (el === sprachfenster || el.tagName === 'SCRIPT' || el.tagName === 'STYLE' || el.tagName === 'SVG') return;
+      if (aus) { el.setAttribute('inert', ''); el.setAttribute('aria-hidden', 'true'); } else { el.removeAttribute('inert'); el.removeAttribute('aria-hidden'); }
+    });
+    new MutationObserver(() => hintergrund(!sprachfenster.hidden)).observe(sprachfenster, { attributes: true, attributeFilter: ['hidden'] });
+  }
   // Einschränkung in den Einstellungen ändern: die Liste bestimmt den Modus
   const einschrSet = () => [...document.querySelectorAll('input[name="einschr-set"]')];
   const einschrSetInit = () => { const aktuell = Array.isArray(settings.einschraenkung) ? settings.einschraenkung : []; einschrSet().forEach((c) => { c.checked = aktuell.includes(c.value); }); };
