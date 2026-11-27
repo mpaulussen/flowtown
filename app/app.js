@@ -6377,7 +6377,8 @@
   function renderTips() {
     const counts = tipModeCounts(), used = Object.keys(counts);
     if (!tipMode || (tipMode !== 'alle' && !counts[tipMode])) tipMode = used.length > 1 ? used.sort((a, b) => counts[b] - counts[a])[0] : 'alle';
-    const tips = computeTips(tipMode);
+    // Modus Einfach: keine Rad-, Ampel-, Fahrweise- und Kostentipps (sie passen nicht zu den Einschränkungen)
+    const tips = computeTips(tipMode).filter((x) => !(settings.modus === 'einfach' && ['Rad', 'Ampel', 'Ampeln', 'Fahrweise', 'Kosten'].includes(x.cat)));
     const n = trips.filter((t) => !t.demo && tippsNurEigeneStadt(t)).length;
     const real = trips.filter((t) => !t.demo);
     const prof = profileTips(real.filter(tippsNurEigeneStadt)), zt = n ? [] : zielTips();

@@ -1813,3 +1813,10 @@ body.modus-einfach .quick3{display:grid;grid-template-columns:repeat(3,minmax(0,
 .nutzen{display:none}
 body.modus-einfach .nutzen{display:block;margin:6px 0 0;font-size:17px;line-height:1.4;color:var(--fg)}
 body.modus-einfach #nowcard .lw-head::after{content:"Du siehst, wo es Hinweise zur Barrierefreiheit gibt.";display:block;margin-top:6px;font-size:17px;line-height:1.4;color:var(--fg)}
+
+/* Einfach-System, Feinschliff: kein „Ohne Ziel aufzeichnen“, keine Rad- und Stau-Ebene auf der Karte */
+body.modus-einfach #btn-start, body.modus-einfach [data-layer="rad"], body.modus-einfach [data-layer="stau"]{display:none!important}
+/* Einfach-System, Layout: Titel und Erklärung untereinander; Auto-Knopf über die ganze Breite */
+body.modus-einfach #nowcard .lw-head{display:block}
+body.modus-einfach .rec-row{display:block}
+body.modus-einfach #btn-mode{width:100%;justify-content:center}
