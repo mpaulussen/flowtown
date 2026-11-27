@@ -4492,8 +4492,8 @@
     if (assistBig) assistLoopStart(true);
     const hoeren = () => { if (assistBig && !$('#assist').hidden && !recog && !assistBusy && SR && settings.voiceIn && !(opts && opts.launch)) listen(); };
     // Der Bot spricht zuerst und redet dich direkt an; danach hört er zu (nicht, solange er selbst spricht, sonst hört er sich)
-    if (assistBig && canSpeak) speak(CALL_HELLO, { now: true, force: true, onend: hoeren });
-    else if (SR && settings.voiceIn && !(opts && opts.launch)) listen();
+    // Beim Öffnen weder eigene Begrüßung noch automatisches Zuhören: sonst liegt die App-Stimme über VoiceOver. Gesprochen wird auf Knopfdruck.
+    void hoeren; void CALL_HELLO;
   }
   function askBar(name) {
     const on = !!(ASK_EX[name] && apiBase());
