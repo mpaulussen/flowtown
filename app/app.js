@@ -7134,6 +7134,10 @@
         msg.textContent = r.restored ? `${r.restored} Fahrten vom Server geholt.` : '';
       } catch (e) { msg.textContent = e.message === 'Failed to fetch' ? 'Keine Verbindung zum Server. Den Code kannst du später unter „Mehr“ eintragen.' : e.message; return; }
     }
+    // Einschränkung (K4): mit einer Angabe startet der Modus Einfach, „Keine davon“ lässt den Modus Standard
+    const einschr = [...document.querySelectorAll('input[name="einschr"]:checked')].map((i) => i.value);
+    if (einschr.length) { settings.einschraenkung = einschr.filter((v) => v !== 'keine'); settings.modus = settings.einschraenkung.length ? 'einfach' : 'standard'; }
+    if (einschr.length) applyModus();
     settings.onboarded = VERSION;
     store.set('settings', settings);
     if (!wege().filter(wegOk).length) { welcomeStep(3); return; }   // noch kein Weg: als Nächstes der erste Weg
@@ -7434,6 +7438,11 @@
   };
   document.querySelectorAll('input[name="modus"]').forEach((r) => r.addEventListener('change', () => { if (r.checked) { settings.modus = r.value; store.set('settings', settings); applyModus(); } }));
   applyModus();
+  // „Keine davon“ schließt die Einschränkungen aus und umgekehrt
+  document.querySelectorAll('input[name="einschr"]').forEach((c) => c.addEventListener('change', () => {
+    if (!c.checked) return;
+    document.querySelectorAll('input[name="einschr"]').forEach((o) => { if (o !== c && (c.value === 'keine' || o.value === 'keine')) o.checked = false; });
+  }));
   $('#set-compass').addEventListener('change', (ev) => { settings.compass = ev.target.checked; store.set('settings', settings); if (ev.target.checked) compassStart(true).then((ok) => { if (!ok) { $('#set-compass').checked = false; micStatus('Der Kompass ist auf diesem Gerät nicht verfügbar oder nicht freigegeben.'); } }); });
   $('#btn-voice').addEventListener('click', () => { setVoice(!voiceOn()); if (voiceOn()) speak('Ansagen an.', { now: true }); else if (canSpeak) speechSynthesis.cancel(); });
   $('#set-voice').addEventListener('change', (ev) => { setVoice(ev.target.checked); if (ev.target.checked) speak('Ansagen sind an. So klingt Flowtown unterwegs.', { now: true }); });
