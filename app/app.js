@@ -6629,6 +6629,10 @@
     };
     const reihe = (einfach && key && QUICK_ORDER[key]) || ['sprechen', 'abfahrt', 'hilfe'];
     reihe.forEach((name, i) => { const el = document.getElementById(QUICK[name]); if (el) el.style.order = String(i); });
+    // Hören: der Sprech-Knopf wird zu „Schreiben“ und öffnet das Textfeld
+    const schreiben = einfach && key === 'hoeren';
+    const qs = document.getElementById('quick-sprechen');
+    if (qs) { qs.dataset.mode = schreiben ? 'schreiben' : 'sprechen'; qs.querySelector('span').textContent = schreiben ? 'Schreiben' : 'Sprechen'; }
     tabLabel('tips', einfach ? 'Für dich' : 'Tipps');
     tabLabel('more', einfach ? 'Einstellungen' : 'Mehr');
   }
@@ -7448,7 +7452,7 @@
   // Heute: großer Sprechknopf öffnet den Sprachmodus, die Beispielfragen starten gleich eine Frage
   $('#talk-btn').addEventListener('click', () => { unlockSpeech(); openAssistEmpty({ big: true }); });
   // Schnellzugriffe (Einfach-System, nur im Modus Einfach sichtbar)
-  $('#quick-sprechen').addEventListener('click', () => $('#talk-btn').click());
+  $('#quick-sprechen').addEventListener('click', (ev) => { if (ev.currentTarget.dataset.mode === 'schreiben') { $('#plan-q').focus(); $('#plan-q').scrollIntoView({ block: 'center' }); } else $('#talk-btn').click(); });
   $('#quick-abfahrt').addEventListener('click', () => { unlockSpeech(); $('#ask-inp').value = 'Welche Abfahrten sind hier?'; $('#ask-bar').dispatchEvent(new Event('submit', { cancelable: true })); });
   $('#quick-hilfe').addEventListener('click', () => $('#btn-sos').click());
   // Solange der große Sprechknopf im Bild ist, braucht es den schwebenden Mikrofonknopf nicht (er verdeckte auch das Mikro im Wohin-Feld)
